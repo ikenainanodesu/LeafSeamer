@@ -1,0 +1,30 @@
+{
+  "name": "logger-system",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": [
+      {
+        "name": "log-viewer",
+        "title": "Log Viewer",
+        "width": 6,
+        "file": "log-viewer.html",
+        "headerColor": "#525252"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "async": "^3.2.5"
+  },
+  "devDependencies": {
+    "@types/async": "^3.2.24",
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "typescript": "^5.7.2"
+  }
+}

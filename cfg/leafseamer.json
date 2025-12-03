@@ -1,0 +1,23 @@
+{
+  "mixer": {
+    "defaultIP": "192.168.1.100",
+    "defaultPort": 8000
+  },
+  "obs": {
+    "defaultHost": "localhost",
+    "defaultPort": 4455,
+    "defaultPassword": ""
+  },
+  "googleSheets": {
+    "spreadsheetId": "",
+    "credentialsPath": ""
+  },
+  "logger": {
+    "retentionDays": 30
+  },
+  "backup": {
+    "autoBackup": true,
+    "schedule": "0 3 * * *",
+    "retentionDays": 7
+  }
+}

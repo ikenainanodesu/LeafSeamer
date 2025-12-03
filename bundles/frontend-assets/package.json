@@ -1,0 +1,7 @@
+{
+  "name": "frontend-assets",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0"
+  }
+}

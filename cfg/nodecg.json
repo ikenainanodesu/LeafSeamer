@@ -1,0 +1,10 @@
+{
+  "host": "localhost",
+  "port": 9090,
+  "logging": {
+    "console": {
+      "enabled": true,
+      "level": "debug"
+    }
+  }
+}

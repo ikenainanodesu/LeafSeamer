@@ -1,0 +1,34 @@
+{
+  "name": "schedule-manager",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": [
+      {
+        "name": "schedule-panel",
+        "title": "Schedule Manager",
+        "width": 4,
+        "file": "schedule-panel.html",
+        "headerColor": "#525252"
+      }
+    ],
+    "graphics": [
+      {
+        "file": "schedule-display.html",
+        "width": 1920,
+        "height": 1080
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "typescript": "^5.7.2"
+  }
+}

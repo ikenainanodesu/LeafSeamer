@@ -1,0 +1,40 @@
+{
+  "name": "leafseamer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodecg start",
+    "dev": "nodecg start",
+    "build": "tsc && node build-dashboards.js",
+    "watch": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "node-osc": "^11.1.1",
+    "nodecg": "^2.6.4",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@types/archiver": "^7.0.0",
+    "@types/async": "^3.2.25",
+    "@types/node": "^22.10.1",
+    "@types/node-osc": "^9.1.0",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "archiver": "^7.0.1",
+    "async": "^3.2.6",
+    "esbuild": "^0.27.1",
+    "glob": "^13.0.0",
+    "googleapis": "^166.0.0",
+    "obs-websocket-js": "^5.0.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
+  }
+}
