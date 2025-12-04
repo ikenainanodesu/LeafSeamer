@@ -6,4 +6,4 @@ backups/
 *.log
 dist/
 .DS_Store
-build_error_*.txt
+*.txt
