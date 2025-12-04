@@ -14,7 +14,7 @@
       {
         "name": "mixer-control-panel",
         "title": "Mixer Control",
-        "width": 4,
+        "width": 8,
         "file": "mixer-control-panel.html",
         "headerColor": "#525252",
         "workspace": "Mixer Control"

@@ -21748,34 +21748,87 @@ var MixerControlPanel = () => {
       {
         style: {
           marginTop: "20px",
-          padding: "15px",
-          backgroundColor: "#424242",
-          borderRadius: "4px"
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: "15px"
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Channel 1 Monitor" }),
-          channels.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Name:" }),
-              " ",
-              channels[0].name
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Input Source:" }),
-              " ",
-              channels[0].inputSource || "Unknown"
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Fader Level:" }),
-              " ",
-              channels[0].faderLevel === -32768 ? "-\u221E dB" : `${(channels[0].faderLevel / 100).toFixed(2)} dB`
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Muted:" }),
-              " ",
-              channels[0].isMuted ? "Yes" : "No"
-            ] })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "No channel data available." })
+          channels.slice(0, 16).map((channel) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+            "div",
+            {
+              style: {
+                padding: "15px",
+                backgroundColor: "#424242",
+                borderRadius: "4px",
+                border: channel.isMuted ? "1px solid #f44336" : "1px solid #4caf50"
+              },
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { style: { marginTop: 0, marginBottom: "10px" }, children: channel.name }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: { margin: "5px 0", fontSize: "0.9em", color: "#aaa" }, children: [
+                  "ID: ",
+                  channel.id
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: { margin: "5px 0" }, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Fader:" }),
+                  " ",
+                  channel.faderLevel === -32768 ? "-\u221E dB" : `${(channel.faderLevel / 100).toFixed(2)} dB`
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "input",
+                  {
+                    type: "range",
+                    min: "-10000",
+                    max: "1000",
+                    value: channel.faderLevel <= -32768 ? -1e4 : channel.faderLevel,
+                    onChange: (e) => {
+                      const val = parseInt(e.target.value);
+                      nodecg.sendMessageToBundle("setMixerFader", "mixer-control", {
+                        channelId: channel.id,
+                        level: val
+                      });
+                    },
+                    style: { width: "100%", marginBottom: "10px" }
+                  }
+                ),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    },
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Muted:" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                        "button",
+                        {
+                          onClick: () => {
+                            nodecg.sendMessageToBundle("setMixerMute", "mixer-control", {
+                              channelId: channel.id,
+                              isMuted: !channel.isMuted
+                            });
+                          },
+                          style: {
+                            padding: "5px 10px",
+                            backgroundColor: channel.isMuted ? "#f44336" : "#4caf50",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontWeight: "bold"
+                          },
+                          children: channel.isMuted ? "MUTED" : "ON"
+                        }
+                      )
+                    ]
+                  }
+                )
+              ]
+            },
+            channel.id
+          )),
+          channels.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "No channel data available." })
         ]
       }
     )

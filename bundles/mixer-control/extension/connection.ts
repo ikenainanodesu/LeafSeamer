@@ -141,6 +141,30 @@ export class ConnectionManager {
     this.logger.info("Manually disconnected from mixer");
   }
 
+  setFaderLevel(channelId: number, level: number) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      const index = channelId - 1;
+      // Yamaha RCP expects value in 0.01dB steps? No, usually it's raw values or specific scale.
+      // Assuming 'level' passed here is the raw value expected by the mixer (e.g. -32768 to 1000)
+      // Or if it's dB * 100.
+      // Based on logs: "NOTIFY set ... -1640" -> -16.40dB. So it is dB * 100.
+      this.tcpClient.write(
+        `set "MIXER:Current/InCh/Fader/Level" ${index} 0 ${level}\n`
+      );
+    }
+  }
+
+  setMute(channelId: number, isMuted: boolean) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      const index = channelId - 1;
+      // On = 1 (Unmuted), Off = 0 (Muted)
+      const value = isMuted ? 0 : 1;
+      this.tcpClient.write(
+        `set "MIXER:Current/InCh/Fader/On" ${index} 0 ${value}\n`
+      );
+    }
+  }
+
   private handleRCPMessage(line: string) {
     this.logger.info(`RCP RX: ${line}`);
 
@@ -194,22 +218,6 @@ export class ConnectionManager {
           this.logger.info(`Updated CH${chIndex + 1} muted: ${isMuted}`);
         }
       }
-      // Check for Input Source (Guessing path, logging will confirm)
-      else if (
-        content.includes("MIXER:Current/InCh/Patch/InChSource") ||
-        content.includes("MIXER:Current/InCh/Input/Source")
-      ) {
-        // Try to capture whatever is at the end
-        const match = content.match(
-          /(?:get|set)?\s*"?MIXER:Current\/InCh\/(?:Patch\/InChSource|Input\/Source)"?\s+(\d+)\s+0\s+"?([^"\s]+)"?/
-        );
-        if (match) {
-          const chIndex = parseInt(match[1]);
-          const source = match[2];
-          this.stateManager.updateChannel(chIndex + 1, { inputSource: source });
-          this.logger.info(`Updated CH${chIndex + 1} source: ${source}`);
-        }
-      }
     }
   }
 
@@ -217,12 +225,12 @@ export class ConnectionManager {
     // RCP Heartbeat / Polling
     setInterval(() => {
       if (this.tcpClient && this.shouldBeConnected) {
-        // Query Channel 1 (Index 0)
-        this.tcpClient.write('get "MIXER:Current/InCh/Fader/Level" 0 0\n');
-        this.tcpClient.write('get "MIXER:Current/InCh/Label/Name" 0 0\n');
-        this.tcpClient.write('get "MIXER:Current/InCh/Fader/On" 0 0\n'); // Mute status
-        // Try guessing input source paths
-        // this.tcpClient.write('get "MIXER:Current/InCh/Patch/InChSource" 0 0\n');
+        // Query Channels 1-16 (Indices 0-15)
+        for (let i = 0; i < 16; i++) {
+          this.tcpClient.write(`get "MIXER:Current/InCh/Fader/Level" ${i} 0\n`);
+          this.tcpClient.write(`get "MIXER:Current/InCh/Label/Name" ${i} 0\n`);
+          this.tcpClient.write(`get "MIXER:Current/InCh/Fader/On" ${i} 0\n`); // Mute status
+        }
       }
     }, 5000);
   }

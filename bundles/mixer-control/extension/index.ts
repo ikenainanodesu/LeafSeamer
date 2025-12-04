@@ -31,4 +31,18 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
   nodecg.listenFor("disconnectMixer", () => {
     connectionManager.disconnect();
   });
+
+  nodecg.listenFor(
+    "setMixerFader",
+    (data: { channelId: number; level: number }) => {
+      connectionManager.setFaderLevel(data.channelId, data.level);
+    }
+  );
+
+  nodecg.listenFor(
+    "setMixerMute",
+    (data: { channelId: number; isMuted: boolean }) => {
+      connectionManager.setMute(data.channelId, data.isMuted);
+    }
+  );
 };

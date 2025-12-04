@@ -36,34 +36,80 @@ const MixerControlPanel = () => {
       <div
         style={{
           marginTop: "20px",
-          padding: "15px",
-          backgroundColor: "#424242",
-          borderRadius: "4px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: "15px",
         }}
       >
-        <h3>Channel 1 Monitor</h3>
-        {channels.length > 0 ? (
-          <div>
-            <p>
-              <strong>Name:</strong> {channels[0].name}
+        {channels.slice(0, 16).map((channel) => (
+          <div
+            key={channel.id}
+            style={{
+              padding: "15px",
+              backgroundColor: "#424242",
+              borderRadius: "4px",
+              border: channel.isMuted
+                ? "1px solid #f44336"
+                : "1px solid #4caf50",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
+              {channel.name}
+            </h3>
+            <p style={{ margin: "5px 0", fontSize: "0.9em", color: "#aaa" }}>
+              ID: {channel.id}
             </p>
-            <p>
-              <strong>Input Source:</strong>{" "}
-              {channels[0].inputSource || "Unknown"}
-            </p>
-            <p>
-              <strong>Fader Level:</strong>{" "}
-              {channels[0].faderLevel === -32768
+            <p style={{ margin: "5px 0" }}>
+              <strong>Fader:</strong>{" "}
+              {channel.faderLevel === -32768
                 ? "-∞ dB"
-                : `${(channels[0].faderLevel / 100).toFixed(2)} dB`}
+                : `${(channel.faderLevel / 100).toFixed(2)} dB`}
             </p>
-            <p>
-              <strong>Muted:</strong> {channels[0].isMuted ? "Yes" : "No"}
-            </p>
+            <input
+              type="range"
+              min="-10000" // -100.00 dB
+              max="1000" // +10.00 dB
+              value={channel.faderLevel <= -32768 ? -10000 : channel.faderLevel}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                nodecg.sendMessageToBundle("setMixerFader", "mixer-control", {
+                  channelId: channel.id,
+                  level: val,
+                });
+              }}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <strong>Muted:</strong>
+              <button
+                onClick={() => {
+                  nodecg.sendMessageToBundle("setMixerMute", "mixer-control", {
+                    channelId: channel.id,
+                    isMuted: !channel.isMuted,
+                  });
+                }}
+                style={{
+                  padding: "5px 10px",
+                  backgroundColor: channel.isMuted ? "#f44336" : "#4caf50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+              >
+                {channel.isMuted ? "MUTED" : "ON"}
+              </button>
+            </div>
           </div>
-        ) : (
-          <p>No channel data available.</p>
-        )}
+        ))}
+        {channels.length === 0 && <p>No channel data available.</p>}
       </div>
     </div>
   );
