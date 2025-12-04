@@ -59,4 +59,8 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
       connectionManager.setOutputMute(data.outputId, data.isMuted);
     }
   );
+
+  nodecg.listenFor("queryOutputRouting", (data: { outputId: number }) => {
+    connectionManager.queryOutputRouting(data.outputId);
+  });
 };
