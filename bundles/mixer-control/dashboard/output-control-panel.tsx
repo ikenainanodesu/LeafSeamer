@@ -119,7 +119,20 @@ const OutputControlPanel = () => {
             </div>
 
             {/* Toggle Directory for Input Sends */}
-            <details>
+            <details
+              onToggle={(e) => {
+                // When expanded, query routing
+                if ((e.target as HTMLDetailsElement).open) {
+                  nodecg.sendMessageToBundle(
+                    "queryOutputRouting",
+                    "mixer-control",
+                    {
+                      outputId: output.id,
+                    }
+                  );
+                }
+              }}
+            >
               <summary style={{ cursor: "pointer", outline: "none" }}>
                 Input Sends
               </summary>
@@ -139,7 +152,7 @@ const OutputControlPanel = () => {
                       <span>{send.inputName}</span>
                       <span style={{ float: "right" }}>
                         {send.active ? "ON" : "OFF"} /{" "}
-                        {send.level === -32768
+                        {send.level <= -32768
                           ? "-∞"
                           : (send.level / 100).toFixed(1)}
                         dB
@@ -148,7 +161,7 @@ const OutputControlPanel = () => {
                   ))
                 ) : (
                   <p style={{ fontSize: "0.8em", color: "#aaa" }}>
-                    No inputs routed (or data not polled)
+                    No inputs routed (or click to load)
                   </p>
                 )}
               </div>
