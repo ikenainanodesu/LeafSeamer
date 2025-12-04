@@ -9,8 +9,12 @@
 **Solution**:
 
 - Stop any running NodeCG processes.
-- On Windows, run `Get-Process node | Stop-Process -Force` in PowerShell to kill all Node.js processes.
-- Change the port in `cfg/nodecg.json`.
+- **Recommended**: Run the helper script: `.\scripts\kill-nodecg.ps1`
+- **Manual**: Run this command in PowerShell to kill only the process on port 9090:
+  ```powershell
+  Get-NetTCPConnection -LocalPort 9090 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+  ```
+- Change the port in `cfg/nodecg.json` if the port is legitimately in use by another application.
 
 ### 2. Bundle fails to load with "Cannot find module"
 

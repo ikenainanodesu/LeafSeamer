@@ -17,6 +17,10 @@ export class StateManager {
         lastUpdate: 0,
       },
     });
+
+    // Force disconnected state on startup
+    this.mixerStateRep.value.connected = false;
+
     this.mixerChannelsRep = nodecg.Replicant<MixerChannel[]>("mixerChannels", {
       defaultValue: [],
     });
