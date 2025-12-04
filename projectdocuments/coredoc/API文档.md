@@ -420,10 +420,17 @@ interface RemoveFromQueueParams {
 ```typescript
 interface GraphicsData {
   timestamp: number; // 最后更新时间戳
+  lowerThird: LowerThirdData; // Lower Third 显示数据
   currentGame: GameInfo | null; // 当前游戏信息
   currentPlayers: PlayerInfo[]; // 当前玩家信息列表
   schedule: ScheduleItem[]; // 日程表
   language: "zh" | "ja" | "en"; // 当前语言
+}
+
+interface LowerThirdData {
+  visible: boolean; // 是否显示 (控制 GSAP 动画)
+  line1: string; // 第一行文字
+  line2: string; // 第二行文字
 }
 
 interface GameInfo {
@@ -455,6 +462,8 @@ interface ScheduleItem {
   players: string[]; // 玩家 ID 列表
 }
 ```
+
+> **注意**: `LowerThirdData.visible` 字段变化时,会触发 GSAP 入场/离场动画。
 
 ---
 

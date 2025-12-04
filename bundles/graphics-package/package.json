@@ -29,7 +29,10 @@
     "build": "tsc",
     "watch": "tsc --watch"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.13.0"
+  },
   "devDependencies": {
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.1",
