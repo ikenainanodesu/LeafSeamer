@@ -32,53 +32,118 @@ const LowerThird = () => {
       if (!line1Ref.current || !line2Ref.current) return;
 
       if (data.visible) {
-        // 入场动画 - 从左侧滑入并淡入
+        // 入场动画配置
+        const fadeInConfig = {
+          duration: 0.6, // 淡入持续时间
+          ease: "power2.out", // 淡入缓动函数
+        };
+
+        const slideInConfig = {
+          duration: 0.6, // 滑入持续时间
+          ease: "back.out", // 滑入缓动函数
+          distance: -300, // 滑入距离
+        };
+
+        const line2Delay = 0.2; // line2 相对于 line1 的延迟时间
+
+        // 创建入场动画时间线
         const tl = gsap.timeline();
 
+        // Line1 入场: 分别控制滑动和淡入
         tl.fromTo(
           line1Ref.current,
-          {
-            x: -300,
-            opacity: 0,
-          },
+          { x: slideInConfig.distance },
           {
             x: 0,
+            duration: slideInConfig.duration,
+            ease: slideInConfig.ease,
+          },
+          0 // 从时间线开始
+        ).fromTo(
+          line1Ref.current,
+          { opacity: 0 },
+          {
             opacity: 1,
-            duration: 0.6,
-            ease: "power2.out",
-          }
+            duration: fadeInConfig.duration,
+            ease: fadeInConfig.ease,
+          },
+          0 // 与滑动同时开始
+        );
+
+        // Line2 入场: 分别控制滑动和淡入
+        tl.fromTo(
+          line2Ref.current,
+          { x: slideInConfig.distance },
+          {
+            x: 0,
+            duration: slideInConfig.duration,
+            ease: slideInConfig.ease,
+          },
+          line2Delay // 延迟开始
         ).fromTo(
           line2Ref.current,
+          { opacity: 0 },
           {
-            x: -300,
-            opacity: 0,
-          },
-          {
-            x: 0,
             opacity: 1,
-            duration: 0.6,
-            ease: "power2.out",
+            duration: fadeInConfig.duration,
+            ease: fadeInConfig.ease,
           },
-          "<0.2" // 晚于 line1 0.5 秒 (相对于 line1 开始时间)
+          line2Delay // 与 line2 滑动同时开始
         );
       } else {
-        // 离场动画 - 出现动画的倒放 (Line 2 先走, Line 1 晚 0.5 秒走)
+        // 离场动画配置
+        const fadeOutConfig = {
+          duration: 0.5, // 淡出持续时间
+          ease: "power2.in", // 淡出缓动函数
+        };
+
+        const slideOutConfig = {
+          duration: 0.6, // 滑出持续时间
+          ease: "back.in", // 滑出缓动函数
+          distance: -300, // 滑出距离
+        };
+
+        const line1Delay = 0.3; // line1 相对于 line2 的延迟时间
+
+        // 创建离场动画时间线
         const tl = gsap.timeline();
 
-        tl.to(line1Ref.current, {
-          x: -300,
-          opacity: 0,
-          duration: 0.6, // 保持与入场时长一致
-          ease: "power2.in", // 倒放通常使用相反的 ease, out -> in
-        }).to(
+        // Line2 离场: 分别控制滑动和淡出
+        tl.to(
           line2Ref.current,
           {
-            x: -300,
-            opacity: 0,
-            duration: 0.6,
-            ease: "power2.in",
+            x: slideOutConfig.distance,
+            duration: slideOutConfig.duration,
+            ease: slideOutConfig.ease,
           },
-          "<0.3" // 晚于 line2 0.5 秒
+          0 // 从时间线开始
+        ).to(
+          line2Ref.current,
+          {
+            opacity: 0,
+            duration: fadeOutConfig.duration,
+            ease: fadeOutConfig.ease,
+          },
+          0 // 与滑动同时开始
+        );
+
+        // Line1 离场: 分别控制滑动和淡出
+        tl.to(
+          line1Ref.current,
+          {
+            x: slideOutConfig.distance,
+            duration: slideOutConfig.duration,
+            ease: slideOutConfig.ease,
+          },
+          line1Delay // 延迟开始
+        ).to(
+          line1Ref.current,
+          {
+            opacity: 0,
+            duration: fadeOutConfig.duration,
+            ease: fadeOutConfig.ease,
+          },
+          line1Delay // 与 line1 滑动同时开始
         );
       }
     },
@@ -92,22 +157,22 @@ const LowerThird = () => {
     <div
       ref={containerRef}
       style={{
-        position: "absolute",
-        bottom: "100px",
-        left: "100px",
-        fontFamily: "Roboto, sans-serif",
+        position: "absolute", // 定位方式 - 绝对定位(相对于屏幕)
+        bottom: "100px", // 底部距离 - 距离屏幕底部100px
+        left: "100px", // 左侧距离 - 距离屏幕左侧100px
+        fontFamily: "Maple, sans-serif", // 字体族 - Maple字体,备用无衬线字体
       }}
     >
       <div
         ref={line1Ref}
         style={{
-          backgroundColor: "#1e88e5",
-          color: "white",
-          padding: "10px 20px",
-          fontSize: "32px",
-          fontWeight: "bold",
-          display: "inline-block",
-          opacity: 0, // 初始不可见,由 GSAP 控制
+          backgroundColor: "#1e88e5", // 背景颜色 - 蓝色主题色
+          color: "white", // 文字颜色 - 白色
+          padding: "10px 20px", // 内边距 - 上下10px, 左右20px
+          fontSize: "64px", // 字体大小 - 32像素(主标题)
+          fontWeight: "bold", // 字体粗细 - 加粗
+          display: "inline-block", // 显示方式 - 行内块元素(宽度自适应内容)
+          opacity: 0, // 初始透明度 - 0(完全透明,由 GSAP 动画控制)
         }}
       >
         {data.line1}
@@ -119,7 +184,8 @@ const LowerThird = () => {
           backgroundColor: "white",
           color: "#333",
           padding: "5px 20px",
-          fontSize: "24px",
+          fontSize: "48px",
+          fontWeight: "bold",
           display: "inline-block",
           opacity: 0, // 初始不可见,由 GSAP 控制
         }}
