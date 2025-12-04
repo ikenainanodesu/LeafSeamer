@@ -4,6 +4,10 @@ import { createRoot } from "react-dom/client";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { LowerThirdData } from "../../../shared/types/graphics.types";
+import {
+  createLowerThirdEntranceAnimation,
+  createLowerThirdExitAnimation,
+} from "../../../shared/utils/gsap-animations";
 
 const LowerThird = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,119 +36,19 @@ const LowerThird = () => {
       if (!line1Ref.current || !line2Ref.current) return;
 
       if (data.visible) {
-        // 入场动画配置
-        const fadeInConfig = {
-          duration: 0.6, // 淡入持续时间
-          ease: "power2.out", // 淡入缓动函数
-        };
-
-        const slideInConfig = {
-          duration: 0.6, // 滑入持续时间
-          ease: "back.out", // 滑入缓动函数
-          distance: -300, // 滑入距离
-        };
-
-        const line2Delay = 0.2; // line2 相对于 line1 的延迟时间
-
-        // 创建入场动画时间线
-        const tl = gsap.timeline();
-
-        // Line1 入场: 分别控制滑动和淡入
-        tl.fromTo(
-          line1Ref.current,
-          { x: slideInConfig.distance },
-          {
-            x: 0,
-            duration: slideInConfig.duration,
-            ease: slideInConfig.ease,
-          },
-          0 // 从时间线开始
-        ).fromTo(
-          line1Ref.current,
-          { opacity: 0 },
-          {
-            opacity: 1,
-            duration: fadeInConfig.duration,
-            ease: fadeInConfig.ease,
-          },
-          0 // 与滑动同时开始
-        );
-
-        // Line2 入场: 分别控制滑动和淡入
-        tl.fromTo(
-          line2Ref.current,
-          { x: slideInConfig.distance },
-          {
-            x: 0,
-            duration: slideInConfig.duration,
-            ease: slideInConfig.ease,
-          },
-          line2Delay // 延迟开始
-        ).fromTo(
-          line2Ref.current,
-          { opacity: 0 },
-          {
-            opacity: 1,
-            duration: fadeInConfig.duration,
-            ease: fadeInConfig.ease,
-          },
-          line2Delay // 与 line2 滑动同时开始
-        );
+        // 使用工具函数创建入场动画
+        createLowerThirdEntranceAnimation(line1Ref.current, line2Ref.current, {
+          fadeConfig: { duration: 0.6, ease: "power2.out" },
+          slideConfig: { duration: 0.6, ease: "back.out", distance: 300 },
+          line2Delay: 0.2,
+        });
       } else {
-        // 离场动画配置
-        const fadeOutConfig = {
-          duration: 0.5, // 淡出持续时间
-          ease: "power2.in", // 淡出缓动函数
-        };
-
-        const slideOutConfig = {
-          duration: 0.6, // 滑出持续时间
-          ease: "back.in", // 滑出缓动函数
-          distance: -300, // 滑出距离
-        };
-
-        const line1Delay = 0.3; // line1 相对于 line2 的延迟时间
-
-        // 创建离场动画时间线
-        const tl = gsap.timeline();
-
-        // Line2 离场: 分别控制滑动和淡出
-        tl.to(
-          line2Ref.current,
-          {
-            x: slideOutConfig.distance,
-            duration: slideOutConfig.duration,
-            ease: slideOutConfig.ease,
-          },
-          0 // 从时间线开始
-        ).to(
-          line2Ref.current,
-          {
-            opacity: 0,
-            duration: fadeOutConfig.duration,
-            ease: fadeOutConfig.ease,
-          },
-          0 // 与滑动同时开始
-        );
-
-        // Line1 离场: 分别控制滑动和淡出
-        tl.to(
-          line1Ref.current,
-          {
-            x: slideOutConfig.distance,
-            duration: slideOutConfig.duration,
-            ease: slideOutConfig.ease,
-          },
-          line1Delay // 延迟开始
-        ).to(
-          line1Ref.current,
-          {
-            opacity: 0,
-            duration: fadeOutConfig.duration,
-            ease: fadeOutConfig.ease,
-          },
-          line1Delay // 与 line1 滑动同时开始
-        );
+        // 使用工具函数创建离场动画
+        createLowerThirdExitAnimation(line1Ref.current, line2Ref.current, {
+          fadeConfig: { duration: 0.5, ease: "power2.in" },
+          slideConfig: { duration: 0.6, ease: "back.in", distance: 300 },
+          line2Delay: 0.3,
+        });
       }
     },
     {
