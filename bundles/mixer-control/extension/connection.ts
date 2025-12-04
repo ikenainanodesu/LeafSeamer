@@ -165,6 +165,38 @@ export class ConnectionManager {
     }
   }
 
+  setOutputFaderLevel(outputId: number, level: number) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      // 1-6: Mix 1-6 (Index 0-5)
+      // 7: Stereo L, 8: Stereo R (Both use St/Fader/Level 0 0 usually, or separate?)
+      // DM3 Stereo is usually one fader. Let's assume ID 7/8 control the same Stereo Master.
+      if (outputId <= 6) {
+        const index = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/Mix/Fader/Level" ${index} 0 ${level}\n`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.tcpClient.write(
+          `set "MIXER:Current/St/Fader/Level" 0 0 ${level}\n`
+        );
+      }
+    }
+  }
+
+  setOutputMute(outputId: number, isMuted: boolean) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      const value = isMuted ? 0 : 1;
+      if (outputId <= 6) {
+        const index = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/Mix/Fader/On" ${index} 0 ${value}\n`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.tcpClient.write(`set "MIXER:Current/St/Fader/On" 0 0 ${value}\n`);
+      }
+    }
+  }
+
   private handleRCPMessage(line: string) {
     this.logger.info(`RCP RX: ${line}`);
 
@@ -218,6 +250,64 @@ export class ConnectionManager {
           this.logger.info(`Updated CH${chIndex + 1} muted: ${isMuted}`);
         }
       }
+      // Check for Mix Fader Level
+      else if (content.includes("MIXER:Current/Mix/Fader/Level")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/Mix\/Fader\/Level"?\s+(\d+)\s+0\s+(-?\d+)/
+        );
+        if (match) {
+          const mixIndex = parseInt(match[1]);
+          const level = parseInt(match[2]);
+          this.stateManager.updateOutput(mixIndex + 1, { faderLevel: level });
+        }
+      }
+      // Check for Mix Name
+      else if (content.includes("MIXER:Current/Mix/Label/Name")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/Mix\/Label\/Name"?\s+(\d+)\s+0\s+"?([^"\n]+)"?/
+        );
+        if (match) {
+          const mixIndex = parseInt(match[1]);
+          const name = match[2];
+          this.stateManager.updateOutput(mixIndex + 1, { name: name });
+        }
+      }
+      // Check for Mix Mute
+      else if (content.includes("MIXER:Current/Mix/Fader/On")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/Mix\/Fader\/On"?\s+(\d+)\s+0\s+(\d+)/
+        );
+        if (match) {
+          const mixIndex = parseInt(match[1]);
+          const onValue = parseInt(match[2]);
+          const isMuted = onValue === 0;
+          this.stateManager.updateOutput(mixIndex + 1, { isMuted: isMuted });
+        }
+      }
+      // Check for Stereo Fader Level
+      else if (content.includes("MIXER:Current/St/Fader/Level")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/St\/Fader\/Level"?\s+0\s+0\s+(-?\d+)/
+        );
+        if (match) {
+          const level = parseInt(match[1]);
+          // Update both Stereo L (7) and R (8)
+          this.stateManager.updateOutput(7, { faderLevel: level });
+          this.stateManager.updateOutput(8, { faderLevel: level });
+        }
+      }
+      // Check for Stereo Mute
+      else if (content.includes("MIXER:Current/St/Fader/On")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/St\/Fader\/On"?\s+0\s+0\s+(\d+)/
+        );
+        if (match) {
+          const onValue = parseInt(match[1]);
+          const isMuted = onValue === 0;
+          this.stateManager.updateOutput(7, { isMuted: isMuted });
+          this.stateManager.updateOutput(8, { isMuted: isMuted });
+        }
+      }
     }
   }
 
@@ -231,6 +321,16 @@ export class ConnectionManager {
           this.tcpClient.write(`get "MIXER:Current/InCh/Label/Name" ${i} 0\n`);
           this.tcpClient.write(`get "MIXER:Current/InCh/Fader/On" ${i} 0\n`); // Mute status
         }
+
+        // Query Mix 1-6 (Indices 0-5)
+        for (let i = 0; i < 6; i++) {
+          this.tcpClient.write(`get "MIXER:Current/Mix/Fader/Level" ${i} 0\n`);
+          this.tcpClient.write(`get "MIXER:Current/Mix/Label/Name" ${i} 0\n`);
+          this.tcpClient.write(`get "MIXER:Current/Mix/Fader/On" ${i} 0\n`);
+        }
+        // Query Stereo L/R (Index 0)
+        this.tcpClient.write(`get "MIXER:Current/St/Fader/Level" 0 0\n`);
+        this.tcpClient.write(`get "MIXER:Current/St/Fader/On" 0 0\n`);
       }
     }, 5000);
   }

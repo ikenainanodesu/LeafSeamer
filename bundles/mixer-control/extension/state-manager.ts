@@ -1,6 +1,10 @@
 import NodeCG from "nodecg/types";
 // State Manager for Mixer Control
-import { MixerState, MixerChannel } from "../../../shared/types/mixer.types";
+import {
+  MixerState,
+  MixerChannel,
+  MixerOutput,
+} from "../../../shared/types/mixer.types";
 import { getCurrentTimestamp } from "../../../shared/utils/timestamp";
 
 export class StateManager {
@@ -14,6 +18,7 @@ export class StateManager {
       defaultValue: {
         connected: false,
         channels: [],
+        outputs: [],
         lastUpdate: 0,
       },
     });
@@ -36,6 +41,20 @@ export class StateManager {
           inputSource: `IN ${i + 1}`,
         })
       );
+    }
+
+    // Initialize default outputs if empty
+    if (
+      !this.mixerStateRep.value.outputs ||
+      this.mixerStateRep.value.outputs.length === 0
+    ) {
+      this.mixerStateRep.value.outputs = Array.from({ length: 8 }, (_, i) => ({
+        id: i + 1,
+        name: i < 6 ? `Mix ${i + 1}` : i === 6 ? "Stereo L" : "Stereo R",
+        faderLevel: -32768,
+        isMuted: true,
+        inputSends: [],
+      }));
     }
   }
 
@@ -87,6 +106,42 @@ export class StateManager {
       }
     } else {
       // console.warn(`StateManager: Channel ${channelId} not found`);
+    }
+  }
+
+  updateOutput(outputId: number, data: Partial<MixerOutput>) {
+    const outputs = this.mixerStateRep.value.outputs;
+    if (!outputs) return;
+
+    const index = outputs.findIndex((o: MixerOutput) => o.id === outputId);
+
+    if (index !== -1) {
+      const output = outputs[index];
+      let changed = false;
+
+      if (
+        data.faderLevel !== undefined &&
+        output.faderLevel !== data.faderLevel
+      ) {
+        output.faderLevel = data.faderLevel;
+        changed = true;
+      }
+      if (data.isMuted !== undefined && output.isMuted !== data.isMuted) {
+        output.isMuted = data.isMuted;
+        changed = true;
+      }
+      if (data.name !== undefined && output.name !== data.name) {
+        output.name = data.name;
+        changed = true;
+      }
+      if (data.inputSends !== undefined) {
+        output.inputSends = data.inputSends;
+        changed = true;
+      }
+
+      if (changed) {
+        this.mixerStateRep.value.lastUpdate = getCurrentTimestamp();
+      }
     }
   }
 }

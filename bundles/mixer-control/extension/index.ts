@@ -45,4 +45,18 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
       connectionManager.setMute(data.channelId, data.isMuted);
     }
   );
+
+  nodecg.listenFor(
+    "setMixerOutputFader",
+    (data: { outputId: number; level: number }) => {
+      connectionManager.setOutputFaderLevel(data.outputId, data.level);
+    }
+  );
+
+  nodecg.listenFor(
+    "setMixerOutputMute",
+    (data: { outputId: number; isMuted: boolean }) => {
+      connectionManager.setOutputMute(data.outputId, data.isMuted);
+    }
+  );
 };
