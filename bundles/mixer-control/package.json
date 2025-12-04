@@ -5,11 +5,19 @@
     "compatibleRange": "^2.0.0",
     "dashboardPanels": [
       {
-        "name": "mixer-dashboard",
+        "name": "mixer-connection",
+        "title": "Mixer Connection",
+        "width": 4,
+        "file": "mixer-connection.html",
+        "headerColor": "#525252"
+      },
+      {
+        "name": "mixer-control-panel",
         "title": "Mixer Control",
         "width": 4,
-        "file": "mixer-dashboard.html",
-        "headerColor": "#525252"
+        "file": "mixer-control-panel.html",
+        "headerColor": "#525252",
+        "workspace": "Mixer Control"
       }
     ]
   },

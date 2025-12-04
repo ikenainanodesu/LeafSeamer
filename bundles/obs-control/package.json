@@ -5,11 +5,19 @@
     "compatibleRange": "^2.0.0",
     "dashboardPanels": [
       {
-        "name": "obs-dashboard",
+        "name": "obs-connection",
+        "title": "OBS Connection",
+        "width": 4,
+        "file": "obs-connection.html",
+        "headerColor": "#525252"
+      },
+      {
+        "name": "obs-control-panel",
         "title": "OBS Control",
         "width": 4,
-        "file": "obs-dashboard.html",
-        "headerColor": "#525252"
+        "file": "obs-control-panel.html",
+        "headerColor": "#525252",
+        "workspace": "OBS Control"
       }
     ]
   },
