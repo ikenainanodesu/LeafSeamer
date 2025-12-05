@@ -144,4 +144,8 @@ export class StateManager {
       }
     }
   }
+
+  getMixerState() {
+    return this.mixerStateRep.value;
+  }
 }

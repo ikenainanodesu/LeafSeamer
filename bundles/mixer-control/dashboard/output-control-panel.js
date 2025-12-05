@@ -21834,36 +21834,52 @@ var OutputControlPanel = () => {
                     ]
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("details", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("summary", { style: { cursor: "pointer", outline: "none" }, children: "Input Sends" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                    "div",
-                    {
-                      style: {
-                        marginTop: "10px",
-                        maxHeight: "200px",
-                        overflowY: "auto"
-                      },
-                      children: output.inputSends && output.inputSends.length > 0 ? output.inputSends.map((send) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                  "details",
+                  {
+                    onToggle: (e) => {
+                      if (e.target.open) {
+                        nodecg.sendMessageToBundle(
+                          "queryOutputRouting",
+                          "mixer-control",
+                          {
+                            outputId: output.id
+                          }
+                        );
+                      }
+                    },
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("summary", { style: { cursor: "pointer", outline: "none" }, children: "Input Sends" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
                         "div",
                         {
-                          style: { fontSize: "0.9em", marginBottom: "5px" },
-                          children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: send.inputName }),
-                            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: { float: "right" }, children: [
-                              send.active ? "ON" : "OFF",
-                              " /",
-                              " ",
-                              send.level === -32768 ? "-\u221E" : (send.level / 100).toFixed(1),
-                              "dB"
-                            ] })
-                          ]
-                        },
-                        send.inputId
-                      )) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { fontSize: "0.8em", color: "#aaa" }, children: "No inputs routed (or data not polled)" })
-                    }
-                  )
-                ] })
+                          style: {
+                            marginTop: "10px",
+                            maxHeight: "200px",
+                            overflowY: "auto"
+                          },
+                          children: output.inputSends && output.inputSends.length > 0 ? output.inputSends.map((send) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                            "div",
+                            {
+                              style: { fontSize: "0.9em", marginBottom: "5px" },
+                              children: [
+                                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: send.inputName }),
+                                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: { float: "right" }, children: [
+                                  send.active ? "ON" : "OFF",
+                                  " /",
+                                  " ",
+                                  send.level === -32768 ? "-\u221E" : (send.level / 100).toFixed(1),
+                                  "dB"
+                                ] })
+                              ]
+                            },
+                            send.inputId
+                          )) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { fontSize: "0.8em", color: "#aaa" }, children: "No inputs routed (or click to load)" })
+                        }
+                      )
+                    ]
+                  }
+                )
               ]
             },
             output.id
