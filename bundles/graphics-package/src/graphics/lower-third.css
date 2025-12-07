@@ -1,0 +1,24 @@
+/* bundles/graphics-package/graphics/lower-third.css */
+.lower-third-container {
+  position: absolute;
+  bottom: 100px;
+  left: 100px;
+  font-family: "Maple", sans-serif;
+}
+.lower-third-line1 {
+  background-color: #1e88e5;
+  color: white;
+  padding: 10px 20px;
+  font-size: 64px;
+  font-weight: bold;
+  display: inline-block;
+}
+.lower-third-line2 {
+  background-color: white;
+  color: #333;
+  padding: 5px 20px;
+  font-size: 48px;
+  font-weight: bold;
+  display: inline-block;
+}
+/*# sourceMappingURL=lower-third.css.map */

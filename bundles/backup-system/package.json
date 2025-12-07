@@ -13,15 +13,12 @@
       }
     ]
   },
-  "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch"
-  },
+  "scripts": {},
   "dependencies": {
     "archiver": "^7.0.1"
   },
   "devDependencies": {
-    "@types/archiver": "^6.1.2",
+    "@types/archiver": "^7.0.0",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",

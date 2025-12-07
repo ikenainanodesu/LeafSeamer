@@ -1,13 +1,14 @@
-/// <reference path="../../../shared/types/global.d.ts" />
+/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { LowerThirdData } from "../../../shared/types/graphics.types";
+import { LowerThirdData } from "@shared/types/graphics.types";
 import {
   createLowerThirdEntranceAnimation,
   createLowerThirdExitAnimation,
-} from "../../../shared/utils/gsap-animations";
+} from "@shared/utils/gsap-animations";
+import "./lower-third.css";
 
 const LowerThird = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,6 +29,13 @@ const LowerThird = () => {
         setData(newVal.lowerThird);
       }
     });
+  }, []);
+
+  // 设置初始状态
+  useEffect(() => {
+    if (line1Ref.current && line2Ref.current) {
+      gsap.set([line1Ref.current, line2Ref.current], { opacity: 0 });
+    }
   }, []);
 
   // GSAP 动画控制
@@ -58,42 +66,12 @@ const LowerThird = () => {
   );
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        position: "absolute", // 定位方式 - 绝对定位(相对于屏幕)
-        bottom: "100px", // 底部距离 - 距离屏幕底部100px
-        left: "100px", // 左侧距离 - 距离屏幕左侧100px
-        fontFamily: "Maple, sans-serif", // 字体族 - Maple字体,备用无衬线字体
-      }}
-    >
-      <div
-        ref={line1Ref}
-        style={{
-          backgroundColor: "#1e88e5", // 背景颜色 - 蓝色主题色
-          color: "white", // 文字颜色 - 白色
-          padding: "10px 20px", // 内边距 - 上下10px, 左右20px
-          fontSize: "64px", // 字体大小 - 32像素(主标题)
-          fontWeight: "bold", // 字体粗细 - 加粗
-          display: "inline-block", // 显示方式 - 行内块元素(宽度自适应内容)
-          opacity: 0, // 初始透明度 - 0(完全透明,由 GSAP 动画控制)
-        }}
-      >
+    <div ref={containerRef} className="lower-third-container">
+      <div ref={line1Ref} className="lower-third-line1">
         {data.line1}
       </div>
       <br />
-      <div
-        ref={line2Ref}
-        style={{
-          backgroundColor: "white",
-          color: "#333",
-          padding: "5px 20px",
-          fontSize: "48px",
-          fontWeight: "bold",
-          display: "inline-block",
-          opacity: 0, // 初始不可见,由 GSAP 控制
-        }}
-      >
+      <div ref={line2Ref} className="lower-third-line2">
         {data.line2}
       </div>
     </div>

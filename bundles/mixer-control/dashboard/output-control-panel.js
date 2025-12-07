@@ -21868,7 +21868,7 @@ var OutputControlPanel = () => {
                                   send.active ? "ON" : "OFF",
                                   " /",
                                   " ",
-                                  send.level === -32768 ? "-\u221E" : (send.level / 100).toFixed(1),
+                                  send.level <= -32768 ? "-\u221E" : (send.level / 100).toFixed(1),
                                   "dB"
                                 ] })
                               ]

@@ -6,9 +6,13 @@
   "scripts": {
     "start": "nodecg start",
     "dev": "nodecg start",
-    "build": "tsc && node build-dashboards.js",
-    "watch": "tsc --watch"
+    "build": "ts-node scripts/build-bundles.ts",
+    "watch": "tsc --watch",
+    "typecheck": "tsc --noEmit"
   },
+  "workspaces": [
+    "bundles/*"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
