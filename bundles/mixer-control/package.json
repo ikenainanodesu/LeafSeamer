@@ -30,8 +30,11 @@
     ]
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "build:extension": "tsc",
+    "build:dashboard": "vite build --config ../../vite.config.dashboard.ts",
+    "build": "npm run build:extension && npm run build:dashboard",
+    "watch:extension": "tsc --watch",
+    "watch": "npm run watch:extension"
   },
   "dependencies": {
     "node-osc": "^11.0.0"

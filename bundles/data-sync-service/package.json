@@ -6,8 +6,10 @@
     "dashboardPanels": []
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "build:extension": "tsc",
+    "build": "npm run build:extension",
+    "watch:extension": "tsc --watch",
+    "watch": "npm run watch:extension"
   },
   "dependencies": {
     "googleapis": "^144.0.0"

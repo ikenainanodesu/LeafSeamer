@@ -1,91 +1,85 @@
-import { build } from "vite";
-import { glob } from "glob";
-import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
 import fs from "fs";
-import react from "@vitejs/plugin-react";
+import path from "path";
+
+const execAsync = promisify(exec);
 
 async function buildBundles() {
   const bundlesDir = path.resolve(__dirname, "../bundles");
+
   if (!fs.existsSync(bundlesDir)) {
     console.error("Bundles directory not found.");
     process.exit(1);
   }
 
+  // 获取所有bundles,排除frontend-assets
   const bundles = fs.readdirSync(bundlesDir).filter((file) => {
-    return fs.statSync(path.join(bundlesDir, file)).isDirectory();
+    const bundlePath = path.join(bundlesDir, file);
+    const stats = fs.statSync(bundlePath);
+    return stats.isDirectory() && file !== "frontend-assets";
   });
 
-  console.log(`Found ${bundles.length} bundles.`);
+  console.log(`Found ${bundles.length} bundles to build.`);
 
   for (const bundle of bundles) {
     const bundlePath = path.join(bundlesDir, bundle);
-    const srcDir = path.join(bundlePath, "src");
+    const packageJsonPath = path.join(bundlePath, "package.json");
 
-    if (!fs.existsSync(srcDir)) {
-      console.log(`Skipping ${bundle} (no src directory)`);
+    if (!fs.existsSync(packageJsonPath)) {
+      console.log(`Skipping ${bundle} (no package.json)`);
       continue;
     }
 
-    console.log(`Building ${bundle}...`);
-
-    // Find entry points (HTML files) in src/dashboard and src/graphics
-    const entryPoints = glob.sync("**/*.html", { cwd: srcDir, absolute: true });
-
-    if (entryPoints.length === 0) {
-      console.log(`  No HTML entry points found in ${bundle}/src`);
-      continue;
-    }
-
-    // Create input map for Rollup
-    // Key should be relative path from bundle root to output file (minus extension for safety, though Rollup keys are arbitrary usually)
-    // Actually, naming keys to match relative path helps structure output if we weren't being careful.
-    // For local bundle dev, we want:
-    // bundles/foo/src/graphics/bar.html -> bundles/foo/graphics/bar.html
-    // bundles/foo/src/dashboard/baz.html -> bundles/foo/dashboard/baz.html
-
-    const input: Record<string, string> = {};
-    entryPoints.forEach((entry) => {
-      // e.g. /path/to/bundles/graphics-package/src/graphics/lower-third.html
-      const relativeToSrc = path.relative(srcDir, entry);
-      // graphics/lower-third.html
-
-      const name = relativeToSrc.replace(/\\/g, "/").replace(/\.html$/, "");
-      // graphics/lower-third
-
-      input[name] = entry;
-    });
+    console.log(`\nBuilding ${bundle}...`);
 
     try {
-      await build({
-        root: srcDir,
-        base: "./",
-        configFile: false,
-        plugins: [react()],
-        build: {
-          outDir: path.join(bundlePath, "dist"),
-          assetsDir: "shared",
-          emptyOutDir: true,
-          rollupOptions: {
-            input: input,
-          },
-          write: true,
-          minify: false,
-        },
-        resolve: {
-          alias: {
-            "@shared": path.resolve(__dirname, "../shared"),
-          },
-        },
-      });
-      console.log(`  ✓ Built ${bundle}`);
-    } catch (e) {
-      console.error(`  ✗ Failed to build ${bundle}`, e);
+      const srcDir = path.join(bundlePath, "src");
+
+      // 检查extension - 可能在src/extension或根目录的extension
+      const hasExtension =
+        fs.existsSync(path.join(srcDir, "extension")) ||
+        fs.existsSync(path.join(bundlePath, "extension"));
+      const hasDashboard = fs.existsSync(path.join(srcDir, "dashboard"));
+      const hasGraphics = fs.existsSync(path.join(srcDir, "graphics"));
+
+      // 构建extension (使用TypeScript编译)
+      if (hasExtension) {
+        console.log(`  Building extension...`);
+        await execAsync("npm run build:extension", {
+          cwd: bundlePath,
+          env: process.env,
+        });
+      }
+
+      // 构建dashboard/graphics (使用Vite)
+      if (hasDashboard || hasGraphics) {
+        console.log(`  Building dashboard/graphics...`);
+        await execAsync("npm run build:dashboard", {
+          cwd: bundlePath,
+          env: { ...process.env, BUNDLE_NAME: bundle },
+        });
+      }
+
+      if (!hasExtension && !hasDashboard && !hasGraphics) {
+        console.log(`  No src/ directory found, skipping`);
+        continue;
+      }
+
+      console.log(`  ✓ Successfully built ${bundle}`);
+    } catch (error: any) {
+      console.error(`  ✗ Failed to build ${bundle}`);
+      console.error(`  Error: ${error.message}`);
+      if (error.stdout) console.error(`  stdout: ${error.stdout}`);
+      if (error.stderr) console.error(`  stderr: ${error.stderr}`);
       process.exit(1);
     }
   }
+
+  console.log("\n✓ All bundles built successfully!");
 }
 
 buildBundles().catch((err) => {
-  console.error(err);
+  console.error("Build failed:", err);
   process.exit(1);
 });
