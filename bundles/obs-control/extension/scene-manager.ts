@@ -1,5 +1,5 @@
 import NodeCG from "nodecg/types";
-import OBSWebSocket from "obs-websocket-js";
+import { OBSWebSocket } from "obs-websocket-js";
 import { OBSState, OBSScene } from "../../../shared/types/obs.types";
 
 export class SceneManager {

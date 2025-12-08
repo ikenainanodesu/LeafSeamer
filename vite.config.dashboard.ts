@@ -52,10 +52,16 @@ export default defineConfig(({ command, mode }) => {
       rollupOptions: {
         input,
         output: {
-          // 将JS/CSS资源输出到assets目录
-          entryFileNames: "assets/[name]-[hash].js",
-          chunkFileNames: "assets/[name]-[hash].js",
-          assetFileNames: "assets/[name]-[hash].[ext]",
+          // 将JS资源直接输出到 dashboard/graphics 目录，共享代码输出到 shared
+          entryFileNames: (chunkInfo) => {
+            const name = chunkInfo.name;
+            if (name.startsWith("dashboard/") || name.startsWith("graphics/")) {
+              return `${name}-[hash].js`;
+            }
+            return "[name]-[hash].js";
+          },
+          chunkFileNames: "shared/[name]-[hash].js",
+          assetFileNames: "shared/[name]-[hash].[ext]",
         },
       },
     },

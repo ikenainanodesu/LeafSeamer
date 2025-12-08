@@ -3,7 +3,17 @@ db/
 logs/
 backups/
 .env
-*.log
-dist/
 .DS_Store
+
+# 日志和错误文件
+*.log
 *.txt
+server_error.*
+
+# 保留重要文档
+!README.md
+!README.txt
+!TROUBLESHOOTING.md
+
+# 构建产物
+dist/

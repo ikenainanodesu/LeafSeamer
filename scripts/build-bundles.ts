@@ -43,12 +43,12 @@ async function buildBundles() {
       const hasDashboard = fs.existsSync(path.join(srcDir, "dashboard"));
       const hasGraphics = fs.existsSync(path.join(srcDir, "graphics"));
 
-      // 构建extension (使用TypeScript编译)
+      // 构建extension (使用Vite)
       if (hasExtension) {
         console.log(`  Building extension...`);
         await execAsync("npm run build:extension", {
           cwd: bundlePath,
-          env: process.env,
+          env: { ...process.env, BUNDLE_NAME: bundle },
         });
       }
 

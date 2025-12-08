@@ -11,7 +11,7 @@ export class Storage {
 
   constructor(nodecg: NodeCG.ServerAPI) {
     this.nodecg = nodecg;
-    this.logDir = path.join((nodecg as any).bundlePath, "logs");
+    this.logDir = path.join(__dirname, "../logs");
 
     if (!fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });

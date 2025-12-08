@@ -17,6 +17,17 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     },
   });
 
+  logger.info("Debug: SceneManager type:", typeof SceneManager);
+  logger.info("Debug: ConnectionManager type:", typeof ConnectionManager);
+
+  if (typeof SceneManager !== "function")
+    logger.error("SceneManager is not a constructor/function!", SceneManager);
+  if (typeof ConnectionManager !== "function")
+    logger.error(
+      "ConnectionManager is not a constructor/function!",
+      ConnectionManager
+    );
+
   const sceneManager = new SceneManager(nodecg);
   const connectionManager = new ConnectionManager(nodecg, sceneManager);
 

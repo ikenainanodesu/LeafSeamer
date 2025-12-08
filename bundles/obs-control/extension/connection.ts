@@ -1,4 +1,4 @@
-import OBSWebSocket from "obs-websocket-js";
+import { OBSWebSocket } from "obs-websocket-js";
 import NodeCG from "nodecg/types";
 import { SceneManager } from "./scene-manager";
 import { createLogger } from "../../../shared/utils/logger";

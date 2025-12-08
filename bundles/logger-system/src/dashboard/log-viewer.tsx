@@ -43,9 +43,10 @@ const LogViewer = () => {
     <div
       style={{
         padding: "20px",
-        height: "100vh",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ marginBottom: "10px" }}>
@@ -61,12 +62,14 @@ const LogViewer = () => {
             color: "white",
             border: "1px solid #666",
             borderRadius: "4px",
+            boxSizing: "border-box",
           }}
         />
       </div>
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           backgroundColor: "#1e1e1e",
           borderRadius: "4px",
