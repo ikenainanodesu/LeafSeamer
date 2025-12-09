@@ -1,105 +1,176 @@
 # LeafSeamer
 
-LeafSeamer is a modular broadcast control system built on [NodeCG](https://nodecg.dev/). It provides a comprehensive suite of tools for managing live broadcasts, including mixer control, OBS automation, graphics, logging, backups, and schedule management.
+基于 NodeCG 的广播制作控制系统,集成调音台、OBS、图形overlay、VB-Audio Matrix等多种设备和服务的统一控制平台。
 
-## Features
+## 项目概述
 
-- **Mixer Control**: OSC-based control for digital mixers (e.g., Behringer X32/M32).
-- **OBS Control**: WebSocket-based automation for OBS Studio.
-- **Graphics Package**: HTML/React-based broadcast graphics (Lower Thirds, Scoreboard).
-- **Logger System**: Centralized logging with file persistence and dashboard viewer.
-- **Backup System**: One-click backup of system configuration and database.
-- **Data Sync**: Synchronization with Google Sheets for external data.
-- **Schedule Manager**: Broadcast schedule management and display.
+LeafSeamer 是一个现代化的广播制作控制系统,为视频直播和节目制作提供集中化的设备控制和状态管理。项目采用模块化架构,每个功能独立为 NodeCG bundle,便于维护和扩展。
 
-## Prerequisites
+## 核心功能模块
 
-- **Node.js**: v18.x or later (Tested on v24.11.1)
-- **npm**: v9.x or later
-- **OBS Studio**: v28.x or later (with WebSocket 5.x enabled)
+### 设备控制模块
 
-## Installation
+- **mixer-control** - 调音台控制模块
+  - 支持通过 OSC 协议控制混音器
+  - 实时显示输入通道状态和路由信息
+  - 提供 Web Dashboard 进行连接管理和控制
 
-1.  **Clone the repository**:
+- **obs-control** - OBS 控制模块
+  - 通过 WebSocket 连接和控制 OBS Studio
+  - 场景切换、录制、推流控制
+  - 实时状态监控
 
-    ```bash
-    git clone <repository-url>
-    cd LeafSeamer
-    ```
+- **vb-matrix-control** - VB-Audio Matrix 控制模块
+  - 通过 VBAN 协议控制 VB-Audio Matrix
+  - 音频路由矩阵管理
+  - 网络配置和 Ping 测试
+  - 本地 IP 地址显示
 
-2.  **Install dependencies**:
+### 图形和显示模块
 
-    ```bash
-    npm install
-    ```
+- **graphics-package** - 图形叠加包
+  - 集成 GSAP 动画库
+  - 提供 Lower Third (字幕条) 图形
+  - Scoreboard (计分板) 显示
+  - 平滑的入场和出场动画
 
-    _Note: This will install NodeCG and all bundle dependencies._
+- **schedule-manager** - 日程管理模块
+  - 节目时间表管理
+  - 日程显示图形输出
+  - Dashboard 控制面板
 
-3.  **Build the project**:
-    ```bash
-    npm run build
-    ```
+### 系统服务模块
 
-## Configuration
+- **logger-system** - 日志系统
+  - 集中化日志收集和查看
+  - 实时日志查看器
+  - 异步日志处理
 
-Configuration files are located in the `cfg/` directory.
+- **backup-system** - 备份系统
+  - 自动备份项目配置和数据
+  - 使用 archiver 进行文件打包
+  - Dashboard 备份控制面板
 
-### `cfg/nodecg.json`
+- **data-sync-service** - 数据同步服务
+  - Google APIs 集成
+  - 后台数据同步(无 Dashboard 界面)
 
-Core NodeCG configuration (host, port, logging).
+## 技术栈
 
-### `cfg/leafseamer.json`
+### 核心框架
 
-Bundle-specific configuration. Example:
+- **NodeCG** v2.6.4 - 广播图形框架
+- **React** v19.2.1 - UI 组件库
+- **TypeScript** v5.7.2 - 类型安全开发
 
-```json
-{
-  "mixer": {
-    "defaultIP": "192.168.1.100",
-    "defaultPort": 8000
-  },
-  "obs": {
-    "defaultHost": "localhost",
-    "defaultPort": 4455,
-    "defaultPassword": "your_password"
-  },
-  "googleSheets": {
-    "spreadsheetId": "your_spreadsheet_id",
-    "credentialsPath": "./credentials.json"
-  }
-}
+### 构建工具
+
+- **Vite** v6.0.1 - 前端构建工具
+- **esbuild** v0.27.1 - JavaScript 打包器
+- **ts-node** - TypeScript 执行环境
+
+### 主要依赖
+
+- **GSAP** v3.13.0 - 高性能动画库
+- **obs-websocket-js** v5.0.7 - OBS WebSocket 客户端
+- **node-osc** v11.1.1 - OSC 协议支持
+- **googleapis** v166.0.0 - Google API 客户端
+- **archiver** v7.0.1 - 文件归档工具
+
+## 项目结构
+
+```
+LeafSeamer/
+├── bundles/                      # NodeCG bundles 模块目录
+│   ├── backup-system/           # 备份系统
+│   ├── data-sync-service/       # 数据同步服务
+│   ├── graphics-package/        # 图形包 (GSAP动画)
+│   ├── logger-system/           # 日志系统
+│   ├── mixer-control/           # 调音台控制
+│   ├── obs-control/             # OBS控制
+│   ├── schedule-manager/        # 日程管理
+│   └── vb-matrix-control/       # VB-Audio Matrix控制
+├── shared/                       # 共享资源
+│   ├── types/                   # TypeScript 类型定义
+│   ├── utils/                   # 工具函数
+│   └── constants/               # 常量定义
+├── scripts/                      # 构建脚本
+├── cfg/                         # NodeCG 配置
+├── db/                          # 数据库文件
+├── logs/                        # 日志文件
+├── project-documents/           # 项目文档
+│   └── core-doc/               # 核心文档
+├── vite.config.dashboard.ts     # Vite Dashboard 配置
+├── vite.config.extension.ts     # Vite Extension 配置
+├── tsconfig.json                # TypeScript 配置
+└── package.json                 # 项目配置
 ```
 
-## Usage
+## 开发说明
 
-1.  **Start the system**:
+### 安装依赖
 
-    ```bash
-    npm start
-    ```
+```bash
+npm install
+```
 
-    Or for development (with auto-restart):
+### 启动开发环境
 
-    ```bash
-    npm run dev
-    ```
+```bash
+npm start
+# 或
+npm run dev
+```
 
-2.  **Access the Dashboard**:
-    Open [http://localhost:9090](http://localhost:9090) in your browser.
+### 构建项目
 
-3.  **Access Graphics**:
-    Graphics URLs are available in the Dashboard under the "Graphics" tab.
+```bash
+# 构建所有 bundles
+npm run build
 
-## Bundles
+# 类型检查
+npm run typecheck
+```
 
-- **mixer-control**: Control faders and mute states.
-- **obs-control**: Switch scenes and monitor stream status.
-- **graphics-package**: Control on-air graphics.
-- **logger-system**: View system logs.
-- **backup-system**: Create and download backups.
-- **data-sync-service**: Sync data from Google Sheets.
-- **schedule-manager**: Manage on-air schedule.
+### Bundle 开发
 
-## Troubleshooting
+每个 bundle 都有独立的构建配置:
 
-See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for common issues and solutions.
+```bash
+cd bundles/[bundle-name]
+
+# 构建 Extension
+npm run build:extension
+
+# 构建 Dashboard
+npm run build:dashboard
+
+# 完整构建
+npm run build
+
+# 监听模式
+npm run watch
+```
+
+## 配置说明
+
+- NodeCG 配置文件位于 `cfg/` 目录
+- 各 bundle 的配置在各自的 `package.json` 中定义
+- TypeScript 配置统一使用根目录的 `tsconfig.json`
+- Vite 构建配置分为 Dashboard 和 Extension 两套
+
+## 访问地址
+
+启动后访问:
+
+- Dashboard: `http://localhost:9090`
+- Graphics: `http://localhost:9090/bundles/[bundle-name]/graphics/[graphic-name].html`
+
+## 许可证
+
+ISC
+
+## 维护状态
+
+当前版本: 1.0.0  
+最后更新: 2025-12-10
