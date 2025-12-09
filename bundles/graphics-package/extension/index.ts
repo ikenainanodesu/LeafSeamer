@@ -4,6 +4,7 @@ import { createLogger } from "../../../shared/utils/logger";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const logger = createLogger("GraphicsPackage");
+  logger.setNodeCG(nodecg);
   logger.info("Starting Graphics Package Bundle");
 
   // Initialize Replicants

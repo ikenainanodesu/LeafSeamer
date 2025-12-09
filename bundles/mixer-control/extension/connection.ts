@@ -19,6 +19,7 @@ export class ConnectionManager {
 
   constructor(nodecg: NodeCG.ServerAPI, stateManager: StateManager) {
     this.nodecg = nodecg;
+    this.logger.setNodeCG(nodecg);
     this.stateManager = stateManager;
     this.config = nodecg.bundleConfig;
   }

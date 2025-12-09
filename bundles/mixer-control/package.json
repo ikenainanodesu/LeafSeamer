@@ -12,18 +12,10 @@
         "headerColor": "#525252"
       },
       {
-        "name": "mixer-control-panel",
-        "title": "Input CH",
+        "name": "mixer-panel",
+        "title": "Mixer Control",
         "width": 8,
-        "file": "mixer-control-panel.html",
-        "headerColor": "#525252",
-        "workspace": "Mixer Control"
-      },
-      {
-        "name": "output-control-panel",
-        "title": "Output CH",
-        "width": 8,
-        "file": "output-control-panel.html",
+        "file": "mixer-panel.html",
         "headerColor": "#525252",
         "workspace": "Mixer Control"
       }

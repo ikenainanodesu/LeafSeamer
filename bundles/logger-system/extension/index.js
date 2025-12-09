@@ -80,7 +80,10 @@ module.exports = function(nodecg) {
   nodecg.log.info("Starting Logger System Bundle");
   const storage = new Storage(nodecg);
   const logger = new Logger(nodecg, storage);
-  nodecg.listenFor("logMessage", (data) => {
-    logger.log(data.level, data.category, data.message);
-  });
+  logger.log("info", "LoggerSystem", "Starting Logger System Bundle");
+  return {
+    log: (level, category, message) => {
+      logger.log(level, category, message);
+    }
+  };
 };

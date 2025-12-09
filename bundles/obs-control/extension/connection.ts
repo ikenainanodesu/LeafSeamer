@@ -15,6 +15,7 @@ export class ConnectionManager {
 
   constructor(nodecg: NodeCG.ServerAPI, sceneManager: SceneManager) {
     this.nodecg = nodecg;
+    this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
     this.config = nodecg.bundleConfig;
     this.obs = new OBSWebSocket();

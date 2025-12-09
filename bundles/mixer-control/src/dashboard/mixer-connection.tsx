@@ -1,10 +1,10 @@
-/// <reference path="../../../shared/types/global.d.ts" />
+/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   MixerState,
   MixerConnectionSettings,
-} from "../../../shared/types/mixer.types";
+} from "../../../../shared/types/mixer.types";
 
 const MixerConnection = () => {
   const [connected, setConnected] = useState(false);

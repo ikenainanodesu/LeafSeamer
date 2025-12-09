@@ -6,6 +6,7 @@ import { OBSConnectionSettings } from "../../../shared/types/obs.types";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const logger = createLogger("OBSControl");
+  logger.setNodeCG(nodecg);
   logger.info("Starting OBS Control Bundle");
 
   // Initialize Replicants

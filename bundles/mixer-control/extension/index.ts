@@ -6,6 +6,7 @@ import { MixerConnectionSettings } from "../../../shared/types/mixer.types";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const logger = createLogger("MixerControl");
+  logger.setNodeCG(nodecg);
   logger.info("Starting Mixer Control Bundle");
 
   // Initialize Replicants
