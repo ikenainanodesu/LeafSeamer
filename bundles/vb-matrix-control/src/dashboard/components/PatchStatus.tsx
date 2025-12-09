@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { PatchPoint } from "../../types";
 
-export const PatchStatus: React.FC = () => {
+export const PatchStatus: React.FC<{ isSelectionComplete: boolean }> = ({
+  isSelectionComplete,
+}) => {
   const [status, setStatus] = useState<PatchPoint | null>(null);
 
   useEffect(() => {
@@ -36,6 +38,14 @@ export const PatchStatus: React.FC = () => {
       });
     }
   };
+
+  if (!isSelectionComplete) {
+    return (
+      <div style={{ marginTop: "10px", color: "#888", textAlign: "center" }}>
+        Please select device
+      </div>
+    );
+  }
 
   if (!status) return <div>No Patch Selected</div>;
 

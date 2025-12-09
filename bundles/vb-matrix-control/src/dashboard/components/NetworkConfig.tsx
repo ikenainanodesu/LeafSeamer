@@ -115,12 +115,19 @@ const PingTestButton: React.FC = () => {
   if (flashState === "success") bgColor = "#52c41a"; // Green
   if (flashState === "error") bgColor = "#ff4d4f"; // Red
 
+  let label = "Ping Test";
+  if (testing) {
+    if (flashState === "success") label = "OK!!";
+    else if (flashState === "error") label = "Fail";
+    else label = "Testing...";
+  }
+
   return (
     <button
       onClick={runPingTest}
       disabled={testing}
       style={{
-        marginLeft: "10px",
+        marginLeft: "5px",
         backgroundColor: bgColor,
         color: flashState === "idle" ? "black" : "white",
         transition: "background-color 0.1s",
@@ -128,9 +135,11 @@ const PingTestButton: React.FC = () => {
         borderRadius: "4px",
         padding: "2px 8px",
         cursor: testing ? "default" : "pointer",
+        width: "100px", // Fixed width to prevent size change
+        textAlign: "center",
       }}
     >
-      {testing ? "Testing..." : "Ping Test"}
+      {label}
     </button>
   );
 };

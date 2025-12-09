@@ -9,6 +9,7 @@ import { Bank } from "./Bank";
 export const Panel: React.FC = () => {
   const [presetName, setPresetName] = React.useState("New Preset");
   const [localIPs, setLocalIPs] = React.useState<string[]>([]);
+  const [hasSelection, setHasSelection] = React.useState(false);
 
   React.useEffect(() => {
     const hostRep = nodecg.Replicant<{ ips: string[] }>("hostInfo");
@@ -48,14 +49,24 @@ export const Panel: React.FC = () => {
             borderRadius: "4px",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <h3>Network Configuration</h3>
-            <div style={{ fontSize: "0.9em", color: "#d1d1d1ff", textAlign: "right" }}>
-                {localIPs.length > 0 ? (
-                  localIPs.map((ip) => <div key={ip}>{ip}</div>)
-                ) : (
-                  "Loading..."
-                )}
+            <div
+              style={{
+                fontSize: "0.9em",
+                color: "#d1d1d1ff",
+                textAlign: "right",
+              }}
+            >
+              {localIPs.length > 0
+                ? localIPs.map((ip) => <div key={ip}>{ip}</div>)
+                : "Loading..."}
             </div>
           </div>
           <NetworkConfig />
@@ -69,8 +80,8 @@ export const Panel: React.FC = () => {
           }}
         >
           <h3>Patch Control</h3>
-          <PatchSelector />
-          <PatchStatus />
+          <PatchSelector onSelectionChange={setHasSelection} />
+          <PatchStatus isSelectionComplete={hasSelection} />
         </div>
 
         <div style={{ display: "flex", gap: "20px" }}>

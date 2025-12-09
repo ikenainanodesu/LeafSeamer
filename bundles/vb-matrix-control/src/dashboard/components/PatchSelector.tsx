@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { DeviceInfo } from "../../types";
 
-export const PatchSelector: React.FC = () => {
+export const PatchSelector: React.FC<{
+  onSelectionChange: (valid: boolean) => void;
+}> = ({ onSelectionChange }) => {
   // These would ideally come from a Replicant, mocked for now or empty
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
 
@@ -27,7 +29,10 @@ export const PatchSelector: React.FC = () => {
   };
 
   useEffect(() => {
-    if (inputDev && outputDev) {
+    const valid = !!(inputDev && outputDev);
+    onSelectionChange(valid);
+
+    if (valid) {
       handleSelectPatch();
     }
   }, [inputDev, inputCh, outputDev, outputCh]);
