@@ -1,0 +1,21 @@
+{
+  "name": "data-sync-service",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": []
+  },
+  "scripts": {
+    "build:extension": "vite build --config ../../vite.config.extension.ts",
+    "build": "npm run build:extension",
+    "watch:extension": "vite build --config ../../vite.config.extension.ts --watch",
+    "watch": "npm run watch:extension"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "mixer-control",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": [
+      {
+        "name": "mixer-connection",
+        "title": "Mixer Connection",
+        "width": 4,
+        "file": "mixer-connection.html",
+        "headerColor": "#525252"
+      },
+      {
+        "name": "mixer-panel",
+        "title": "Mixer Control",
+        "width": 8,
+        "file": "mixer-panel.html",
+        "headerColor": "#525252",
+        "workspace": "Mixer Control"
+      }
+    ]
+  },
+  "scripts": {
+    "build:extension": "vite build --config ../../vite.config.extension.ts",
+    "build:dashboard": "vite build --config ../../vite.config.dashboard.ts",
+    "build": "npm run build:extension && npm run build:dashboard",
+    "watch:extension": "vite build --config ../../vite.config.extension.ts --watch",
+    "watch": "npm run watch:extension"
+  },
+  "dependencies": {
+    "node-osc": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "typescript": "^5.7.2"
+  }
+}

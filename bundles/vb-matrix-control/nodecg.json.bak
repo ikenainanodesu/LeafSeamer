@@ -1,0 +1,12 @@
+{
+  "compatibleRange": "^2.0.0",
+  "dashboardPanels": [
+    {
+      "name": "control-panel",
+      "title": "VB Matrix Control",
+      "width": 8,
+      "file": "dashboard/control-panel.html",
+      "headerColor": "#525F78"
+    }
+  ]
+}

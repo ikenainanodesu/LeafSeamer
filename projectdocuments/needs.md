@@ -86,3 +86,35 @@
       - [ ] L/R独立调节
   - [ ] dm3实现目前缺乏api接口
   - [ ] 使用voicemeeter matrix实现
+
+- 帮我增加一个VB matrix coconuts控制模块
+  - 使用VBAN-text控制matrix coconuts
+    - 具体vban文档可以查看`E:\GitHub repository\LeafSeamer\projectdocuments\vban`
+  - 在dashboard中制作新的操作界面
+    - 网络配置
+      - ip输入框
+      - 端口输入框
+      - vbantext的stream name输入框
+    - patch选择  
+      - 选择输入设备(下拉框,点击时获取VBAN-text返回的设备列表)
+        - 选择该设备的通道(下拉框,点击时获取VBAN-text返回的通道列表)
+      - 选择输出设备(下拉框,点击时获取VBAN-text返回的设备列表)
+        - 选择该设备的通道(下拉框,点击时获取VBAN-text返回的通道列表)
+    - patch状态
+      - 点击patch状态可以在patch和unpatch的状态之间切换
+      - 显示当前选择的patch的gain(dB)
+      - 增加按钮
+        - gain +1dB
+        - gain -1dB
+    - 预设管理
+      - 拖动到预设bank可以保存预设为一个卡片
+      - 为预设新建一个本地json用于保存和拉取预设数据
+        - 预设需要有
+          - 网络配置
+          - patch情报
+          - patch状态
+          - 预设名称
+    - 预设bank区
+      - 默认为空白卡片区域
+      - 可以被拖入预设管理,并将预设管理保存为一个卡片
+      - 被拖入的预设卡片上显示预设名字

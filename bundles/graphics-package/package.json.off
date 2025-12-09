@@ -1,0 +1,45 @@
+{
+  "name": "graphics-package",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": [
+      {
+        "name": "graphics-control",
+        "title": "Graphics Control",
+        "width": 4,
+        "file": "graphics-control.html",
+        "headerColor": "#525252"
+      }
+    ],
+    "graphics": [
+      {
+        "file": "lower-third.html",
+        "width": 1920,
+        "height": 1080
+      },
+      {
+        "file": "scoreboard.html",
+        "width": 1920,
+        "height": 1080
+      }
+    ]
+  },
+  "scripts": {
+    "build:extension": "vite build --config ../../vite.config.extension.ts",
+    "build:dashboard": "vite build --config ../../vite.config.dashboard.ts",
+    "build": "npm run build:extension && npm run build:dashboard",
+    "watch:extension": "vite build --config ../../vite.config.extension.ts --watch",
+    "watch": "npm run watch:extension"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "typescript": "^5.7.2"
+  }
+}

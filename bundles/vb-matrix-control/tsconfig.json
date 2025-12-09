@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./extension",
+    "rootDir": "../../",
+    "baseUrl": "../../"
+  },
+  "include": [
+    "extension/**/*",
+    "src/**/*",
+    "../../shared/**/*",
+    "../../node_modules/nodecg/types/**/*"
+  ]
+}

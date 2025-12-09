@@ -1,0 +1,40 @@
+{
+  "name": "obs-control",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": [
+      {
+        "name": "obs-connection",
+        "title": "OBS Connection",
+        "width": 4,
+        "file": "obs-connection.html",
+        "headerColor": "#525252"
+      },
+      {
+        "name": "obs-control-panel",
+        "title": "OBS Control",
+        "width": 4,
+        "file": "obs-control-panel.html",
+        "headerColor": "#525252",
+        "workspace": "OBS Control"
+      }
+    ]
+  },
+  "scripts": {
+    "build:extension": "vite build --config ../../vite.config.extension.ts",
+    "build:dashboard": "vite build --config ../../vite.config.dashboard.ts",
+    "build": "npm run build:extension && npm run build:dashboard",
+    "watch:extension": "vite build --config ../../vite.config.extension.ts --watch",
+    "watch": "npm run watch:extension"
+  },
+  "dependencies": {
+    "obs-websocket-js": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "typescript": "^5.7.2"
+  }
+}
