@@ -8,6 +8,14 @@ import { Bank } from "./Bank";
 
 export const Panel: React.FC = () => {
   const [presetName, setPresetName] = React.useState("New Preset");
+  const [localIPs, setLocalIPs] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    const hostRep = nodecg.Replicant<{ ips: string[] }>("hostInfo");
+    hostRep.on("change", (val: { ips: string[] } | undefined) => {
+      if (val && val.ips) setLocalIPs(val.ips);
+    });
+  }, []);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { over } = event;
@@ -40,7 +48,16 @@ export const Panel: React.FC = () => {
             borderRadius: "4px",
           }}
         >
-          <h3>Network Configuration</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3>Network Configuration</h3>
+            <div style={{ fontSize: "0.9em", color: "#d1d1d1ff", textAlign: "right" }}>
+                {localIPs.length > 0 ? (
+                  localIPs.map((ip) => <div key={ip}>{ip}</div>)
+                ) : (
+                  "Loading..."
+                )}
+            </div>
+          </div>
           <NetworkConfig />
         </div>
 

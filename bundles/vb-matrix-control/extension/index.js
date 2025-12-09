@@ -1,4 +1,5 @@
 "use strict";
+const os = require("os");
 const fs = require("fs");
 const path = require("path");
 const dgram = require("dgram");
@@ -19,6 +20,7 @@ function _interopNamespaceDefault(e) {
   n.default = e;
   return Object.freeze(n);
 }
+const os__namespace = /* @__PURE__ */ _interopNamespaceDefault(os);
 const fs__namespace = /* @__PURE__ */ _interopNamespaceDefault(fs);
 const path__namespace = /* @__PURE__ */ _interopNamespaceDefault(path);
 const VBAN_HEADER_SIZE = 28;
@@ -81,7 +83,19 @@ class MatrixManager {
     this.initReplicants();
     this.initListeners();
     this.loadPresetsFromFile();
-    setInterval(() => this.pollStatus(), 1e3);
+  }
+  getLocalIPs() {
+    const interfaces = os__namespace.networkInterfaces();
+    const ips = [];
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if ("IPv4" !== iface.family || iface.internal) {
+          continue;
+        }
+        ips.push(iface.address);
+      }
+    }
+    return ips;
   }
   initReplicants() {
     this.netConfigRep = this.nodecg.Replicant("networkConfig", {
@@ -90,6 +104,10 @@ class MatrixManager {
         port: 6980,
         streamName: "Command1"
       }
+    });
+    this.hostInfoRep = this.nodecg.Replicant("hostInfo", {
+      defaultValue: { ips: this.getLocalIPs() },
+      persistent: false
     });
     this.presetsRep = this.nodecg.Replicant("presets", {
       defaultValue: []
@@ -110,6 +128,9 @@ class MatrixManager {
     });
     this.vban.on("error", (err) => {
       this.nodecg.log.error("VBAN Error:", err.message);
+    });
+    this.nodecg.listenFor("ping", () => {
+      this.ping();
     });
     this.nodecg.listenFor(
       "selectPatch",
@@ -309,11 +330,13 @@ class MatrixManager {
       this.nodecg.log.error("Failed to load presets:", err.message);
     }
   }
-  pollStatus() {
+  ping() {
     const versionQuery = "Command.Version = ?;";
-    this.nodecg.log.debug(`[VBAN Poll] Sending: ${versionQuery}`);
+    this.nodecg.log.debug(`[VBAN Ping] Sending: ${versionQuery}`);
     this.vban.send(versionQuery);
   }
+  // ... listener added in initListeners
+  // (Using separate tool call for initListeners update)
   handleResponse(data) {
     this.nodecg.log.info(`[VBAN Response] Raw: ${data}`);
     const lines = data.split(/[\r\n]+/).map((line) => line.trim()).filter((line) => line.length > 0);
@@ -329,6 +352,9 @@ class MatrixManager {
     if (line.includes("=")) {
       const [key, value] = line.split("=").map((s) => s.trim());
       this.nodecg.log.info(`[VBAN] ${key} -> ${value}`);
+      if (key === "Command.Version") {
+        this.nodecg.sendMessage("pingSuccess", value);
+      }
       if (key.includes("Slot") && key.includes(".Device")) {
         const match = key.match(/Slot\(([^)]+)\)\.Device/);
         if (match && value && value !== '""' && value !== "" && value !== "Err") {

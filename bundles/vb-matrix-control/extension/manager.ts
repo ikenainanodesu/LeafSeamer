@@ -1,3 +1,4 @@
+import * as os from "os";
 import * as fs from "fs";
 import * as path from "path";
 import NodeCG from "nodecg/types";
@@ -12,6 +13,7 @@ export class MatrixManager {
   private netConfigRep: any;
   private patchStatusRep: any;
   private presetsRep: any;
+  private hostInfoRep: any;
 
   constructor(nodecg: NodeCG.ServerAPI) {
     this.nodecg = nodecg;
@@ -20,9 +22,21 @@ export class MatrixManager {
     this.initReplicants();
     this.initListeners();
     this.loadPresetsFromFile();
+  }
 
-    // Start polling
-    setInterval(() => this.pollStatus(), 1000);
+  private getLocalIPs(): string[] {
+    const interfaces = os.networkInterfaces();
+    const ips: string[] = [];
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]!) {
+        // Skip internal (127.0.0.1) and non-IPv4
+        if ("IPv4" !== iface.family || iface.internal) {
+          continue;
+        }
+        ips.push(iface.address);
+      }
+    }
+    return ips;
   }
 
   private initReplicants() {
@@ -32,6 +46,11 @@ export class MatrixManager {
         port: 6980,
         streamName: "Command1",
       },
+    });
+
+    this.hostInfoRep = this.nodecg.Replicant("hostInfo", {
+      defaultValue: { ips: this.getLocalIPs() },
+      persistent: false,
     });
 
     this.presetsRep = this.nodecg.Replicant<Preset[]>("presets", {
@@ -61,6 +80,10 @@ export class MatrixManager {
 
     this.vban.on("error", (err: Error) => {
       this.nodecg.log.error("VBAN Error:", err.message);
+    });
+
+    this.nodecg.listenFor("ping", () => {
+      this.ping();
     });
 
     // Dashboard Listeners
@@ -340,13 +363,15 @@ export class MatrixManager {
     }
   }
 
-  private pollStatus() {
+  public ping() {
     // Poll for basic info to ensure connection
     const versionQuery = "Command.Version = ?;";
-    this.nodecg.log.debug(`[VBAN Poll] Sending: ${versionQuery}`);
+    this.nodecg.log.debug(`[VBAN Ping] Sending: ${versionQuery}`);
     this.vban.send(versionQuery);
-    // We will add more polls as we implement patch state
   }
+
+  // ... listener added in initListeners
+  // (Using separate tool call for initListeners update)
 
   private handleResponse(data: string) {
     // Parse response from Matrix
@@ -389,6 +414,7 @@ export class MatrixManager {
       // Basic Version Check
       if (key === "Command.Version") {
         // Could store this status
+        this.nodecg.sendMessage("pingSuccess", value);
       }
 
       // Device discovery responses

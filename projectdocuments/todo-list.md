@@ -1,0 +1,2 @@
+- [ ] 根据选择的设备和通道数建立patch gui,可以按照matrix逻辑编辑patch map
+- [ ] 
