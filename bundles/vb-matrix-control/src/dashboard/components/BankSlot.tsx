@@ -18,6 +18,7 @@ export const BankSlot: React.FC<BankSlotProps> = ({ id, preset, index }) => {
     height: "100px",
     border: "1px solid #ccc",
     backgroundColor: isOver ? "#e0e0e0" : "#fff",
+    color: "#333",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",

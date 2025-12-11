@@ -7,7 +7,7 @@
       {
         "name": "log-viewer",
         "title": "Log Viewer",
-        "width": 6,
+        "width": 4,
         "file": "log-viewer.html",
         "headerColor": "#525252"
       }

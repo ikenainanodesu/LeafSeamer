@@ -27,7 +27,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
         style={{ width: "100%" }}
       />
       <PresetDraggable />
-      <div style={{ fontSize: "0.8em", color: "#666" }}>
+      <div style={{ fontSize: "0.8em", color: "#c9c9c9ff" }}>
         Name and drag to Bank to save current state.
       </div>
     </div>

@@ -23,6 +23,7 @@ export const PresetDraggable: React.FC = () => {
           padding: "10px",
           border: "1px dashed #666",
           backgroundColor: "#eee",
+          color: "#333",
           cursor: "grab",
           textAlign: "center",
         }}
