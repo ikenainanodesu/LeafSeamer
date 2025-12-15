@@ -4,9 +4,11 @@ import { createRoot } from "react-dom/client";
 import {
   OBSState,
   OBSConnectionSettings,
+  OBSConnectionStatus,
 } from "../../../shared/types/obs.types";
 
 const ObsConnection = () => {
+  const [status, setStatus] = useState<OBSConnectionStatus>("disconnected");
   const [connected, setConnected] = useState(false);
   const [settings, setSettings] = useState<OBSConnectionSettings>({
     host: "localhost",
@@ -23,6 +25,7 @@ const ObsConnection = () => {
     obsStateRep.on("change", (newVal: OBSState | undefined) => {
       if (newVal) {
         setConnected(newVal.connected);
+        setStatus(newVal.status);
       }
     });
 
@@ -32,6 +35,12 @@ const ObsConnection = () => {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (status === "error") {
+      window.alert("Connection failed");
+    }
+  }, [status]);
 
   const updateSetting = (key: keyof OBSConnectionSettings, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -73,7 +82,11 @@ const ObsConnection = () => {
           }}
         />
         <span style={{ fontWeight: "bold" }}>
-          {connected ? "Connected" : "Disconnected"}
+          {status === "connected"
+            ? "Connected"
+            : status === "connecting"
+              ? "Connecting..."
+              : "Disconnected"}
         </span>
       </div>
 
@@ -115,17 +128,18 @@ const ObsConnection = () => {
           {!connected ? (
             <button
               onClick={handleConnect}
+              disabled={status === "connecting"}
               style={{
                 padding: "8px 16px",
-                backgroundColor: "#2196f3",
+                backgroundColor: status === "connecting" ? "#aaa" : "#2196f3",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer",
+                cursor: status === "connecting" ? "default" : "pointer",
                 flex: 1,
               }}
             >
-              Connect
+              {status === "connecting" ? "Connecting..." : "Connect"}
             </button>
           ) : (
             <button

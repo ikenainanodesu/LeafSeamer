@@ -3,8 +3,15 @@ export interface OBSScene {
   index: number;
 }
 
+export type OBSConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "connecting"
+  | "error";
+
 export interface OBSState {
   connected: boolean;
+  status: OBSConnectionStatus;
   currentScene: string;
   isStreaming: boolean;
   isRecording: boolean;

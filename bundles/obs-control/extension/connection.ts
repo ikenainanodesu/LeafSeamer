@@ -12,6 +12,7 @@ export class ConnectionManager {
   private config: any;
   private reconnectInterval: NodeJS.Timeout | null = null;
   private shouldBeConnected = false;
+  private isConnecting = false;
 
   constructor(nodecg: NodeCG.ServerAPI, sceneManager: SceneManager) {
     this.nodecg = nodecg;
@@ -26,15 +27,20 @@ export class ConnectionManager {
   private setupListeners() {
     this.obs.on("Identified", () => {
       this.logger.info("Connected to OBS");
-      this.sceneManager.setConnected(true);
+      this.sceneManager.setStatus("connected");
       this.sceneManager.updateScenes(this.obs);
     });
 
     this.obs.on("ConnectionClosed", () => {
       this.logger.warn("Disconnected from OBS");
-      this.sceneManager.setConnected(false);
+
+      // If we are currently trying to connect, let the connect() loop handle it
+      if (this.isConnecting) return;
+
+      this.sceneManager.setStatus("disconnected");
       if (this.shouldBeConnected) {
-        this.scheduleReconnect();
+        // Automatically try to reconnect once if strictly intended to be connected
+        this.connect();
       }
     });
 
@@ -44,7 +50,10 @@ export class ConnectionManager {
   }
 
   async connect(params?: { host: string; port: number; password?: string }) {
+    if (this.isConnecting) return;
+
     this.shouldBeConnected = true;
+    this.isConnecting = true;
 
     if (this.reconnectInterval) {
       clearInterval(this.reconnectInterval);
@@ -85,21 +94,39 @@ export class ConnectionManager {
     const address = `ws://${host}:${port}`;
 
     this.logger.info(`Connecting to OBS at ${address}`);
+    this.sceneManager.setStatus("connecting");
 
-    try {
-      await this.obs.connect(address, password);
-    } catch (error: any) {
-      this.logger.error("Failed to connect to OBS", error.message);
-      this.sceneManager.setConnected(false);
+    const maxRetries = 3;
+    const retryInterval = 2000;
 
-      if (this.shouldBeConnected) {
-        this.scheduleReconnect();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (!this.shouldBeConnected) return; // Stop if disconnected
+
+      try {
+        await this.obs.connect(address, password);
+        return; // Success
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to connect to OBS (Attempt ${attempt}/${maxRetries}): ${error.message}`
+        );
+        if (attempt < maxRetries) {
+          if (!this.shouldBeConnected) return; // Stop if disconnected during wait
+          await new Promise((resolve) => setTimeout(resolve, retryInterval));
+        } else {
+          this.logger.error("All connection attempts failed");
+          this.sceneManager.setStatus("error");
+          this.shouldBeConnected = false;
+        }
       }
     }
+
+    // Reset connecting flag if we exit the loop (success or failure)
+    this.isConnecting = false;
   }
 
   async disconnect() {
     this.shouldBeConnected = false;
+    this.sceneManager.setStatus("disconnected");
 
     if (this.reconnectInterval) {
       clearInterval(this.reconnectInterval);
@@ -124,16 +151,6 @@ export class ConnectionManager {
         `Failed to switch scene to ${sceneName}`,
         error.message
       );
-    }
-  }
-
-  private scheduleReconnect() {
-    if (!this.reconnectInterval) {
-      this.logger.info("Scheduling reconnect in 5s...");
-      this.reconnectInterval = setInterval(() => {
-        this.logger.info("Attempting to reconnect to OBS...");
-        this.connect();
-      }, 5000);
     }
   }
 }

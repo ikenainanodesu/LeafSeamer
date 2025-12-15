@@ -1,6 +1,10 @@
 import NodeCG from "nodecg/types";
 import { OBSWebSocket } from "obs-websocket-js";
-import { OBSState, OBSScene } from "../../../shared/types/obs.types";
+import {
+  OBSState,
+  OBSScene,
+  OBSConnectionStatus,
+} from "../../../shared/types/obs.types";
 
 export class SceneManager {
   private nodecg: NodeCG.ServerAPI;
@@ -12,6 +16,7 @@ export class SceneManager {
     this.obsStateRep = nodecg.Replicant<OBSState>("obsState", {
       defaultValue: {
         connected: false,
+        status: "disconnected",
         currentScene: "",
         isStreaming: false,
         isRecording: false,
@@ -24,10 +29,17 @@ export class SceneManager {
 
     // Always reset connection state to false on startup
     this.obsStateRep.value.connected = false;
+    this.obsStateRep.value.status = "disconnected";
   }
 
   setConnected(connected: boolean) {
     this.obsStateRep.value.connected = connected;
+    this.obsStateRep.value.status = connected ? "connected" : "disconnected";
+  }
+
+  setStatus(status: OBSConnectionStatus) {
+    this.obsStateRep.value.status = status;
+    this.obsStateRep.value.connected = status === "connected";
   }
 
   setCurrentScene(sceneName: string) {

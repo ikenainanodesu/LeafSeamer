@@ -40,6 +40,7 @@ class ConnectionManager {
     this.logger = createLogger("OBSConnection");
     this.reconnectInterval = null;
     this.shouldBeConnected = false;
+    this.isConnecting = false;
     this.nodecg = nodecg;
     this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
@@ -50,14 +51,15 @@ class ConnectionManager {
   setupListeners() {
     this.obs.on("Identified", () => {
       this.logger.info("Connected to OBS");
-      this.sceneManager.setConnected(true);
+      this.sceneManager.setStatus("connected");
       this.sceneManager.updateScenes(this.obs);
     });
     this.obs.on("ConnectionClosed", () => {
       this.logger.warn("Disconnected from OBS");
-      this.sceneManager.setConnected(false);
+      if (this.isConnecting) return;
+      this.sceneManager.setStatus("disconnected");
       if (this.shouldBeConnected) {
-        this.scheduleReconnect();
+        this.connect();
       }
     });
     this.obs.on("CurrentProgramSceneChanged", (data) => {
@@ -66,7 +68,9 @@ class ConnectionManager {
   }
   async connect(params) {
     var _a, _b, _c;
+    if (this.isConnecting) return;
     this.shouldBeConnected = true;
+    this.isConnecting = true;
     if (this.reconnectInterval) {
       clearInterval(this.reconnectInterval);
       this.reconnectInterval = null;
@@ -87,18 +91,33 @@ class ConnectionManager {
     }
     const address = `ws://${host}:${port}`;
     this.logger.info(`Connecting to OBS at ${address}`);
-    try {
-      await this.obs.connect(address, password);
-    } catch (error) {
-      this.logger.error("Failed to connect to OBS", error.message);
-      this.sceneManager.setConnected(false);
-      if (this.shouldBeConnected) {
-        this.scheduleReconnect();
+    this.sceneManager.setStatus("connecting");
+    const maxRetries = 3;
+    const retryInterval = 2e3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (!this.shouldBeConnected) return;
+      try {
+        await this.obs.connect(address, password);
+        return;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to connect to OBS (Attempt ${attempt}/${maxRetries}): ${error.message}`
+        );
+        if (attempt < maxRetries) {
+          if (!this.shouldBeConnected) return;
+          await new Promise((resolve) => setTimeout(resolve, retryInterval));
+        } else {
+          this.logger.error("All connection attempts failed");
+          this.sceneManager.setStatus("error");
+          this.shouldBeConnected = false;
+        }
       }
     }
+    this.isConnecting = false;
   }
   async disconnect() {
     this.shouldBeConnected = false;
+    this.sceneManager.setStatus("disconnected");
     if (this.reconnectInterval) {
       clearInterval(this.reconnectInterval);
       this.reconnectInterval = null;
@@ -123,15 +142,6 @@ class ConnectionManager {
       );
     }
   }
-  scheduleReconnect() {
-    if (!this.reconnectInterval) {
-      this.logger.info("Scheduling reconnect in 5s...");
-      this.reconnectInterval = setInterval(() => {
-        this.logger.info("Attempting to reconnect to OBS...");
-        this.connect();
-      }, 5e3);
-    }
-  }
 }
 class SceneManager {
   constructor(nodecg) {
@@ -139,6 +149,7 @@ class SceneManager {
     this.obsStateRep = nodecg.Replicant("obsState", {
       defaultValue: {
         connected: false,
+        status: "disconnected",
         currentScene: "",
         isStreaming: false,
         isRecording: false,
@@ -149,9 +160,15 @@ class SceneManager {
       defaultValue: []
     });
     this.obsStateRep.value.connected = false;
+    this.obsStateRep.value.status = "disconnected";
   }
   setConnected(connected) {
     this.obsStateRep.value.connected = connected;
+    this.obsStateRep.value.status = connected ? "connected" : "disconnected";
+  }
+  setStatus(status) {
+    this.obsStateRep.value.status = status;
+    this.obsStateRep.value.connected = status === "connected";
   }
   setCurrentScene(sceneName) {
     this.obsStateRep.value.currentScene = sceneName;
