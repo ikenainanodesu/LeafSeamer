@@ -93,17 +93,24 @@ const App = () => {
             action.presetId
           );
           break;
-        case "obs-transition":
-          nodecg.sendMessageToBundle("setOBSTransition", "obs-control", {
-            id: action.connectionId,
-            transition: action.transitionName,
-          });
-          break;
-        case "obs-scene":
-          nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
-            id: action.connectionId,
-            scene: action.sceneName,
-          });
+        case "obs-action":
+          if (action.connectionId) {
+            // If transition is specified, set it first
+            if (action.transitionName) {
+              nodecg.sendMessageToBundle("setOBSTransition", "obs-control", {
+                id: action.connectionId,
+                transition: action.transitionName,
+              });
+            }
+            // If scene is specified, set it next (after small delay or immediately?)
+            // Immediate should be fine as they are separate calls.
+            if (action.sceneName) {
+              nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
+                id: action.connectionId,
+                scene: action.sceneName,
+              });
+            }
+          }
           break;
       }
     });

@@ -1,8 +1,4 @@
-export type SeamerActionType =
-  | "mixer-fader"
-  | "vb-preset"
-  | "obs-transition"
-  | "obs-scene";
+export type SeamerActionType = "mixer-fader" | "vb-preset" | "obs-action";
 
 export interface SeamerActionBase {
   id: string;
@@ -22,23 +18,14 @@ export interface VBPresetAction extends SeamerActionBase {
   presetId: string;
 }
 
-export interface OBSTransitionAction extends SeamerActionBase {
-  type: "obs-transition";
+export interface OBSAction extends SeamerActionBase {
+  type: "obs-action";
   connectionId: string;
-  transitionName: string;
+  sceneName?: string;
+  transitionName?: string;
 }
 
-export interface OBSSceneAction extends SeamerActionBase {
-  type: "obs-scene";
-  connectionId: string;
-  sceneName: string;
-}
-
-export type SeamerAction =
-  | MixerFaderAction
-  | VBPresetAction
-  | OBSTransitionAction
-  | OBSSceneAction;
+export type SeamerAction = MixerFaderAction | VBPresetAction | OBSAction;
 
 export interface Preset {
   id: string;
