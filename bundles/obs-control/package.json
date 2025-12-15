@@ -9,7 +9,8 @@
         "title": "OBS Connection",
         "width": 4,
         "file": "obs-connection.html",
-        "headerColor": "#525252"
+        "headerColor": "#525252",
+        "workspace": "OBS Control"
       },
       {
         "name": "obs-control-panel",
