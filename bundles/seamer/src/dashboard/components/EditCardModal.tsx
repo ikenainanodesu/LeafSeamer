@@ -85,6 +85,58 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
     });
   };
 
+  const NumberInput = ({
+    value,
+    onChange,
+    placeholder,
+    style,
+  }: {
+    value: number;
+    onChange: (val: number) => void;
+    placeholder?: string;
+    style?: React.CSSProperties;
+  }) => {
+    const [localVal, setLocalVal] = useState<string | null>(null);
+
+    React.useEffect(() => {
+      // Whenever parent value changes, reset local override UNLESS strictly equal
+      // This allows external updates but keeps local typing if result matches
+      setLocalVal(null);
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = e.target.value;
+      setLocalVal(raw);
+
+      // Only propagate valid numbers
+      // Allow "-" or empty string to exist locally without pushing NaN to parent
+      if (raw === "" || raw === "-") {
+        return;
+      }
+
+      const num = Number(raw);
+      if (!isNaN(num)) {
+        onChange(num);
+      }
+    };
+
+    const handleBlur = () => {
+      // On blur, revert to the actual parent value
+      setLocalVal(null);
+    };
+
+    return (
+      <input
+        type="number"
+        value={localVal !== null ? localVal : value}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        style={style}
+      />
+    );
+  };
+
   const renderActionDetails = (action: SeamerAction) => {
     if (action.type === "mixer-fader") {
       const mixerChs = mixerState?.channels || [];
@@ -103,11 +155,10 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
               </option>
             ))}
           </select>
-          <input
-            type="number"
-            value={action.level}
-            onChange={(e) =>
-              updateAction(action.id, { level: Number(e.target.value) })
+          <NumberInput
+            value={action.level / 100}
+            onChange={(val) =>
+              updateAction(action.id, { level: Math.round(val * 100) })
             }
             placeholder="dB Level"
             style={{ width: "80px" }}
