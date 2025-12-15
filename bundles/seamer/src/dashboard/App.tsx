@@ -28,7 +28,7 @@ const App = () => {
     const curCardsRep = nodecg.Replicant<SeamerCard[]>("seamerCards", {
       defaultValue: [],
     });
-    curCardsRep.on("change", (newVal) => {
+    curCardsRep.on("change", (newVal: SeamerCard[]) => {
       setCards(newVal || []);
     });
 
@@ -37,28 +37,34 @@ const App = () => {
       "mixerState",
       "mixer-control"
     );
-    mixerRep.on("change", (newVal) => setMixerState(newVal || null));
+    mixerRep.on("change", (newVal: MixerState) =>
+      setMixerState(newVal || null)
+    );
 
     // VB Matrix Presets
     const presetsRep = nodecg.Replicant<Preset[]>(
       "presets",
       "vb-matrix-control"
     );
-    presetsRep.on("change", (newVal) => setPresets(newVal || []));
+    presetsRep.on("change", (newVal: Preset[]) => setPresets(newVal || []));
 
     // OBS Connections
     const obsConRep = nodecg.Replicant<OBSConnectionSettings[]>(
       "obsConnections",
       "obs-control"
     );
-    obsConRep.on("change", (newVal) => setObsConnections(newVal || []));
+    obsConRep.on("change", (newVal: OBSConnectionSettings[]) =>
+      setObsConnections(newVal || [])
+    );
 
     // OBS States
     const obsStateRep = nodecg.Replicant<Record<string, OBSState>>(
       "obsStates",
       "obs-control"
     );
-    obsStateRep.on("change", (newVal) => setObsStates(newVal || {}));
+    obsStateRep.on("change", (newVal: Record<string, OBSState>) =>
+      setObsStates(newVal || {})
+    );
   }, []);
 
   const saveCard = (card: SeamerCard) => {

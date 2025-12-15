@@ -7,13 +7,13 @@ import {
   MixerFaderAction,
   VBPresetAction,
   OBSAction,
-} from "../types/seamer.types";
+} from "../../types/seamer.types";
 import { v4 as uuidv4 } from "uuid";
-import { MixerState } from "../../../../shared/types/mixer.types";
+import { MixerState } from "../../../../../shared/types/mixer.types";
 import {
   OBSConnectionSettings,
   OBSState,
-} from "../../../../shared/types/obs.types";
+} from "../../../../../shared/types/obs.types";
 
 interface EditCardModalProps {
   initialCard: SeamerCard;
@@ -37,24 +37,24 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
   const [localCard, setLocalCard] = useState<SeamerCard>(initialCard);
 
   const updateAction = (id: string, updates: Partial<SeamerAction>) => {
-    setLocalCard((prev) => ({
+    setLocalCard((prev: SeamerCard) => ({
       ...prev,
-      actions: prev.actions.map((a) =>
+      actions: prev.actions.map((a: SeamerAction) =>
         a.id === id ? ({ ...a, ...updates } as SeamerAction) : a
       ),
     }));
   };
 
   const removeAction = (id: string) => {
-    setLocalCard((prev) => ({
+    setLocalCard((prev: SeamerCard) => ({
       ...prev,
-      actions: prev.actions.filter((a) => a.id !== id),
+      actions: prev.actions.filter((a: SeamerAction) => a.id !== id),
     }));
   };
 
   const handleTypeChange = (id: string, type: SeamerActionType) => {
-    setLocalCard((prev) => {
-      const newActions = prev.actions.map((a) => {
+    setLocalCard((prev: SeamerCard) => {
+      const newActions = prev.actions.map((a: SeamerAction) => {
         if (a.id === id) {
           // Create new action based on type
           if (type === "mixer-fader") {
@@ -149,7 +149,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             }
           >
             <option value={-1}>Select Channel</option>
-            {mixerChs.map((ch) => (
+            {mixerChs.map((ch: any) => (
               <option key={ch.id} value={ch.id}>
                 {ch.userLabel || `Ch ${ch.id}`}
               </option>
@@ -187,7 +187,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
     } else if (action.type === "obs-action") {
       const connections = obsConnections || [];
       const obsState = obsStates[action.connectionId];
-      const scenes = obsState?.scenes?.map((s) => s.name) || [];
+      const scenes = obsState?.scenes?.map((s: any) => s.name) || [];
       const transitions = obsState?.transitions || [];
 
       return (
@@ -224,7 +224,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
               }
             >
               <option value="">(No Change)</option>
-              {scenes.map((s) => (
+              {scenes.map((s: string) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -262,7 +262,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
       type: "obs-action",
       connectionId: "",
     };
-    setLocalCard((prev) => ({
+    setLocalCard((prev: SeamerCard) => ({
       ...prev,
       actions: [...prev.actions, newAction],
     }));
@@ -304,7 +304,10 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             type="text"
             value={localCard.title}
             onChange={(e) =>
-              setLocalCard((prev) => ({ ...prev, title: e.target.value }))
+              setLocalCard((prev: SeamerCard) => ({
+                ...prev,
+                title: e.target.value,
+              }))
             }
             style={{ width: "100%", marginTop: "5px" }}
           />
@@ -312,7 +315,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
 
         <div style={{ marginBottom: "15px" }}>
           <h4>Actions</h4>
-          {localCard.actions.map((action, idx) => (
+          {localCard.actions.map((action: SeamerAction, idx: number) => (
             <div
               key={action.id}
               style={{

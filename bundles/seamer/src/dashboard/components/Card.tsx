@@ -1,5 +1,5 @@
 import React from "react";
-import { SeamerCard } from "../types/seamer.types";
+import { SeamerCard } from "../../types/seamer.types";
 
 interface CardProps {
   card: SeamerCard;
