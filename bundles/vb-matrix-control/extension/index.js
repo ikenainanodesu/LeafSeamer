@@ -112,6 +112,23 @@ class MatrixManager {
     this.presetsRep = this.nodecg.Replicant("presets", {
       defaultValue: []
     });
+    this.activePatchesRep = this.nodecg.Replicant(
+      "activePatches",
+      {
+        defaultValue: [
+          {
+            id: "default",
+            inputDevice: "",
+            inputChannel: 1,
+            outputDevice: "",
+            outputChannel: 1,
+            gain: -144,
+            mute: false,
+            exists: false
+          }
+        ]
+      }
+    );
     this.nodecg.Replicant("availableDevices", {
       defaultValue: []
     });
@@ -132,26 +149,54 @@ class MatrixManager {
     this.nodecg.listenFor("ping", () => {
       this.ping();
     });
+    this.nodecg.listenFor("addPatch", () => {
+      const currentPatches = this.activePatchesRep.value || [];
+      const newPatch = {
+        id: Math.random().toString(36).substr(2, 9),
+        inputDevice: "",
+        inputChannel: 1,
+        outputDevice: "",
+        outputChannel: 1,
+        gain: -144,
+        mute: false,
+        exists: false
+      };
+      this.activePatchesRep.value = [...currentPatches, newPatch];
+    });
+    this.nodecg.listenFor("removePatch", (id) => {
+      const currentPatches = this.activePatchesRep.value || [];
+      this.activePatchesRep.value = currentPatches.filter(
+        (p) => p.id !== id
+      );
+    });
     this.nodecg.listenFor(
       "selectPatch",
       (patch) => {
-        if (!patch.inputDevice || !patch.outputDevice) {
+        if (!patch.id || !patch.inputDevice || !patch.outputDevice) {
           this.nodecg.log.warn(
-            "[selectPatch] Invalid patch: missing device(s)"
+            "[selectPatch] Invalid patch: missing id or device(s)"
           );
           return;
         }
+        const currentPatches = this.activePatchesRep.value || [];
+        const patchIndex = currentPatches.findIndex(
+          (p) => p.id === patch.id
+        );
+        if (patchIndex === -1) {
+          this.nodecg.log.warn(`[selectPatch] Patch ID ${patch.id} not found.`);
+          return;
+        }
         this.nodecg.log.info("Select Patch Requested:", patch);
-        const initialStatus = {
+        const updatedPatch = {
+          ...currentPatches[patchIndex],
           ...patch,
           gain: -144,
+          // Reset to unknown/default until read
           mute: false,
           exists: false
         };
-        this.nodecg.Replicant("currentPatchStatus").value = initialStatus;
-        this.nodecg.log.info(
-          "[selectPatch] Set Replicant to initialized state (gain:-144, exists:false)"
-        );
+        currentPatches[patchIndex] = updatedPatch;
+        this.activePatchesRep.value = [...currentPatches];
         const inCh = patch.inputChannel || 1;
         const outCh = patch.outputChannel || 1;
         const gainQuery = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = ?;`;
@@ -178,10 +223,11 @@ class MatrixManager {
             this.nodecg.log.info(`[VBAN Send] ${gainCmd}`);
             this.vban.send(gainCmd);
           } else if (patch.exists === true && typeof patch.gain === "undefined") {
-            const currentPatch = this.nodecg.Replicant(
-              "currentPatchStatus"
-            ).value;
-            if (currentPatch && !currentPatch.exists) {
+            const currentPatches2 = this.activePatchesRep.value || [];
+            const existing = currentPatches2.find(
+              (p) => p.id === patch.id
+            );
+            if (existing && !existing.exists) {
               const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = 0.0;`;
               this.nodecg.log.info(
                 `[VBAN Send] ${gainCmd} (Default connection)`
@@ -197,7 +243,14 @@ class MatrixManager {
           }
         }
       }
-      this.nodecg.Replicant("currentPatchStatus").value = patch;
+      const currentPatches = this.activePatchesRep.value || [];
+      const idx = currentPatches.findIndex(
+        (p) => p.id === patch.id
+      );
+      if (idx !== -1) {
+        currentPatches[idx] = patch;
+        this.activePatchesRep.value = [...currentPatches];
+      }
     });
     this.nodecg.listenFor("refreshDevices", () => {
       const commonSlots = [
@@ -243,19 +296,15 @@ class MatrixManager {
     this.nodecg.listenFor(
       "savePresetToBank",
       (data) => {
-        const currentPatch = JSON.parse(
-          JSON.stringify(this.nodecg.Replicant("currentPatchStatus").value)
+        const currentPatches = JSON.parse(
+          JSON.stringify(this.activePatchesRep.value || [])
         );
         const netConfig = JSON.parse(JSON.stringify(this.netConfigRep.value));
-        if (!currentPatch) {
-          this.nodecg.log.warn("Cannot save preset: No patch selected.");
-          return;
-        }
         const newPreset = {
           id: data.slotId,
           name: data.name,
           network: netConfig,
-          patches: [{ id: "main", ...currentPatch, status: currentPatch }]
+          patches: currentPatches
         };
         const currentPresets = this.presetsRep.value || [];
         const newPresetsList = JSON.parse(JSON.stringify(currentPresets));
@@ -276,19 +325,9 @@ class MatrixManager {
       const currentPresets = JSON.parse(
         JSON.stringify(this.presetsRep.value || [])
       );
-      const initialLength = currentPresets.length;
       const newPresetsList = currentPresets.filter(
         (p) => p.id !== presetId
       );
-      if (newPresetsList.length === initialLength) {
-        this.nodecg.log.warn(
-          `[deletePreset] ID ${presetId} not found in presets list. Available IDs: ${currentPresets.map((p) => p.id).join(", ")}`
-        );
-      } else {
-        this.nodecg.log.info(
-          `[deletePreset] Deleted successfully. Remaining: ${newPresetsList.length}`
-        );
-      }
       this.presetsRep.value = newPresetsList;
       this.savePresetsToFile(newPresetsList);
     });
@@ -298,24 +337,23 @@ class MatrixManager {
       if (preset) {
         this.nodecg.log.info(`Loading Preset: ${preset.name}`);
         this.netConfigRep.value = JSON.parse(JSON.stringify(preset.network));
-        if (preset.patches && preset.patches.length > 0) {
-          const p = preset.patches[0];
-          const status = JSON.parse(JSON.stringify(p.status || p));
-          this.nodecg.Replicant("currentPatchStatus").value = status;
-          if (status) {
+        if (preset.patches) {
+          const patchesToLoad = JSON.parse(JSON.stringify(preset.patches));
+          this.activePatchesRep.value = patchesToLoad;
+          patchesToLoad.forEach((p) => {
             const inCh = p.inputChannel || 1;
             const outCh = p.outputChannel || 1;
-            if (typeof status.gain === "number") {
-              const gainCmd = `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).dBGain = ${status.gain.toFixed(1)};`;
-              this.nodecg.log.info(`[loadPreset] Sending: ${gainCmd}`);
-              this.vban.send(gainCmd);
+            if (typeof p.gain === "number") {
+              this.vban.send(
+                `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).dBGain = ${p.gain.toFixed(1)};`
+              );
             }
-            if (typeof status.mute === "boolean") {
-              const muteCmd = `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).Mute = ${status.mute ? 1 : 0};`;
-              this.nodecg.log.info(`[loadPreset] Sending: ${muteCmd}`);
-              this.vban.send(muteCmd);
+            if (typeof p.mute === "boolean") {
+              this.vban.send(
+                `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).Mute = ${p.mute ? 1 : 0};`
+              );
             }
-          }
+          });
         }
       }
     });
@@ -395,15 +433,19 @@ class MatrixManager {
         if (match && value && value !== "Err") {
           const gainValue = parseFloat(value);
           if (!isNaN(gainValue)) {
-            const currentPatch = this.nodecg.Replicant(
-              "currentPatchStatus"
-            ).value;
-            if (currentPatch && match[1] === currentPatch.inputDevice && parseInt(match[2]) === (currentPatch.inputChannel || 1) && match[3] === currentPatch.outputDevice && parseInt(match[4]) === (currentPatch.outputChannel || 1)) {
-              currentPatch.gain = gainValue;
-              currentPatch.exists = true;
-              this.nodecg.Replicant("currentPatchStatus").value = {
-                ...currentPatch
-              };
+            const currentPatches = this.activePatchesRep.value || [];
+            let updated = false;
+            const updatedPatches = currentPatches.map(
+              (patch) => {
+                if (patch.inputDevice === match[1] && (patch.inputChannel || 1) === parseInt(match[2]) && patch.outputDevice === match[3] && (patch.outputChannel || 1) === parseInt(match[4])) {
+                  updated = true;
+                  return { ...patch, gain: gainValue, exists: true };
+                }
+                return patch;
+              }
+            );
+            if (updated) {
+              this.activePatchesRep.value = updatedPatches;
             }
           }
         }
@@ -415,15 +457,19 @@ class MatrixManager {
         if (match && value && value !== "Err") {
           const muteValue = parseInt(value);
           if (!isNaN(muteValue)) {
-            const currentPatch = this.nodecg.Replicant(
-              "currentPatchStatus"
-            ).value;
-            if (currentPatch && match[1] === currentPatch.inputDevice && parseInt(match[2]) === (currentPatch.inputChannel || 1) && match[3] === currentPatch.outputDevice && parseInt(match[4]) === (currentPatch.outputChannel || 1)) {
-              currentPatch.mute = muteValue === 1;
-              currentPatch.exists = true;
-              this.nodecg.Replicant("currentPatchStatus").value = {
-                ...currentPatch
-              };
+            const currentPatches = this.activePatchesRep.value || [];
+            let updated = false;
+            const updatedPatches = currentPatches.map(
+              (patch) => {
+                if (patch.inputDevice === match[1] && (patch.inputChannel || 1) === parseInt(match[2]) && patch.outputDevice === match[3] && (patch.outputChannel || 1) === parseInt(match[4])) {
+                  updated = true;
+                  return { ...patch, mute: muteValue === 1, exists: true };
+                }
+                return patch;
+              }
+            );
+            if (updated) {
+              this.activePatchesRep.value = updatedPatches;
             }
           }
         }

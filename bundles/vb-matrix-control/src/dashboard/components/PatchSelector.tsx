@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { DeviceInfo } from "../../types";
+import { CurrentPatchStatus, DeviceInfo } from "../../types";
 
 export const PatchSelector: React.FC<{
+  patchId: string;
+  status?: CurrentPatchStatus;
   onSelectionChange: (valid: boolean) => void;
-}> = ({ onSelectionChange }) => {
-  // These would ideally come from a Replicant, mocked for now or empty
+}> = ({ patchId, status, onSelectionChange }) => {
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
 
   // Selection state
@@ -16,36 +17,63 @@ export const PatchSelector: React.FC<{
   useEffect(() => {
     // Listen to available devices Replicant
     const rep = nodecg.Replicant<DeviceInfo[]>("availableDevices");
-    rep.on("change", (val: DeviceInfo[]) => {
+    const handleChange = (val: DeviceInfo[]) => {
       if (val) setDevices(val);
-    });
+    };
+    rep.on("change", handleChange);
 
     // Trigger initial refresh
-    handleRefresh();
+    nodecg.sendMessage("refreshDevices");
+
+    return () => {
+      rep.removeListener("change", handleChange);
+    };
   }, []);
 
   const handleRefresh = () => {
     nodecg.sendMessage("refreshDevices");
   };
 
+  // Sync with incoming status prop
+  useEffect(() => {
+    if (status) {
+      if (status.inputDevice !== inputDev) setInputDev(status.inputDevice);
+      if (status.inputChannel !== inputCh) setInputCh(status.inputChannel);
+      if (status.outputDevice !== outputDev) setOutputDev(status.outputDevice);
+      if (status.outputChannel !== outputCh) setOutputCh(status.outputChannel);
+    }
+  }, [status]);
+
+  // Handle local changes
   useEffect(() => {
     const valid = !!(inputDev && outputDev);
     onSelectionChange(valid);
 
-    if (valid) {
-      handleSelectPatch();
+    // Only send update if we have a valid selection AND it differs from the prop (to avoid loops)
+    // Actually, checking difference vs prop might be tricky if prop hasn't updated yet.
+    // But since we are "controlling" this via local state + prop sync,
+    // we should just send the message when the USER changes something.
+    // The useEffect triggers on state change. We just need to make sure we don't trigger this when we programmatically set state from prop.
+    // A simple way is to check if the new state matches the status. IF it matches, we don't need to send.
+
+    // Check if current state matches the status prop
+    const isSameAsProp =
+      status &&
+      status.inputDevice === inputDev &&
+      status.inputChannel === inputCh &&
+      status.outputDevice === outputDev &&
+      status.outputChannel === outputCh;
+
+    if (valid && !isSameAsProp) {
+      nodecg.sendMessage("selectPatch", {
+        id: patchId,
+        inputDevice: inputDev,
+        inputChannel: inputCh,
+        outputDevice: outputDev,
+        outputChannel: outputCh,
+      });
     }
   }, [inputDev, inputCh, outputDev, outputCh]);
-
-  const handleSelectPatch = () => {
-    // Tell backend to select this patch for control
-    nodecg.sendMessage("selectPatch", {
-      inputDevice: inputDev,
-      inputChannel: inputCh,
-      outputDevice: outputDev,
-      outputChannel: outputCh,
-    });
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

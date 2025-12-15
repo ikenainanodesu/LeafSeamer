@@ -24,6 +24,7 @@ export interface PatchInfo {
 
 // Current patch status: combines device/channel info with gain/mute
 export interface CurrentPatchStatus {
+  id: string; // Unique ID for keying
   inputDevice: string;
   inputChannel: number;
   outputDevice: string;
@@ -34,10 +35,10 @@ export interface CurrentPatchStatus {
 }
 
 export interface Preset {
-  id: string;
+  id: string; // Slot ID
   name: string;
   network: NetworkConfig;
-  patches: PatchInfo[];
+  patches: CurrentPatchStatus[];
 }
 
 export interface DeviceInfo {

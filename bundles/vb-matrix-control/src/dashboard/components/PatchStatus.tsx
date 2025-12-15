@@ -1,17 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { PatchPoint } from "../../types";
+import React from "react";
+import { CurrentPatchStatus } from "../../types";
 
-export const PatchStatus: React.FC<{ isSelectionComplete: boolean }> = ({
-  isSelectionComplete,
+export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
+  status,
 }) => {
-  const [status, setStatus] = useState<PatchPoint | null>(null);
-
-  useEffect(() => {
-    const rep = nodecg.Replicant<PatchPoint>("currentPatchStatus");
-    rep.on("change", (newVal: PatchPoint) => {
-      setStatus(newVal);
-    });
-  }, []);
+  // Removed local state and replicant subscription as we receive status from props
 
   const updateGain = (delta: number) => {
     if (!status || !status.exists) return;
@@ -39,15 +32,13 @@ export const PatchStatus: React.FC<{ isSelectionComplete: boolean }> = ({
     }
   };
 
-  if (!isSelectionComplete) {
+  if (!status || !status.inputDevice || !status.outputDevice) {
     return (
       <div style={{ marginTop: "10px", color: "#888", textAlign: "center" }}>
         Please select device
       </div>
     );
   }
-
-  if (!status) return <div>No Patch Selected</div>;
 
   const isPatched = status.exists && status.gain > -144;
 
