@@ -155,7 +155,9 @@ const ObsControlPanel = () => {
               backgroundColor: "#222",
               color: "#fff",
               border: "1px solid #444",
+              opacity: isStreaming ? 0.5 : 1,
             }}
+            disabled={isStreaming}
           />
         </div>
         <div style={{ marginBottom: "5px", position: "relative" }}>
@@ -171,11 +173,14 @@ const ObsControlPanel = () => {
                 backgroundColor: "#222",
                 color: "#fff",
                 border: "1px solid #444",
+                opacity: isStreaming ? 0.5 : 1,
               }}
+              disabled={isStreaming}
             />
             <button
               onClick={() => setShowKey(!showKey)}
               style={{ marginLeft: "5px" }}
+              // Keep show/hide button active even if streaming, to verify key
             >
               {showKey ? "Hide" : "Show"}
             </button>
@@ -189,6 +194,7 @@ const ObsControlPanel = () => {
               onChange={(e) =>
                 handleStreamSettingChange("useAuth", e.target.checked)
               }
+              disabled={isStreaming}
             />{" "}
             Use authentication
           </label>
@@ -209,7 +215,9 @@ const ObsControlPanel = () => {
                   backgroundColor: "#222",
                   color: "#fff",
                   border: "1px solid #444",
+                  opacity: isStreaming ? 0.5 : 1,
                 }}
+                disabled={isStreaming}
               />
             </div>
             <div style={{ marginBottom: "5px" }}>
@@ -227,7 +235,9 @@ const ObsControlPanel = () => {
                     backgroundColor: "#222",
                     color: "#fff",
                     border: "1px solid #444",
+                    opacity: isStreaming ? 0.5 : 1,
                   }}
+                  disabled={isStreaming}
                 />
                 <button
                   onClick={() => setShowPass(!showPass)}

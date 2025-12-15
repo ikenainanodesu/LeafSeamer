@@ -50,11 +50,28 @@ class ConnectionManager {
     this.setupListeners();
   }
   setupListeners() {
-    this.obs.on("Identified", () => {
+    this.obs.on("Identified", async () => {
       this.logger.info("Connected to OBS");
       this.sceneManager.setStatus("connected");
       this.sceneManager.updateScenes(this.obs);
       this.sceneManager.updateTransitions(this.obs);
+      try {
+        const stats = await this.obs.call("GetStreamStatus");
+        this.sceneManager.updateStreamStats({
+          ...stats,
+          kbitsPerSec: 0,
+          fps: 0
+        });
+        if (stats.outputActive) {
+          this.startStatsPolling();
+        }
+        await this.syncStreamSettings();
+      } catch (err) {
+        this.logger.error(
+          "Failed to get initial stream status",
+          (err == null ? void 0 : err.message) || err
+        );
+      }
     });
     this.obs.on("ConnectionClosed", () => {
       this.logger.warn("Disconnected from OBS");
@@ -85,8 +102,16 @@ class ConnectionManager {
       }
     );
     this.obs.on("StreamStateChanged", (data) => {
-      this.sceneManager.setConnected(data.outputActive);
       this.logger.info(`Stream State Changed: Active=${data.outputActive}`);
+      this.sceneManager.updateStreamStats({ outputActive: data.outputActive });
+      if (data.outputActive) {
+        this.startStatsPolling();
+        this.syncStreamSettings().catch(
+          (e) => this.logger.error("Failed to sync settings on stream start", e)
+        );
+      } else {
+        this.stopStatsPolling();
+      }
     });
     this.nodecg.listenFor("startStreaming", async (_data, ack) => {
       try {
@@ -228,6 +253,32 @@ class ConnectionManager {
     } catch (error) {
       this.logger.error("Failed to set stream settings", error.message);
       throw error;
+    }
+  }
+  async syncStreamSettings() {
+    try {
+      const response = await this.obs.call("GetStreamServiceSettings");
+      const settings = response.streamServiceSettings;
+      const newSettings = {
+        server: settings.server || "",
+        key: settings.key || "",
+        useAuth: settings.use_auth || false,
+        username: settings.username || "",
+        password: settings.password || ""
+      };
+      const streamSettingsRep = this.nodecg.Replicant("obsStreamSettings", {
+        defaultValue: {
+          server: "",
+          key: "",
+          useAuth: false,
+          username: "",
+          password: ""
+        }
+      });
+      streamSettingsRep.value = newSettings;
+      this.logger.info("Synced stream settings from OBS");
+    } catch (error) {
+      this.logger.error("Failed to sync stream settings", error.message);
     }
   }
   startStatsPolling() {
