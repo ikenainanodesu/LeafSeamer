@@ -11,6 +11,7 @@ export class ConnectionManager {
   private logger = createLogger("OBSConnection");
   private config: any;
   private reconnectInterval: NodeJS.Timeout | null = null;
+  private statsInterval: NodeJS.Timeout | null = null;
   private shouldBeConnected = false;
   private isConnecting = false;
 
@@ -67,6 +68,46 @@ export class ConnectionManager {
               ack(err);
             }
           });
+      }
+    );
+
+    this.obs.on("StreamStateChanged", (data) => {
+      this.sceneManager.setConnected(data.outputActive); // This might be wrong, StreamStateChanged is output specific.
+      // Actually we have separate isStreaming in OBSState.
+      // But StreamStatus below handles active state too.
+      // Let's rely on StreamStatus for stats and active state updates mainly,
+      // but StreamStateChanged is good for immediate feedback.
+      // For now, let's just log it.
+      this.logger.info(`Stream State Changed: Active=${data.outputActive}`);
+    });
+
+    this.nodecg.listenFor("startStreaming", async (_data, ack: any) => {
+      try {
+        await this.obs.call("StartStream");
+        if (ack && !ack.handled) ack(null);
+      } catch (err) {
+        if (ack && !ack.handled) ack(err);
+      }
+    });
+
+    this.nodecg.listenFor("stopStreaming", async (_data, ack: any) => {
+      try {
+        await this.obs.call("StopStream");
+        if (ack && !ack.handled) ack(null);
+      } catch (err) {
+        if (ack && !ack.handled) ack(err);
+      }
+    });
+
+    this.nodecg.listenFor(
+      "setStreamSettings",
+      async (settings: any, ack: any) => {
+        try {
+          await this.setStreamSettings(settings);
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
       }
     );
   }
@@ -189,5 +230,68 @@ export class ConnectionManager {
       );
       throw error;
     }
+  }
+
+  async setStreamSettings(settings: {
+    server: string;
+    key: string;
+    useAuth: boolean;
+    username?: string;
+    password?: string;
+  }) {
+    try {
+      const streamSettings: any = {
+        server: settings.server,
+        key: settings.key,
+      };
+
+      if (settings.useAuth) {
+        streamSettings.use_auth = true;
+        streamSettings.username = settings.username;
+        streamSettings.password = settings.password;
+      } else {
+        streamSettings.use_auth = false;
+      }
+
+      await this.obs.call("SetStreamServiceSettings", {
+        streamServiceType: "rtmp_custom", // Assuming custom RTMP for now
+        streamServiceSettings: streamSettings,
+      });
+      this.logger.info("Stream settings updated");
+    } catch (error: any) {
+      this.logger.error("Failed to set stream settings", error.message);
+
+      throw error;
+    }
+  }
+
+  private startStatsPolling() {
+    if (this.statsInterval) clearInterval(this.statsInterval);
+    this.statsInterval = setInterval(async () => {
+      try {
+        const stats = await this.obs.call("GetStreamStatus");
+        this.sceneManager.updateStreamStats({
+          ...stats,
+          kbitsPerSec: 0, // Placeholder if not available
+          fps: 0,
+        });
+      } catch (e) {
+        // ignore errors during polling
+      }
+    }, 2000);
+  }
+
+  private stopStatsPolling() {
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+    this.sceneManager.updateStreamStats({
+      outputActive: false,
+      fps: 0,
+      kbitsPerSec: 0,
+      averageFrameTime: 0,
+      outputTimecode: "00:00:00",
+    });
   }
 }

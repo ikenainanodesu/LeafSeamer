@@ -18,12 +18,14 @@ export interface OBSState {
   scenes: OBSScene[];
   transitions: string[];
   currentTransition: string;
+  streamStats?: StreamStats;
 }
 
 export interface StreamStats {
   fps: number;
   kbitsPerSec: number;
   averageFrameTime: number;
+  outputTimecode?: string;
 }
 
 export interface OBSConnectionSettings {

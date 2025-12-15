@@ -39,6 +39,7 @@ class ConnectionManager {
   constructor(nodecg, sceneManager) {
     this.logger = createLogger("OBSConnection");
     this.reconnectInterval = null;
+    this.statsInterval = null;
     this.shouldBeConnected = false;
     this.isConnecting = false;
     this.nodecg = nodecg;
@@ -81,6 +82,37 @@ class ConnectionManager {
             ack(err);
           }
         });
+      }
+    );
+    this.obs.on("StreamStateChanged", (data) => {
+      this.sceneManager.setConnected(data.outputActive);
+      this.logger.info(`Stream State Changed: Active=${data.outputActive}`);
+    });
+    this.nodecg.listenFor("startStreaming", async (_data, ack) => {
+      try {
+        await this.obs.call("StartStream");
+        if (ack && !ack.handled) ack(null);
+      } catch (err) {
+        if (ack && !ack.handled) ack(err);
+      }
+    });
+    this.nodecg.listenFor("stopStreaming", async (_data, ack) => {
+      try {
+        await this.obs.call("StopStream");
+        if (ack && !ack.handled) ack(null);
+      } catch (err) {
+        if (ack && !ack.handled) ack(err);
+      }
+    });
+    this.nodecg.listenFor(
+      "setStreamSettings",
+      async (settings, ack) => {
+        try {
+          await this.setStreamSettings(settings);
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
       }
     );
   }
@@ -174,6 +206,58 @@ class ConnectionManager {
       throw error;
     }
   }
+  async setStreamSettings(settings) {
+    try {
+      const streamSettings = {
+        server: settings.server,
+        key: settings.key
+      };
+      if (settings.useAuth) {
+        streamSettings.use_auth = true;
+        streamSettings.username = settings.username;
+        streamSettings.password = settings.password;
+      } else {
+        streamSettings.use_auth = false;
+      }
+      await this.obs.call("SetStreamServiceSettings", {
+        streamServiceType: "rtmp_custom",
+        // Assuming custom RTMP for now
+        streamServiceSettings: streamSettings
+      });
+      this.logger.info("Stream settings updated");
+    } catch (error) {
+      this.logger.error("Failed to set stream settings", error.message);
+      throw error;
+    }
+  }
+  startStatsPolling() {
+    if (this.statsInterval) clearInterval(this.statsInterval);
+    this.statsInterval = setInterval(async () => {
+      try {
+        const stats = await this.obs.call("GetStreamStatus");
+        this.sceneManager.updateStreamStats({
+          ...stats,
+          kbitsPerSec: 0,
+          // Placeholder if not available
+          fps: 0
+        });
+      } catch (e) {
+      }
+    }, 2e3);
+  }
+  stopStatsPolling() {
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+    this.sceneManager.updateStreamStats({
+      outputActive: false,
+      fps: 0,
+      kbitsPerSec: 0,
+      averageFrameTime: 0,
+      outputTimecode: "00:00:00"
+    });
+  }
 }
 class SceneManager {
   constructor(nodecg) {
@@ -187,7 +271,8 @@ class SceneManager {
         isRecording: false,
         scenes: [],
         transitions: [],
-        currentTransition: ""
+        currentTransition: "",
+        streamStats: { fps: 0, kbitsPerSec: 0, averageFrameTime: 0 }
       }
     });
     this.obsScenesRep = nodecg.Replicant("obsScenes", {
@@ -236,6 +321,18 @@ class SceneManager {
     } catch (error) {
       this.nodecg.log.error("Failed to update transitions", error);
     }
+  }
+  updateStreamStats(stats) {
+    this.obsStateRep.value.streamStats = {
+      fps: stats.fps || 0,
+      kbitsPerSec: stats.kbitsPerSec || 0,
+      // Might be 0 if not available
+      averageFrameTime: stats.averageFrameTime || 0,
+      // Add duration/timecode if we want to display it
+      //@ts-ignore - extending type dynamically for now or we should update type def
+      outputTimecode: stats.outputTimecode
+    };
+    this.obsStateRep.value.isStreaming = stats.outputActive;
   }
 }
 module.exports = function(nodecg) {

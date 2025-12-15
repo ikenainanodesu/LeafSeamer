@@ -23,6 +23,7 @@ export class SceneManager {
         scenes: [],
         transitions: [],
         currentTransition: "",
+        streamStats: { fps: 0, kbitsPerSec: 0, averageFrameTime: 0 },
       },
     });
     this.obsScenesRep = nodecg.Replicant<OBSScene[]>("obsScenes", {
@@ -81,5 +82,17 @@ export class SceneManager {
     } catch (error) {
       this.nodecg.log.error("Failed to update transitions", error);
     }
+  }
+
+  updateStreamStats(stats: any) {
+    this.obsStateRep.value.streamStats = {
+      fps: stats.fps || 0,
+      kbitsPerSec: stats.kbitsPerSec || 0, // Might be 0 if not available
+      averageFrameTime: stats.averageFrameTime || 0,
+      // Add duration/timecode if we want to display it
+      //@ts-ignore - extending type dynamically for now or we should update type def
+      outputTimecode: stats.outputTimecode,
+    };
+    this.obsStateRep.value.isStreaming = stats.outputActive;
   }
 }

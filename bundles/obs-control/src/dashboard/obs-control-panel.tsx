@@ -9,6 +9,17 @@ const ObsControlPanel = () => {
   const [scenes, setScenes] = useState<OBSScene[]>([]);
   const [transitions, setTransitions] = useState<string[]>([]);
   const [currentTransition, setCurrentTransition] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamStats, setStreamStats] = useState<any>({});
+  const [streamSettings, setStreamSettings] = useState({
+    server: "",
+    key: "",
+    useAuth: false,
+    username: "",
+    password: "",
+  });
+  const [showKey, setShowKey] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   useEffect(() => {
     const obsStateRep = nodecg.Replicant<OBSState>("obsState");
@@ -20,7 +31,22 @@ const ObsControlPanel = () => {
         setScenes(newVal.scenes);
         setTransitions(newVal.transitions || []);
         setCurrentTransition(newVal.currentTransition || "");
+        setIsStreaming(newVal.isStreaming);
+        setStreamStats(newVal.streamStats || {});
       }
+    });
+
+    const settingsRep = nodecg.Replicant<any>("obsStreamSettings", {
+      defaultValue: {
+        server: "",
+        key: "",
+        useAuth: false,
+        username: "",
+        password: "",
+      },
+    });
+    settingsRep.on("change", (newVal: any) => {
+      if (newVal) setStreamSettings(newVal);
     });
   }, []);
 
@@ -43,6 +69,23 @@ const ObsControlPanel = () => {
       .catch((err: any) =>
         console.error("[OBS Control] Failed to send transition:", err)
       );
+  };
+
+  const handleStreamSettingChange = (field: string, value: any) => {
+    const newSettings = { ...streamSettings, [field]: value };
+    setStreamSettings(newSettings);
+    nodecg.Replicant("obsStreamSettings").value = newSettings;
+  };
+
+  const toggleStreaming = () => {
+    if (isStreaming) {
+      nodecg.sendMessageToBundle("stopStreaming", "obs-control");
+    } else {
+      nodecg
+        .sendMessageToBundle("setStreamSettings", "obs-control", streamSettings)
+        .then(() => nodecg.sendMessageToBundle("startStreaming", "obs-control"))
+        .catch((err) => console.error("Failed to start stream", err));
+    }
   };
 
   if (!connected) {
@@ -87,6 +130,147 @@ const ObsControlPanel = () => {
             </option>
           ))}
         </select>
+      </div>
+
+      <div
+        style={{
+          marginBottom: "20px",
+          padding: "10px",
+          backgroundColor: "#333",
+          borderRadius: "5px",
+        }}
+      >
+        <h4 style={{ marginTop: 0 }}>Destination</h4>
+        <div style={{ marginBottom: "5px" }}>
+          <label style={{ display: "block" }}>Server</label>
+          <input
+            type="text"
+            value={streamSettings.server}
+            onChange={(e) =>
+              handleStreamSettingChange("server", e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: "5px",
+              backgroundColor: "#222",
+              color: "#fff",
+              border: "1px solid #444",
+            }}
+          />
+        </div>
+        <div style={{ marginBottom: "5px", position: "relative" }}>
+          <label style={{ display: "block" }}>Stream Key</label>
+          <div style={{ display: "flex" }}>
+            <input
+              type={showKey ? "text" : "password"}
+              value={streamSettings.key}
+              onChange={(e) => handleStreamSettingChange("key", e.target.value)}
+              style={{
+                flex: 1,
+                padding: "5px",
+                backgroundColor: "#222",
+                color: "#fff",
+                border: "1px solid #444",
+              }}
+            />
+            <button
+              onClick={() => setShowKey(!showKey)}
+              style={{ marginLeft: "5px" }}
+            >
+              {showKey ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+        <div style={{ marginBottom: "5px" }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={streamSettings.useAuth}
+              onChange={(e) =>
+                handleStreamSettingChange("useAuth", e.target.checked)
+              }
+            />{" "}
+            Use authentication
+          </label>
+        </div>
+        {streamSettings.useAuth && (
+          <>
+            <div style={{ marginBottom: "5px" }}>
+              <label style={{ display: "block" }}>Username</label>
+              <input
+                type="text"
+                value={streamSettings.username}
+                onChange={(e) =>
+                  handleStreamSettingChange("username", e.target.value)
+                }
+                style={{
+                  width: "100%",
+                  padding: "5px",
+                  backgroundColor: "#222",
+                  color: "#fff",
+                  border: "1px solid #444",
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: "5px" }}>
+              <label style={{ display: "block" }}>Password</label>
+              <div style={{ display: "flex" }}>
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={streamSettings.password}
+                  onChange={(e) =>
+                    handleStreamSettingChange("password", e.target.value)
+                  }
+                  style={{
+                    flex: 1,
+                    padding: "5px",
+                    backgroundColor: "#222",
+                    color: "#fff",
+                    border: "1px solid #444",
+                  }}
+                />
+                <button
+                  onClick={() => setShowPass(!showPass)}
+                  style={{ marginLeft: "5px" }}
+                >
+                  {showPass ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div
+          style={{
+            marginTop: "15px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <button
+            onClick={toggleStreaming}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: isStreaming ? "#d32f2f" : "#388e3c",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            {isStreaming ? "Stop Streaming" : "Start Streaming"}
+          </button>
+          {isStreaming && (
+            <div style={{ textAlign: "right", fontSize: "0.9em" }}>
+              <div>Time: {streamStats.outputTimecode || "00:00:00"}</div>
+              {/* Bitrate might not be accurate always with basic polling but let's show what we have if any */}
+              {streamStats.kbitsPerSec > 0 && (
+                <div>Bitrate: {streamStats.kbitsPerSec} kbps</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <h3>Scenes</h3>
