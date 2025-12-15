@@ -300,9 +300,22 @@ class MatrixManager {
         this.netConfigRep.value = JSON.parse(JSON.stringify(preset.network));
         if (preset.patches && preset.patches.length > 0) {
           const p = preset.patches[0];
-          this.nodecg.Replicant("currentPatchStatus").value = JSON.parse(
-            JSON.stringify(p.status || p)
-          );
+          const status = JSON.parse(JSON.stringify(p.status || p));
+          this.nodecg.Replicant("currentPatchStatus").value = status;
+          if (status) {
+            const inCh = p.inputChannel || 1;
+            const outCh = p.outputChannel || 1;
+            if (typeof status.gain === "number") {
+              const gainCmd = `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).dBGain = ${status.gain.toFixed(1)};`;
+              this.nodecg.log.info(`[loadPreset] Sending: ${gainCmd}`);
+              this.vban.send(gainCmd);
+            }
+            if (typeof status.mute === "boolean") {
+              const muteCmd = `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).Mute = ${status.mute ? 1 : 0};`;
+              this.nodecg.log.info(`[loadPreset] Sending: ${muteCmd}`);
+              this.vban.send(muteCmd);
+            }
+          }
         }
       }
     });
