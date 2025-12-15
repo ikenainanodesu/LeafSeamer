@@ -30,12 +30,14 @@
     "watch": "npm run watch:extension"
   },
   "dependencies": {
-    "obs-websocket-js": "^5.0.0"
+    "obs-websocket-js": "^5.0.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
+    "@types/uuid": "^10.0.0",
     "typescript": "^5.7.2"
   }
 }

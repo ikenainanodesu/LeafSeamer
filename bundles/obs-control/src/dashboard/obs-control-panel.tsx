@@ -1,130 +1,147 @@
 /// <reference path="../../../shared/types/global.d.ts" />
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { OBSState, OBSScene } from "../../../shared/types/obs.types";
+import {
+  OBSState,
+  OBSScene,
+  OBSConnectionSettings,
+} from "../../../shared/types/obs.types";
 
-const ObsControlPanel = () => {
-  const [connected, setConnected] = useState(false);
-  const [currentScene, setCurrentScene] = useState("");
-  const [scenes, setScenes] = useState<OBSScene[]>([]);
-  const [transitions, setTransitions] = useState<string[]>([]);
-  const [currentTransition, setCurrentTransition] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamStats, setStreamStats] = useState<any>({});
-  const [streamSettings, setStreamSettings] = useState({
-    server: "",
-    key: "",
-    useAuth: false,
-    username: "",
-    password: "",
-  });
+const SingleObsControl = ({
+  id,
+  name,
+  obsState,
+  streamSettings,
+  onStreamSettingChange,
+}: {
+  id: string;
+  name: string;
+  obsState: OBSState;
+  streamSettings: any;
+  onStreamSettingChange: (id: string, newSettings: any) => void;
+}) => {
+  const {
+    connected,
+    currentScene,
+    scenes,
+    transitions,
+    currentTransition,
+    isStreaming,
+    streamStats,
+  } = obsState;
   const [showKey, setShowKey] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
+  // Initial local stream settings from prop
+  const [localSettings, setLocalSettings] = useState(
+    streamSettings || {
+      server: "",
+      key: "",
+      useAuth: false,
+      username: "",
+      password: "",
+    }
+  );
+
   useEffect(() => {
-    const obsStateRep = nodecg.Replicant<OBSState>("obsState");
-
-    obsStateRep.on("change", (newVal: OBSState | undefined) => {
-      if (newVal) {
-        setConnected(newVal.connected);
-        setCurrentScene(newVal.currentScene);
-        setScenes(newVal.scenes);
-        setTransitions(newVal.transitions || []);
-        setCurrentTransition(newVal.currentTransition || "");
-        setIsStreaming(newVal.isStreaming);
-        setStreamStats(newVal.streamStats || {});
-      }
-    });
-
-    const settingsRep = nodecg.Replicant<any>("obsStreamSettings", {
-      defaultValue: {
-        server: "",
-        key: "",
-        useAuth: false,
-        username: "",
-        password: "",
-      },
-    });
-    settingsRep.on("change", (newVal: any) => {
-      if (newVal) setStreamSettings(newVal);
-    });
-  }, []);
+    if (streamSettings) setLocalSettings(streamSettings);
+  }, [streamSettings]);
 
   const handleSceneClick = (sceneName: string) => {
-    console.log(`[OBS Control] Clicking scene: ${sceneName}`);
-    nodecg
-      .sendMessageToBundle("setOBSScene", "obs-control", sceneName)
-      .then(() => console.log("[OBS Control] Message sent successfully"))
-      .catch((err: any) =>
-        console.error("[OBS Control] Failed to send message:", err)
-      );
+    nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
+      id,
+      scene: sceneName,
+    });
   };
 
   const handleTransitionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const transitionName = e.target.value;
-    console.log(`[OBS Control] Switching transition to: ${transitionName}`);
-    nodecg
-      .sendMessageToBundle("setOBSTransition", "obs-control", transitionName)
-      .then(() => console.log("[OBS Control] Transition message sent"))
-      .catch((err: any) =>
-        console.error("[OBS Control] Failed to send transition:", err)
-      );
+    nodecg.sendMessageToBundle("setOBSTransition", "obs-control", {
+      id,
+      transition: e.target.value,
+    });
   };
 
-  const handleStreamSettingChange = (field: string, value: any) => {
-    const newSettings = { ...streamSettings, [field]: value };
-    setStreamSettings(newSettings);
-    nodecg.Replicant("obsStreamSettings").value = newSettings;
+  const handleLocalSettingChange = (field: string, value: any) => {
+    const newSettings = { ...localSettings, [field]: value };
+    setLocalSettings(newSettings);
+    onStreamSettingChange(id, newSettings);
   };
 
   const toggleStreaming = () => {
     if (isStreaming) {
-      nodecg.sendMessageToBundle("stopStreaming", "obs-control");
+      nodecg.sendMessageToBundle("stopStreaming", "obs-control", { id });
     } else {
       nodecg
-        .sendMessageToBundle("setStreamSettings", "obs-control", streamSettings)
-        .then(() => nodecg.sendMessageToBundle("startStreaming", "obs-control"))
-        .catch((err) => console.error("Failed to start stream", err));
+        .sendMessageToBundle("setStreamSettings", "obs-control", {
+          id,
+          settings: localSettings,
+        })
+        .then(() =>
+          nodecg.sendMessageToBundle("startStreaming", "obs-control", { id })
+        )
+        .catch((err) => console.error(`[${name}] Failed to start stream`, err));
     }
   };
 
   if (!connected) {
     return (
-      <div style={{ padding: "20px", textAlign: "center", color: "#aaa" }}>
-        <p>OBS is disconnected. Please connect via the Connection panel.</p>
+      <div
+        style={{
+          padding: "10px",
+          margin: "10px 0",
+          border: "1px dashed #555",
+          borderRadius: "5px",
+          color: "#aaa",
+        }}
+      >
+        <strong>{name}</strong>: Disconnected
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "20px" }}>
-      <div style={{ marginBottom: "20px" }}>
+    <div
+      style={{
+        marginBottom: "20px",
+        border: "1px solid #444",
+        borderRadius: "5px",
+        padding: "10px",
+        backgroundColor: "#2b2b2b",
+      }}
+    >
+      <h3
+        style={{
+          marginTop: 0,
+          borderBottom: "1px solid #444",
+          paddingBottom: "5px",
+        }}
+      >
+        {name}
+      </h3>
+
+      <div style={{ marginBottom: "15px" }}>
         <p>
           Current Scene: <strong>{currentScene}</strong>
         </p>
       </div>
 
-      <div style={{ marginBottom: "20px" }}>
-        <label
-          htmlFor="transition-select"
-          style={{ display: "block", marginBottom: "5px" }}
-        >
+      {/* Transitions */}
+      <div style={{ marginBottom: "15px" }}>
+        <label style={{ display: "block", marginBottom: "5px" }}>
           Transition:
         </label>
         <select
-          id="transition-select"
-          value={currentTransition}
+          value={currentTransition || ""}
           onChange={handleTransitionChange}
           style={{
             width: "100%",
-            padding: "8px",
+            padding: "5px",
             backgroundColor: "#424242",
             color: "white",
             border: "1px solid #555",
-            borderRadius: "4px",
           }}
         >
-          {transitions.map((t) => (
+          {(transitions || []).map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
@@ -132,9 +149,10 @@ const ObsControlPanel = () => {
         </select>
       </div>
 
+      {/* Stream Control */}
       <div
         style={{
-          marginBottom: "20px",
+          marginBottom: "15px",
           padding: "10px",
           backgroundColor: "#333",
           borderRadius: "5px",
@@ -145,10 +163,9 @@ const ObsControlPanel = () => {
           <label style={{ display: "block" }}>Server</label>
           <input
             type="text"
-            value={streamSettings.server}
-            onChange={(e) =>
-              handleStreamSettingChange("server", e.target.value)
-            }
+            value={localSettings.server}
+            onChange={(e) => handleLocalSettingChange("server", e.target.value)}
+            disabled={isStreaming}
             style={{
               width: "100%",
               padding: "5px",
@@ -157,7 +174,6 @@ const ObsControlPanel = () => {
               border: "1px solid #444",
               opacity: isStreaming ? 0.5 : 1,
             }}
-            disabled={isStreaming}
           />
         </div>
         <div style={{ marginBottom: "5px", position: "relative" }}>
@@ -165,8 +181,9 @@ const ObsControlPanel = () => {
           <div style={{ display: "flex" }}>
             <input
               type={showKey ? "text" : "password"}
-              value={streamSettings.key}
-              onChange={(e) => handleStreamSettingChange("key", e.target.value)}
+              value={localSettings.key}
+              onChange={(e) => handleLocalSettingChange("key", e.target.value)}
+              disabled={isStreaming}
               style={{
                 flex: 1,
                 padding: "5px",
@@ -175,12 +192,10 @@ const ObsControlPanel = () => {
                 border: "1px solid #444",
                 opacity: isStreaming ? 0.5 : 1,
               }}
-              disabled={isStreaming}
             />
             <button
               onClick={() => setShowKey(!showKey)}
               style={{ marginLeft: "5px" }}
-              // Keep show/hide button active even if streaming, to verify key
             >
               {showKey ? "Hide" : "Show"}
             </button>
@@ -190,25 +205,26 @@ const ObsControlPanel = () => {
           <label>
             <input
               type="checkbox"
-              checked={streamSettings.useAuth}
+              checked={localSettings.useAuth}
               onChange={(e) =>
-                handleStreamSettingChange("useAuth", e.target.checked)
+                handleLocalSettingChange("useAuth", e.target.checked)
               }
               disabled={isStreaming}
             />{" "}
             Use authentication
           </label>
         </div>
-        {streamSettings.useAuth && (
+        {localSettings.useAuth && (
           <>
             <div style={{ marginBottom: "5px" }}>
               <label style={{ display: "block" }}>Username</label>
               <input
                 type="text"
-                value={streamSettings.username}
+                value={localSettings.username}
                 onChange={(e) =>
-                  handleStreamSettingChange("username", e.target.value)
+                  handleLocalSettingChange("username", e.target.value)
                 }
+                disabled={isStreaming}
                 style={{
                   width: "100%",
                   padding: "5px",
@@ -217,7 +233,6 @@ const ObsControlPanel = () => {
                   border: "1px solid #444",
                   opacity: isStreaming ? 0.5 : 1,
                 }}
-                disabled={isStreaming}
               />
             </div>
             <div style={{ marginBottom: "5px" }}>
@@ -225,10 +240,11 @@ const ObsControlPanel = () => {
               <div style={{ display: "flex" }}>
                 <input
                   type={showPass ? "text" : "password"}
-                  value={streamSettings.password}
+                  value={localSettings.password}
                   onChange={(e) =>
-                    handleStreamSettingChange("password", e.target.value)
+                    handleLocalSettingChange("password", e.target.value)
                   }
+                  disabled={isStreaming}
                   style={{
                     flex: 1,
                     padding: "5px",
@@ -237,7 +253,6 @@ const ObsControlPanel = () => {
                     border: "1px solid #444",
                     opacity: isStreaming ? 0.5 : 1,
                   }}
-                  disabled={isStreaming}
                 />
                 <button
                   onClick={() => setShowPass(!showPass)}
@@ -249,7 +264,6 @@ const ObsControlPanel = () => {
             </div>
           </>
         )}
-
         <div
           style={{
             marginTop: "15px",
@@ -271,10 +285,9 @@ const ObsControlPanel = () => {
           >
             {isStreaming ? "Stop Streaming" : "Start Streaming"}
           </button>
-          {isStreaming && (
+          {isStreaming && streamStats && (
             <div style={{ textAlign: "right", fontSize: "0.9em" }}>
               <div>Time: {streamStats.outputTimecode || "00:00:00"}</div>
-              {/* Bitrate might not be accurate always with basic polling but let's show what we have if any */}
               {streamStats.kbitsPerSec > 0 && (
                 <div>Bitrate: {streamStats.kbitsPerSec} kbps</div>
               )}
@@ -283,39 +296,87 @@ const ObsControlPanel = () => {
         </div>
       </div>
 
-      <h3>Scenes</h3>
+      {/* Scenes */}
+      <h4>Scenes</h4>
       <ul style={{ listStyle: "none", padding: 0 }}>
-        {scenes.map((scene) => (
+        {(scenes || []).map((scene) => (
           <li
             key={scene.name}
             onClick={() => handleSceneClick(scene.name)}
             style={{
-              padding: "10px",
+              padding: "8px",
               backgroundColor:
                 currentScene === scene.name ? "#4caf50" : "#424242",
-              marginBottom: "8px",
+              marginBottom: "4px",
               borderRadius: "4px",
               cursor: "pointer",
-              transition: "background-color 0.2s",
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
-            }}
-            onMouseEnter={(e) => {
-              if (currentScene !== scene.name) {
-                e.currentTarget.style.backgroundColor = "#555";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (currentScene !== scene.name) {
-                e.currentTarget.style.backgroundColor = "#424242";
-              }
             }}
           >
             <span>{scene.name}</span>
           </li>
         ))}
       </ul>
+    </div>
+  );
+};
+
+const ObsControlPanel = () => {
+  const [connections, setConnections] = useState<OBSConnectionSettings[]>([]);
+  const [obsStates, setObsStates] = useState<Record<string, OBSState>>({});
+  const [allStreamSettings, setAllStreamSettings] = useState<
+    Record<string, any>
+  >({});
+
+  useEffect(() => {
+    const obsConnectionsRep = nodecg.Replicant<OBSConnectionSettings[]>(
+      "obsConnections",
+      { defaultValue: [] }
+    );
+    const obsStatesRep = nodecg.Replicant<Record<string, OBSState>>(
+      "obsStates",
+      { defaultValue: {} }
+    );
+    const streamSettingsRep = nodecg.Replicant<Record<string, any>>(
+      "obsStreamSettings",
+      { defaultValue: {} }
+    );
+
+    obsConnectionsRep.on("change", (newVal) => {
+      if (newVal) setConnections(JSON.parse(JSON.stringify(newVal)));
+    });
+    obsStatesRep.on("change", (newVal) => {
+      if (newVal) setObsStates(JSON.parse(JSON.stringify(newVal)));
+    });
+    streamSettingsRep.on("change", (newVal) => {
+      if (newVal) setAllStreamSettings(JSON.parse(JSON.stringify(newVal)));
+    });
+  }, []);
+
+  const handleStreamSettingChange = (id: string, newSettings: any) => {
+    const newAllSettings = { ...allStreamSettings, [id]: newSettings };
+    setAllStreamSettings(newAllSettings);
+    nodecg.Replicant<Record<string, any>>("obsStreamSettings", {
+      defaultValue: {},
+    }).value = newAllSettings;
+  };
+
+  return (
+    <div style={{ padding: "10px" }}>
+      <h2>OBS Controls</h2>
+      {connections.length === 0 && <p>No OBS connections configured.</p>}
+
+      {connections.map((conn) => (
+        <SingleObsControl
+          key={conn.id}
+          id={conn.id}
+          name={conn.name || "Unknown OBS"}
+          obsState={obsStates[conn.id] || { connected: false }}
+          streamSettings={allStreamSettings[conn.id]}
+          onStreamSettingChange={handleStreamSettingChange}
+        />
+      ))}
     </div>
   );
 };

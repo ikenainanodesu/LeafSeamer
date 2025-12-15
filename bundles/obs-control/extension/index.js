@@ -37,201 +37,202 @@ class Logger {
 const createLogger = (context) => new Logger(context);
 class ConnectionManager {
   constructor(nodecg, sceneManager) {
+    this.obsInstances = /* @__PURE__ */ new Map();
     this.logger = createLogger("OBSConnection");
-    this.reconnectInterval = null;
-    this.statsInterval = null;
-    this.shouldBeConnected = false;
-    this.isConnecting = false;
+    this.statsIntervals = /* @__PURE__ */ new Map();
+    this.reconnectTimeouts = /* @__PURE__ */ new Map();
     this.nodecg = nodecg;
     this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
     this.config = nodecg.bundleConfig;
-    this.obs = new obsWebsocketJs.OBSWebSocket();
-    this.setupListeners();
+    this.setupMessageListeners();
   }
-  setupListeners() {
-    this.obs.on("Identified", async () => {
-      this.logger.info("Connected to OBS");
-      this.sceneManager.setStatus("connected");
-      this.sceneManager.updateScenes(this.obs);
-      this.sceneManager.updateTransitions(this.obs);
-      try {
-        const stats = await this.obs.call("GetStreamStatus");
-        this.sceneManager.updateStreamStats({
-          ...stats,
-          kbitsPerSec: 0,
-          fps: 0
-        });
-        if (stats.outputActive) {
-          this.startStatsPolling();
-        }
-        await this.syncStreamSettings();
-      } catch (err) {
-        this.logger.error(
-          "Failed to get initial stream status",
-          (err == null ? void 0 : err.message) || err
-        );
-      }
-    });
-    this.obs.on("ConnectionClosed", () => {
-      this.logger.warn("Disconnected from OBS");
-      if (this.isConnecting) return;
-      this.sceneManager.setStatus("disconnected");
-      if (this.shouldBeConnected) {
-        this.connect();
-      }
-    });
-    this.obs.on("CurrentProgramSceneChanged", (data) => {
-      this.sceneManager.setCurrentScene(data.sceneName);
-    });
-    this.obs.on("CurrentSceneTransitionChanged", (data) => {
-      this.sceneManager.setCurrentTransition(data.transitionName);
-    });
+  setupMessageListeners() {
     this.nodecg.listenFor(
       "setOBSTransition",
-      (transitionName, ack) => {
-        this.setTransition(transitionName).then(() => {
-          if (ack && !ack.handled) {
-            ack(null);
-          }
+      (data, ack) => {
+        this.setTransition(data.id, data.transition).then(() => {
+          if (ack && !ack.handled) ack(null);
         }).catch((err) => {
-          if (ack && !ack.handled) {
-            ack(err);
-          }
+          if (ack && !ack.handled) ack(err);
         });
       }
     );
-    this.obs.on("StreamStateChanged", (data) => {
-      this.logger.info(`Stream State Changed: Active=${data.outputActive}`);
-      this.sceneManager.updateStreamStats({ outputActive: data.outputActive });
-      if (data.outputActive) {
-        this.startStatsPolling();
-        this.syncStreamSettings().catch(
-          (e) => this.logger.error("Failed to sync settings on stream start", e)
-        );
-      } else {
-        this.stopStatsPolling();
-      }
-    });
-    this.nodecg.listenFor("startStreaming", async (_data, ack) => {
-      try {
-        await this.obs.call("StartStream");
-        if (ack && !ack.handled) ack(null);
-      } catch (err) {
-        if (ack && !ack.handled) ack(err);
-      }
-    });
-    this.nodecg.listenFor("stopStreaming", async (_data, ack) => {
-      try {
-        await this.obs.call("StopStream");
-        if (ack && !ack.handled) ack(null);
-      } catch (err) {
-        if (ack && !ack.handled) ack(err);
-      }
-    });
     this.nodecg.listenFor(
-      "setStreamSettings",
-      async (settings, ack) => {
+      "startStreaming",
+      async (data, ack) => {
         try {
-          await this.setStreamSettings(settings);
+          const obs = this.getObs(data.id);
+          if (obs) await obs.call("StartStream");
           if (ack && !ack.handled) ack(null);
         } catch (err) {
           if (ack && !ack.handled) ack(err);
         }
       }
     );
-  }
-  async connect(params) {
-    var _a, _b, _c;
-    if (this.isConnecting) return;
-    this.shouldBeConnected = true;
-    this.isConnecting = true;
-    if (this.reconnectInterval) {
-      clearInterval(this.reconnectInterval);
-      this.reconnectInterval = null;
-    }
-    const settingsRep = this.nodecg.Replicant(
-      "obsConnectionSettings"
-    );
-    const settings = settingsRep.value;
-    const host = (params == null ? void 0 : params.host) || (settings == null ? void 0 : settings.host) || ((_a = this.config.obs) == null ? void 0 : _a.defaultHost) || "localhost";
-    const port = (params == null ? void 0 : params.port) || ((settings == null ? void 0 : settings.port) ? parseInt(settings.port) : void 0) || ((_b = this.config.obs) == null ? void 0 : _b.defaultPort) || 4455;
-    const password = (params == null ? void 0 : params.password) || (settings == null ? void 0 : settings.password) || ((_c = this.config.obs) == null ? void 0 : _c.defaultPassword) || "";
-    if (params) {
-      settingsRep.value = {
-        host: params.host,
-        port: params.port.toString(),
-        password: params.password
-      };
-    }
-    const address = `ws://${host}:${port}`;
-    this.logger.info(`Connecting to OBS at ${address}`);
-    this.sceneManager.setStatus("connecting");
-    const maxRetries = 3;
-    const retryInterval = 2e3;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      if (!this.shouldBeConnected) return;
-      try {
-        await this.obs.connect(address, password);
-        return;
-      } catch (error) {
-        this.logger.warn(
-          `Failed to connect to OBS (Attempt ${attempt}/${maxRetries}): ${error.message}`
-        );
-        if (attempt < maxRetries) {
-          if (!this.shouldBeConnected) return;
-          await new Promise((resolve) => setTimeout(resolve, retryInterval));
-        } else {
-          this.logger.error("All connection attempts failed");
-          this.sceneManager.setStatus("error");
-          this.shouldBeConnected = false;
+    this.nodecg.listenFor(
+      "stopStreaming",
+      async (data, ack) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (obs) await obs.call("StopStream");
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
         }
       }
-    }
-    this.isConnecting = false;
+    );
+    this.nodecg.listenFor(
+      "setStreamSettings",
+      async (data, ack) => {
+        try {
+          await this.setStreamSettings(data.id, data.settings);
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      }
+    );
+    this.nodecg.listenFor("connectOBS", (data) => {
+      this.connect(data);
+    });
+    this.nodecg.listenFor("disconnectOBS", (data) => {
+      this.disconnect(data.id);
+    });
+    this.nodecg.listenFor(
+      "setOBSScene",
+      (data) => {
+        this.setScene(data.id, data.scene);
+      }
+    );
   }
-  async disconnect() {
-    this.shouldBeConnected = false;
-    this.sceneManager.setStatus("disconnected");
-    if (this.reconnectInterval) {
-      clearInterval(this.reconnectInterval);
-      this.reconnectInterval = null;
+  getObs(id) {
+    return this.obsInstances.get(id);
+  }
+  setupObsListeners(obsId, obs) {
+    obs.on("Identified", async () => {
+      this.logger.info(`[${obsId}] Connected to OBS`);
+      this.sceneManager.setStatus(obsId, "connected");
+      this.sceneManager.updateScenes(obsId, obs);
+      this.sceneManager.updateTransitions(obsId, obs);
+      try {
+        const stats = await obs.call("GetStreamStatus");
+        this.sceneManager.updateStreamStats(obsId, {
+          ...stats,
+          kbitsPerSec: 0,
+          fps: 0
+        });
+        if (stats.outputActive) {
+          this.startStatsPolling(obsId, obs);
+        }
+        await this.syncStreamSettings(obsId, obs);
+      } catch (err) {
+        this.logger.error(
+          `[${obsId}] Failed to get initial stream status`,
+          (err == null ? void 0 : err.message) || err
+        );
+      }
+    });
+    obs.on("ConnectionClosed", () => {
+      this.logger.warn(`[${obsId}] Disconnected from OBS`);
+      this.sceneManager.setStatus(obsId, "disconnected");
+      this.stopStatsPolling(obsId);
+    });
+    obs.on("CurrentProgramSceneChanged", (data) => {
+      this.sceneManager.setCurrentScene(obsId, data.sceneName);
+    });
+    obs.on("CurrentSceneTransitionChanged", (data) => {
+      this.sceneManager.setCurrentTransition(obsId, data.transitionName);
+    });
+    obs.on("StreamStateChanged", (data) => {
+      this.logger.info(
+        `[${obsId}] Stream State Changed: Active=${data.outputActive}`
+      );
+      this.sceneManager.updateStreamStats(obsId, {
+        outputActive: data.outputActive
+      });
+      if (data.outputActive) {
+        this.startStatsPolling(obsId, obs);
+        this.syncStreamSettings(obsId, obs).catch(
+          (e) => this.logger.error(
+            `[${obsId}] Failed to sync settings on stream start`,
+            e
+          )
+        );
+      } else {
+        this.stopStatsPolling(obsId);
+      }
+    });
+  }
+  async connect(settings) {
+    const { id, host, port, password } = settings;
+    let obs = this.obsInstances.get(id);
+    if (!obs) {
+      obs = new obsWebsocketJs.OBSWebSocket();
+      this.obsInstances.set(id, obs);
+      this.setupObsListeners(id, obs);
     }
+    if (this.reconnectTimeouts.has(id)) {
+      clearTimeout(this.reconnectTimeouts.get(id));
+      this.reconnectTimeouts.delete(id);
+    }
+    const address = `ws://${host}:${port}`;
+    this.logger.info(`[${id}] Connecting to OBS at ${address}`);
+    this.sceneManager.setStatus(id, "connecting");
     try {
-      await this.obs.disconnect();
-      this.logger.info("Manually disconnected from OBS");
+      await obs.connect(address, password);
     } catch (error) {
-      this.logger.error("Failed to disconnect from OBS", error.message);
+      this.logger.warn(`[${id}] Failed to connect: ${error.message}`);
+      this.sceneManager.setStatus(id, "error");
     }
   }
-  async setScene(sceneName) {
+  async disconnect(id) {
+    const obs = this.obsInstances.get(id);
+    if (obs) {
+      try {
+        await obs.disconnect();
+        this.logger.info(`[${id}] Manually disconnected`);
+      } catch (e) {
+        this.logger.error(`[${id}] Failed to disconnect`, e.message);
+      }
+    }
+    this.sceneManager.setStatus(id, "disconnected");
+    this.stopStatsPolling(id);
+  }
+  // Cleanup method if a connection is removed completely
+  async removeConnection(id) {
+    await this.disconnect(id);
+    this.obsInstances.delete(id);
+    this.sceneManager.deleteState(id);
+  }
+  async setScene(id, sceneName) {
+    const obs = this.getObs(id);
+    if (!obs) return;
     try {
-      await this.obs.call("SetCurrentProgramScene", {
+      await obs.call("SetCurrentProgramScene", {
         sceneName
       });
-      this.logger.info(`Switched to scene: ${sceneName}`);
+      this.logger.info(`[${id}] Switched to scene: ${sceneName}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to switch scene to ${sceneName}`,
-        error.message
-      );
+      this.logger.error(`[${id}] Failed to switch scene`, error.message);
     }
   }
-  async setTransition(transitionName) {
+  async setTransition(id, transitionName) {
+    const obs = this.getObs(id);
+    if (!obs) return;
     try {
-      await this.obs.call("SetCurrentSceneTransition", {
+      await obs.call("SetCurrentSceneTransition", {
         transitionName
       });
-      this.logger.info(`Switched to transition: ${transitionName}`);
+      this.logger.info(`[${id}] Switched to transition: ${transitionName}`);
     } catch (error) {
-      this.logger.error(
-        `Failed to switch transition to ${transitionName}`,
-        error.message
-      );
+      this.logger.error(`[${id}] Failed to switch transition`, error.message);
       throw error;
     }
   }
-  async setStreamSettings(settings) {
+  async setStreamSettings(id, settings) {
+    const obs = this.getObs(id);
+    if (!obs) return;
     try {
       const streamSettings = {
         server: settings.server,
@@ -244,20 +245,19 @@ class ConnectionManager {
       } else {
         streamSettings.use_auth = false;
       }
-      await this.obs.call("SetStreamServiceSettings", {
+      await obs.call("SetStreamServiceSettings", {
         streamServiceType: "rtmp_custom",
-        // Assuming custom RTMP for now
         streamServiceSettings: streamSettings
       });
-      this.logger.info("Stream settings updated");
+      this.logger.info(`[${id}] Stream settings updated`);
     } catch (error) {
-      this.logger.error("Failed to set stream settings", error.message);
+      this.logger.error(`[${id}] Failed to set stream settings`, error.message);
       throw error;
     }
   }
-  async syncStreamSettings() {
+  async syncStreamSettings(id, obs) {
     try {
-      const response = await this.obs.call("GetStreamServiceSettings");
+      const response = await obs.call("GetStreamServiceSettings");
       const settings = response.streamServiceSettings;
       const newSettings = {
         server: settings.server || "",
@@ -266,42 +266,43 @@ class ConnectionManager {
         username: settings.username || "",
         password: settings.password || ""
       };
-      const streamSettingsRep = this.nodecg.Replicant("obsStreamSettings", {
-        defaultValue: {
-          server: "",
-          key: "",
-          useAuth: false,
-          username: "",
-          password: ""
-        }
-      });
-      streamSettingsRep.value = newSettings;
-      this.logger.info("Synced stream settings from OBS");
+      const streamSettingsRep = this.nodecg.Replicant(
+        "obsStreamSettings",
+        { defaultValue: {} }
+      );
+      if (!streamSettingsRep.value) streamSettingsRep.value = {};
+      streamSettingsRep.value[id] = newSettings;
+      this.logger.info(`[${id}] Synced stream settings from OBS`);
     } catch (error) {
-      this.logger.error("Failed to sync stream settings", error.message);
+      this.logger.error(
+        `[${id}] Failed to sync stream settings`,
+        error.message
+      );
     }
   }
-  startStatsPolling() {
-    if (this.statsInterval) clearInterval(this.statsInterval);
-    this.statsInterval = setInterval(async () => {
+  startStatsPolling(id, obs) {
+    if (this.statsIntervals.has(id)) {
+      clearInterval(this.statsIntervals.get(id));
+    }
+    const interval = setInterval(async () => {
       try {
-        const stats = await this.obs.call("GetStreamStatus");
-        this.sceneManager.updateStreamStats({
+        const stats = await obs.call("GetStreamStatus");
+        this.sceneManager.updateStreamStats(id, {
           ...stats,
           kbitsPerSec: 0,
-          // Placeholder if not available
           fps: 0
         });
       } catch (e) {
       }
     }, 2e3);
+    this.statsIntervals.set(id, interval);
   }
-  stopStatsPolling() {
-    if (this.statsInterval) {
-      clearInterval(this.statsInterval);
-      this.statsInterval = null;
+  stopStatsPolling(id) {
+    if (this.statsIntervals.has(id)) {
+      clearInterval(this.statsIntervals.get(id));
+      this.statsIntervals.delete(id);
     }
-    this.sceneManager.updateStreamStats({
+    this.sceneManager.updateStreamStats(id, {
       outputActive: false,
       fps: 0,
       kbitsPerSec: 0,
@@ -313,40 +314,51 @@ class ConnectionManager {
 class SceneManager {
   constructor(nodecg) {
     this.nodecg = nodecg;
-    this.obsStateRep = nodecg.Replicant("obsState", {
-      defaultValue: {
-        connected: false,
-        status: "disconnected",
-        currentScene: "",
-        isStreaming: false,
-        isRecording: false,
-        scenes: [],
-        transitions: [],
-        currentTransition: "",
-        streamStats: { fps: 0, kbitsPerSec: 0, averageFrameTime: 0 }
+    this.obsStatesRep = nodecg.Replicant(
+      "obsStates",
+      {
+        defaultValue: {}
       }
-    });
-    this.obsScenesRep = nodecg.Replicant("obsScenes", {
-      defaultValue: []
-    });
-    this.obsStateRep.value.connected = false;
-    this.obsStateRep.value.status = "disconnected";
+    );
   }
-  setConnected(connected) {
-    this.obsStateRep.value.connected = connected;
-    this.obsStateRep.value.status = connected ? "connected" : "disconnected";
+  getDefaultState() {
+    return {
+      connected: false,
+      status: "disconnected",
+      currentScene: "",
+      isStreaming: false,
+      isRecording: false,
+      scenes: [],
+      transitions: [],
+      currentTransition: "",
+      streamStats: { fps: 0, kbitsPerSec: 0, averageFrameTime: 0 }
+    };
   }
-  setStatus(status) {
-    this.obsStateRep.value.status = status;
-    this.obsStateRep.value.connected = status === "connected";
+  ensureState(obsId) {
+    if (!this.obsStatesRep.value[obsId]) {
+      this.obsStatesRep.value[obsId] = this.getDefaultState();
+    }
   }
-  setCurrentScene(sceneName) {
-    this.obsStateRep.value.currentScene = sceneName;
+  setConnected(obsId, connected) {
+    this.ensureState(obsId);
+    this.obsStatesRep.value[obsId].connected = connected;
+    this.obsStatesRep.value[obsId].status = connected ? "connected" : "disconnected";
   }
-  setCurrentTransition(transitionName) {
-    this.obsStateRep.value.currentTransition = transitionName;
+  setStatus(obsId, status) {
+    this.ensureState(obsId);
+    this.obsStatesRep.value[obsId].status = status;
+    this.obsStatesRep.value[obsId].connected = status === "connected";
   }
-  async updateScenes(obs) {
+  setCurrentScene(obsId, sceneName) {
+    this.ensureState(obsId);
+    this.obsStatesRep.value[obsId].currentScene = sceneName;
+  }
+  setCurrentTransition(obsId, transitionName) {
+    this.ensureState(obsId);
+    this.obsStatesRep.value[obsId].currentTransition = transitionName;
+  }
+  async updateScenes(obsId, obs) {
+    this.ensureState(obsId);
     try {
       const response = await obs.call("GetSceneList");
       const scenes = response.scenes.map(
@@ -355,70 +367,58 @@ class SceneManager {
           index
         })
       );
-      this.obsScenesRep.value = JSON.parse(JSON.stringify(scenes));
-      this.obsStateRep.value.scenes = JSON.parse(JSON.stringify(scenes));
-      this.obsStateRep.value.currentScene = response.currentProgramSceneName;
+      this.obsStatesRep.value[obsId].scenes = JSON.parse(
+        JSON.stringify(scenes)
+      );
+      this.obsStatesRep.value[obsId].currentScene = response.currentProgramSceneName;
     } catch (error) {
-      this.nodecg.log.error("Failed to update scenes", error);
+      this.nodecg.log.error(`[${obsId}] Failed to update scenes`, error);
     }
   }
-  async updateTransitions(obs) {
+  async updateTransitions(obsId, obs) {
+    this.ensureState(obsId);
     try {
       const response = await obs.call("GetSceneTransitionList");
-      this.obsStateRep.value.transitions = response.transitions.map(
+      this.obsStatesRep.value[obsId].transitions = response.transitions.map(
         (t) => t.transitionName
       );
-      this.obsStateRep.value.currentTransition = response.currentSceneTransitionName;
+      this.obsStatesRep.value[obsId].currentTransition = response.currentSceneTransitionName;
     } catch (error) {
-      this.nodecg.log.error("Failed to update transitions", error);
+      this.nodecg.log.error(`[${obsId}] Failed to update transitions`, error);
     }
   }
-  updateStreamStats(stats) {
-    this.obsStateRep.value.streamStats = {
+  updateStreamStats(obsId, stats) {
+    this.ensureState(obsId);
+    this.obsStatesRep.value[obsId].streamStats = {
       fps: stats.fps || 0,
       kbitsPerSec: stats.kbitsPerSec || 0,
-      // Might be 0 if not available
       averageFrameTime: stats.averageFrameTime || 0,
-      // Add duration/timecode if we want to display it
-      //@ts-ignore - extending type dynamically for now or we should update type def
       outputTimecode: stats.outputTimecode
     };
-    this.obsStateRep.value.isStreaming = stats.outputActive;
+    this.obsStatesRep.value[obsId].isStreaming = stats.outputActive;
+  }
+  deleteState(obsId) {
+    if (this.obsStatesRep.value[obsId]) {
+      delete this.obsStatesRep.value[obsId];
+    }
   }
 }
 module.exports = function(nodecg) {
   const logger = createLogger("OBSControl");
   logger.setNodeCG(nodecg);
   logger.info("Starting OBS Control Bundle");
-  nodecg.Replicant("obsConnectionSettings", {
-    defaultValue: {
-      host: "localhost",
-      port: "4455",
-      password: ""
-    }
+  nodecg.Replicant("obsConnections", {
+    defaultValue: [
+      {
+        id: "default",
+        // Default connection
+        name: "Main OBS",
+        host: "localhost",
+        port: "4455",
+        password: ""
+      }
+    ]
   });
-  logger.info("Debug: SceneManager type:", typeof SceneManager);
-  logger.info("Debug: ConnectionManager type:", typeof ConnectionManager);
-  if (typeof SceneManager !== "function")
-    logger.error("SceneManager is not a constructor/function!", SceneManager);
-  if (typeof ConnectionManager !== "function")
-    logger.error(
-      "ConnectionManager is not a constructor/function!",
-      ConnectionManager
-    );
   const sceneManager = new SceneManager(nodecg);
-  const connectionManager = new ConnectionManager(nodecg, sceneManager);
-  nodecg.listenFor(
-    "connectOBS",
-    (data) => {
-      connectionManager.connect(data);
-    }
-  );
-  nodecg.listenFor("disconnectOBS", () => {
-    connectionManager.disconnect();
-  });
-  nodecg.listenFor("setOBSScene", (sceneName) => {
-    logger.info(`Received request to switch scene to: ${sceneName}`);
-    connectionManager.setScene(sceneName);
-  });
+  new ConnectionManager(nodecg, sceneManager);
 };

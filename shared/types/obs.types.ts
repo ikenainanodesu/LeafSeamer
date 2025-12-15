@@ -29,6 +29,8 @@ export interface StreamStats {
 }
 
 export interface OBSConnectionSettings {
+  id: string;
+  name?: string;
   host: string;
   port: string;
   password?: string;
