@@ -7,6 +7,8 @@ const ObsControlPanel = () => {
   const [connected, setConnected] = useState(false);
   const [currentScene, setCurrentScene] = useState("");
   const [scenes, setScenes] = useState<OBSScene[]>([]);
+  const [transitions, setTransitions] = useState<string[]>([]);
+  const [currentTransition, setCurrentTransition] = useState("");
 
   useEffect(() => {
     const obsStateRep = nodecg.Replicant<OBSState>("obsState");
@@ -16,6 +18,8 @@ const ObsControlPanel = () => {
         setConnected(newVal.connected);
         setCurrentScene(newVal.currentScene);
         setScenes(newVal.scenes);
+        setTransitions(newVal.transitions || []);
+        setCurrentTransition(newVal.currentTransition || "");
       }
     });
   }, []);
@@ -27,6 +31,17 @@ const ObsControlPanel = () => {
       .then(() => console.log("[OBS Control] Message sent successfully"))
       .catch((err: any) =>
         console.error("[OBS Control] Failed to send message:", err)
+      );
+  };
+
+  const handleTransitionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const transitionName = e.target.value;
+    console.log(`[OBS Control] Switching transition to: ${transitionName}`);
+    nodecg
+      .sendMessageToBundle("setOBSTransition", "obs-control", transitionName)
+      .then(() => console.log("[OBS Control] Transition message sent"))
+      .catch((err: any) =>
+        console.error("[OBS Control] Failed to send transition:", err)
       );
   };
 
@@ -44,6 +59,34 @@ const ObsControlPanel = () => {
         <p>
           Current Scene: <strong>{currentScene}</strong>
         </p>
+      </div>
+
+      <div style={{ marginBottom: "20px" }}>
+        <label
+          htmlFor="transition-select"
+          style={{ display: "block", marginBottom: "5px" }}
+        >
+          Transition:
+        </label>
+        <select
+          id="transition-select"
+          value={currentTransition}
+          onChange={handleTransitionChange}
+          style={{
+            width: "100%",
+            padding: "8px",
+            backgroundColor: "#424242",
+            color: "white",
+            border: "1px solid #555",
+            borderRadius: "4px",
+          }}
+        >
+          {transitions.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
       </div>
 
       <h3>Scenes</h3>

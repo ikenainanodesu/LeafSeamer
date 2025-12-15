@@ -53,6 +53,7 @@ class ConnectionManager {
       this.logger.info("Connected to OBS");
       this.sceneManager.setStatus("connected");
       this.sceneManager.updateScenes(this.obs);
+      this.sceneManager.updateTransitions(this.obs);
     });
     this.obs.on("ConnectionClosed", () => {
       this.logger.warn("Disconnected from OBS");
@@ -65,6 +66,23 @@ class ConnectionManager {
     this.obs.on("CurrentProgramSceneChanged", (data) => {
       this.sceneManager.setCurrentScene(data.sceneName);
     });
+    this.obs.on("CurrentSceneTransitionChanged", (data) => {
+      this.sceneManager.setCurrentTransition(data.transitionName);
+    });
+    this.nodecg.listenFor(
+      "setOBSTransition",
+      (transitionName, ack) => {
+        this.setTransition(transitionName).then(() => {
+          if (ack && !ack.handled) {
+            ack(null);
+          }
+        }).catch((err) => {
+          if (ack && !ack.handled) {
+            ack(err);
+          }
+        });
+      }
+    );
   }
   async connect(params) {
     var _a, _b, _c;
@@ -142,6 +160,20 @@ class ConnectionManager {
       );
     }
   }
+  async setTransition(transitionName) {
+    try {
+      await this.obs.call("SetCurrentSceneTransition", {
+        transitionName
+      });
+      this.logger.info(`Switched to transition: ${transitionName}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to switch transition to ${transitionName}`,
+        error.message
+      );
+      throw error;
+    }
+  }
 }
 class SceneManager {
   constructor(nodecg) {
@@ -153,7 +185,9 @@ class SceneManager {
         currentScene: "",
         isStreaming: false,
         isRecording: false,
-        scenes: []
+        scenes: [],
+        transitions: [],
+        currentTransition: ""
       }
     });
     this.obsScenesRep = nodecg.Replicant("obsScenes", {
@@ -173,6 +207,9 @@ class SceneManager {
   setCurrentScene(sceneName) {
     this.obsStateRep.value.currentScene = sceneName;
   }
+  setCurrentTransition(transitionName) {
+    this.obsStateRep.value.currentTransition = transitionName;
+  }
   async updateScenes(obs) {
     try {
       const response = await obs.call("GetSceneList");
@@ -180,7 +217,6 @@ class SceneManager {
         (scene, index) => ({
           name: scene.sceneName,
           index
-          // OBS WebSocket 5 doesn't strictly provide index in the same way, but we can infer order
         })
       );
       this.obsScenesRep.value = JSON.parse(JSON.stringify(scenes));
@@ -188,6 +224,17 @@ class SceneManager {
       this.obsStateRep.value.currentScene = response.currentProgramSceneName;
     } catch (error) {
       this.nodecg.log.error("Failed to update scenes", error);
+    }
+  }
+  async updateTransitions(obs) {
+    try {
+      const response = await obs.call("GetSceneTransitionList");
+      this.obsStateRep.value.transitions = response.transitions.map(
+        (t) => t.transitionName
+      );
+      this.obsStateRep.value.currentTransition = response.currentSceneTransitionName;
+    } catch (error) {
+      this.nodecg.log.error("Failed to update transitions", error);
     }
   }
 }

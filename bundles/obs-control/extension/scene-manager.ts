@@ -21,6 +21,8 @@ export class SceneManager {
         isStreaming: false,
         isRecording: false,
         scenes: [],
+        transitions: [],
+        currentTransition: "",
       },
     });
     this.obsScenesRep = nodecg.Replicant<OBSScene[]>("obsScenes", {
@@ -46,13 +48,17 @@ export class SceneManager {
     this.obsStateRep.value.currentScene = sceneName;
   }
 
+  setCurrentTransition(transitionName: string) {
+    this.obsStateRep.value.currentTransition = transitionName;
+  }
+
   async updateScenes(obs: OBSWebSocket) {
     try {
       const response = await obs.call("GetSceneList");
       const scenes: OBSScene[] = response.scenes.map(
         (scene: any, index: number) => ({
           name: scene.sceneName as string,
-          index: index, // OBS WebSocket 5 doesn't strictly provide index in the same way, but we can infer order
+          index: index,
         })
       );
 
@@ -61,6 +67,19 @@ export class SceneManager {
       this.obsStateRep.value.currentScene = response.currentProgramSceneName;
     } catch (error) {
       this.nodecg.log.error("Failed to update scenes", error);
+    }
+  }
+
+  async updateTransitions(obs: OBSWebSocket) {
+    try {
+      const response = await obs.call("GetSceneTransitionList");
+      this.obsStateRep.value.transitions = response.transitions.map(
+        (t: any) => t.transitionName
+      );
+      this.obsStateRep.value.currentTransition =
+        response.currentSceneTransitionName;
+    } catch (error) {
+      this.nodecg.log.error("Failed to update transitions", error);
     }
   }
 }

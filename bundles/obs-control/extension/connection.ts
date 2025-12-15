@@ -29,6 +29,7 @@ export class ConnectionManager {
       this.logger.info("Connected to OBS");
       this.sceneManager.setStatus("connected");
       this.sceneManager.updateScenes(this.obs);
+      this.sceneManager.updateTransitions(this.obs);
     });
 
     this.obs.on("ConnectionClosed", () => {
@@ -47,6 +48,27 @@ export class ConnectionManager {
     this.obs.on("CurrentProgramSceneChanged", (data) => {
       this.sceneManager.setCurrentScene(data.sceneName);
     });
+
+    this.obs.on("CurrentSceneTransitionChanged", (data) => {
+      this.sceneManager.setCurrentTransition(data.transitionName);
+    });
+
+    this.nodecg.listenFor(
+      "setOBSTransition",
+      (transitionName: string, ack: any) => {
+        this.setTransition(transitionName)
+          .then(() => {
+            if (ack && !ack.handled) {
+              ack(null);
+            }
+          })
+          .catch((err) => {
+            if (ack && !ack.handled) {
+              ack(err);
+            }
+          });
+      }
+    );
   }
 
   async connect(params?: { host: string; port: number; password?: string }) {
@@ -151,6 +173,21 @@ export class ConnectionManager {
         `Failed to switch scene to ${sceneName}`,
         error.message
       );
+    }
+  }
+
+  async setTransition(transitionName: string) {
+    try {
+      await this.obs.call("SetCurrentSceneTransition", {
+        transitionName: transitionName,
+      });
+      this.logger.info(`Switched to transition: ${transitionName}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to switch transition to ${transitionName}`,
+        error.message
+      );
+      throw error;
     }
   }
 }

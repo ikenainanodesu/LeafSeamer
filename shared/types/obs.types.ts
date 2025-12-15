@@ -16,6 +16,8 @@ export interface OBSState {
   isStreaming: boolean;
   isRecording: boolean;
   scenes: OBSScene[];
+  transitions: string[];
+  currentTransition: string;
 }
 
 export interface StreamStats {
