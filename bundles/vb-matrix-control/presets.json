@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "id": "bank-0",
+    "name": "New Preset1",
+    "network": {
+      "ip": "192.168.100.220",
+      "port": 6980,
+      "streamName": "Command1"
+    },
+    "patches": [
+      {
+        "id": "default",
+        "inputDevice": "VAIO1",
+        "inputChannel": 2,
+        "outputDevice": "VAIO1",
+        "outputChannel": 1,
+        "gain": 0,
+        "mute": false,
+        "exists": false
+      }
+    ]
+  },
+  {
+    "id": "bank-1",
+    "name": "New Preset2",
+    "network": {
+      "ip": "192.168.100.220",
+      "port": 6980,
+      "streamName": "Command1"
+    },
+    "patches": [
+      {
+        "id": "default",
+        "inputDevice": "VAIO1",
+        "inputChannel": 2,
+        "outputDevice": "VAIO1",
+        "outputChannel": 1,
+        "gain": 0,
+        "mute": false,
+        "exists": false
+      }
+    ]
+  }
+]

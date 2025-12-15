@@ -13,24 +13,43 @@ export class ConnectionManager {
   private statsIntervals: Map<string, NodeJS.Timeout> = new Map();
   private reconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
-  constructor(nodecg: NodeCG.ServerAPI, sceneManager: SceneManager) {
+  private obsConnectionsRep: any;
+
+  constructor(
+    nodecg: NodeCG.ServerAPI,
+    sceneManager: SceneManager,
+    obsConnectionsRep: any
+  ) {
     this.nodecg = nodecg;
     this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
     this.config = nodecg.bundleConfig;
+    this.obsConnectionsRep = obsConnectionsRep;
 
     this.setupMessageListeners();
+  }
+
+  public connectAll() {
+    this.logger.info("Auto-connecting to all defined OBS instances...");
+    const connections = this.obsConnectionsRep.value || [];
+    connections.forEach((conn: OBSConnectionSettings) => {
+      this.connect(conn);
+    });
   }
 
   private setupMessageListeners() {
     this.nodecg.listenFor(
       "setOBSTransition",
       (data: { id: string; transition: string }, ack: any) => {
+        this.logger.info(
+          `[setOBSTransition] Request for ID: ${data.id}, Transition: ${data.transition}`
+        );
         this.setTransition(data.id, data.transition)
           .then(() => {
             if (ack && !ack.handled) ack(null);
           })
           .catch((err) => {
+            this.logger.error(`[setOBSTransition] Error: ${err.message}`);
             if (ack && !ack.handled) ack(err);
           });
       }
@@ -85,6 +104,9 @@ export class ConnectionManager {
     this.nodecg.listenFor(
       "setOBSScene",
       (data: { id: string; scene: string }) => {
+        this.logger.info(
+          `[setOBSScene] Request for ID: ${data.id}, Scene: ${data.scene}`
+        );
         this.setScene(data.id, data.scene);
       }
     );

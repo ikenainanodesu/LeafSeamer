@@ -36,7 +36,7 @@ class Logger {
 }
 const createLogger = (context) => new Logger(context);
 class ConnectionManager {
-  constructor(nodecg, sceneManager) {
+  constructor(nodecg, sceneManager, obsConnectionsRep) {
     this.obsInstances = /* @__PURE__ */ new Map();
     this.logger = createLogger("OBSConnection");
     this.statsIntervals = /* @__PURE__ */ new Map();
@@ -45,15 +45,27 @@ class ConnectionManager {
     this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
     this.config = nodecg.bundleConfig;
+    this.obsConnectionsRep = obsConnectionsRep;
     this.setupMessageListeners();
+  }
+  connectAll() {
+    this.logger.info("Auto-connecting to all defined OBS instances...");
+    const connections = this.obsConnectionsRep.value || [];
+    connections.forEach((conn) => {
+      this.connect(conn);
+    });
   }
   setupMessageListeners() {
     this.nodecg.listenFor(
       "setOBSTransition",
       (data, ack) => {
+        this.logger.info(
+          `[setOBSTransition] Request for ID: ${data.id}, Transition: ${data.transition}`
+        );
         this.setTransition(data.id, data.transition).then(() => {
           if (ack && !ack.handled) ack(null);
         }).catch((err) => {
+          this.logger.error(`[setOBSTransition] Error: ${err.message}`);
           if (ack && !ack.handled) ack(err);
         });
       }
@@ -102,6 +114,9 @@ class ConnectionManager {
     this.nodecg.listenFor(
       "setOBSScene",
       (data) => {
+        this.logger.info(
+          `[setOBSScene] Request for ID: ${data.id}, Scene: ${data.scene}`
+        );
         this.setScene(data.id, data.scene);
       }
     );
@@ -420,5 +435,11 @@ module.exports = function(nodecg) {
     ]
   });
   const sceneManager = new SceneManager(nodecg);
-  new ConnectionManager(nodecg, sceneManager);
+  const obsConnectionsRep = nodecg.Replicant("obsConnections");
+  const connectionManager = new ConnectionManager(
+    nodecg,
+    sceneManager,
+    obsConnectionsRep
+  );
+  connectionManager.connectAll();
 };

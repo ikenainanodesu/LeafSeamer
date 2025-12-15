@@ -24,7 +24,16 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
   });
 
   const sceneManager = new SceneManager(nodecg);
-  const connectionManager = new ConnectionManager(nodecg, sceneManager);
+
+  // Replicant is defined earlier
+  const obsConnectionsRep =
+    nodecg.Replicant<OBSConnectionSettings[]>("obsConnections");
+  const connectionManager = new ConnectionManager(
+    nodecg,
+    sceneManager,
+    obsConnectionsRep
+  );
+  connectionManager.connectAll();
 
   // Connection manager sets up its own listeners now.
 };

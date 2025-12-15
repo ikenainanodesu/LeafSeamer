@@ -36,5 +36,8 @@
       }
     ]
   },
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1"
+  }
 }
