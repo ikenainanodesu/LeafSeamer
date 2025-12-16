@@ -1,11 +1,11 @@
-/// <reference path="../../../shared/types/global.d.ts" />
+/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   OBSState,
   OBSScene,
   OBSConnectionSettings,
-} from "../../../shared/types/obs.types";
+} from "../../../../shared/types/obs.types";
 
 const SingleObsControl = ({
   id,
@@ -79,7 +79,9 @@ const SingleObsControl = ({
         .then(() =>
           nodecg.sendMessageToBundle("startStreaming", "obs-control", { id })
         )
-        .catch((err) => console.error(`[${name}] Failed to start stream`, err));
+        .catch((err: any) =>
+          console.error(`[${name}] Failed to start stream`, err)
+        );
     }
   };
 
@@ -141,7 +143,7 @@ const SingleObsControl = ({
             border: "1px solid #555",
           }}
         >
-          {(transitions || []).map((t) => (
+          {(transitions || []).map((t: string) => (
             <option key={t} value={t}>
               {t}
             </option>
@@ -299,7 +301,7 @@ const SingleObsControl = ({
       {/* Scenes */}
       <h4>Scenes</h4>
       <ul style={{ listStyle: "none", padding: 0 }}>
-        {(scenes || []).map((scene) => (
+        {(scenes || []).map((scene: OBSScene) => (
           <li
             key={scene.name}
             onClick={() => handleSceneClick(scene.name)}
@@ -343,13 +345,13 @@ const ObsControlPanel = () => {
       { defaultValue: {} }
     );
 
-    obsConnectionsRep.on("change", (newVal) => {
+    obsConnectionsRep.on("change", (newVal: OBSConnectionSettings[]) => {
       if (newVal) setConnections(JSON.parse(JSON.stringify(newVal)));
     });
-    obsStatesRep.on("change", (newVal) => {
+    obsStatesRep.on("change", (newVal: Record<string, OBSState>) => {
       if (newVal) setObsStates(JSON.parse(JSON.stringify(newVal)));
     });
-    streamSettingsRep.on("change", (newVal) => {
+    streamSettingsRep.on("change", (newVal: Record<string, any>) => {
       if (newVal) setAllStreamSettings(JSON.parse(JSON.stringify(newVal)));
     });
   }, []);

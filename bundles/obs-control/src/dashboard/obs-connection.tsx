@@ -1,11 +1,11 @@
-/// <reference path="../../../shared/types/global.d.ts" />
+/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   OBSState,
   OBSConnectionSettings,
   OBSConnectionStatus,
-} from "../../../shared/types/obs.types";
+} from "../../../../shared/types/obs.types";
 import { v4 as uuidv4 } from "uuid";
 
 const ObsConnection = () => {
