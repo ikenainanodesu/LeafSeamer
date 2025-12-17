@@ -1,4 +1,5 @@
 [简体中文](Manual/chs/README.md) | [日本語](Manual/jpn/README.md) | [English](README.md)
+
 # LeafSeamer
 
 A broadcast production control system based on NodeCG, integrating unified control for Mixer, OBS, Graphics Overlay, VB-Audio Matrix, and other devices and services.
@@ -208,4 +209,4 @@ After startup visit:
 
 ## License
 
-GPL-3.0
+Apache-2.0

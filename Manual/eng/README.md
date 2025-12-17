@@ -207,4 +207,4 @@ After startup visit:
 
 ## License
 
-GPL-3.0
+Apache-2.0

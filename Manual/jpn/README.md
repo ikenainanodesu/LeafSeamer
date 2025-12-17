@@ -207,4 +207,4 @@ npm run typecheck
 
 ## ライセンス
 
-GPL-3.0
+Apache-2.0
