@@ -169,8 +169,8 @@ LeafSeamer's Dashboard is organized into multiple workspaces by function:
 
 For detailed installation and usage instructions, please refer to:
 
-- [Installation Guide](Manual\eng\INSTALLATION.md)
-- [User Manual](Manual\eng\USER_MANUAL.md)
+- [Installation Guide](Manual/eng/INSTALLATION.md)
+- [User Manual](Manual/eng/USER_MANUAL.md)
 
 ### Basic Commands
 
