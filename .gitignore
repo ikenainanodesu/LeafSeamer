@@ -4,9 +4,9 @@ logs/
 backups/
 .env
 .DS_Store
-.agent
+.agent/
 .gitignore
-project-documents
+project-documents/
 
 # 日志和错误文件
 *.log
