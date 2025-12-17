@@ -100,4 +100,11 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
   nodecg.listenFor("queryOutputRouting", (data: { outputId: number }) => {
     connectionManager.queryOutputRouting(data.outputId);
   });
+
+  nodecg.listenFor(
+    "setMixerInputPatch",
+    (data: { channelId: number; patch: string }) => {
+      connectionManager.setInputPatch(data.channelId, data.patch);
+    }
+  );
 };

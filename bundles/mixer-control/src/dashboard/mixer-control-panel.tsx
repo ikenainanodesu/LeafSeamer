@@ -59,6 +59,84 @@ const MixerControlPanel = () => {
             <p style={{ margin: "5px 0", fontSize: "0.9em", color: "#aaa" }}>
               ID: {channel.id}
             </p>
+            {/* Patch Selector */}
+            <div style={{ marginBottom: "10px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.8em",
+                  color: "#ccc",
+                  marginBottom: "2px",
+                }}
+              >
+                Patch Source:
+              </label>
+              <select
+                value={channel.patch || "Unknown"}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // If custom, maybe allow text input? For now, dropdown.
+                  nodecg.sendMessageToBundle(
+                    "setMixerInputPatch",
+                    "mixer-control",
+                    {
+                      channelId: channel.id,
+                      patch: val,
+                    }
+                  );
+                }}
+                style={{
+                  width: "100%",
+                  padding: "4px",
+                  fontSize: "0.8em",
+                  backgroundColor: "#222",
+                  color: "white",
+                  border: "1px solid #555",
+                  borderRadius: "2px",
+                }}
+              >
+                <option value="Unknown" disabled>
+                  Select Source
+                </option>
+                {/* Common DM3/TF Sources - Example List */}
+                <optgroup label="Local Analog">
+                  {Array.from({ length: 16 }, (_, i) => (
+                    <option
+                      key={`Analog${i + 1}`}
+                      value={`Analog${i + 1}`}
+                    >{`Analog ${i + 1}`}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Dante">
+                  {Array.from(
+                    { length: 16 },
+                    (
+                      _,
+                      i // DM3 has 16 Dante usually? or 32? Let's assume 16 for now
+                    ) => (
+                      <option
+                        key={`Dante${i + 1}`}
+                        value={`Dante${i + 1}`}
+                      >{`Dante ${i + 1}`}</option>
+                    )
+                  )}
+                </optgroup>
+                <optgroup label="USB">
+                  {Array.from({ length: 18 }, (_, i) => (
+                    <option
+                      key={`USB${i + 1}`}
+                      value={`USB${i + 1}`}
+                    >{`USB ${i + 1}`}</option>
+                  ))}
+                </optgroup>
+                <option value="None">None</option>
+                {/* Allow displaying current value if not in list */}
+                {channel.patch &&
+                  !["Analog", "Dante", "USB", "None"].some((p) =>
+                    channel.patch?.startsWith(p)
+                  ) && <option value={channel.patch}>{channel.patch}</option>}
+              </select>
+            </div>
             <p style={{ margin: "5px 0" }}>
               <strong>Fader:</strong>{" "}
               {channel.faderLevel === -32768

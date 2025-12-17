@@ -249,23 +249,22 @@ export class ConnectionManager {
   setInputSendPre(outputId: number, inputId: number, pre: boolean) {
     if (this.tcpClient && this.shouldBeConnected) {
       if (outputId <= 6) {
-        // Mix: Use "Point" (0=Pre, 1=Post usually, or 0=PRE_EQ, 1=PRE_FADER, 2=POST?
-        // Standard Yamaha (CL/QL):
-        // ToMix/Point: 0=Pre, 1=Post (or vice versa? Let's Assume 0=Pre based on "Point" concept behaving like boolean index here)
-        // Adjusting: Pre=True -> 0 (PRE), Pre=False -> 1 (POST)
+        // DM3/Rivage/CL/QL typically use "PrePost" for send point.
+        // 0 = Pre Fader
+        // 1 = Post Fader
         const val = pre ? 0 : 1;
 
         this.logger.info(
-          `Setting Input Send Pre (Point): Out${outputId} In${inputId} ${pre} (Val ${val})`
+          `Setting Input Send Pre (PrePost): Out${outputId} In${inputId} ${pre} (Val ${val})`
         );
 
         const mixIndex = outputId - 1;
         this.tcpClient.write(
-          `set "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex} ${val}\n`
+          `set "MIXER:Current/InCh/ToMix/PrePost" ${inputId - 1} ${mixIndex} ${val}\n`
         );
         // Verify
         this.tcpClient.write(
-          `get "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex}\n`
+          `get "MIXER:Current/InCh/ToMix/PrePost" ${inputId - 1} ${mixIndex}\n`
         );
       } else if (outputId === 7 || outputId === 8) {
         // Stereo: ToSt/Pre is invalid. Stereo is always Post-Fader (Main).
@@ -301,6 +300,25 @@ export class ConnectionManager {
     }
   }
 
+  setInputPatch(channelId: number, patch: string) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      this.logger.warn(
+        "Input Patch command not supported via RCP for this mixer model (UnknownAddress)."
+      );
+      /*
+      // Assuming command: set "MIXER:Current/InCh/Input/Patch" {ch} 0 "{patch}"
+      this.logger.info(`Setting Input Patch: CH${channelId} -> ${patch}`);
+      this.tcpClient.write(
+        `set "MIXER:Current/InCh/Input/Patch" ${channelId - 1} 0 "${patch}"\n`
+      );
+      // Verify
+      this.tcpClient.write(
+        `get "MIXER:Current/InCh/Input/Patch" ${channelId - 1} 0\n`
+      );
+      */
+    }
+  }
+
   queryOutputRouting(outputId: number) {
     if (this.tcpClient && this.shouldBeConnected) {
       this.logger.info(`Querying routing for Output ${outputId}`);
@@ -316,12 +334,13 @@ export class ConnectionManager {
           this.tcpClient.write(
             `get "MIXER:Current/InCh/ToMix/Level" ${i} ${mixIndex}\n`
           );
-          // Query Pre/Post (Point) - Disabled for DM3
-          /*
+
+          // Query Pre/Post (PrePost)
           this.tcpClient.write(
-            `get "MIXER:Current/InCh/ToMix/Point" ${i} ${mixIndex}\n`
+            `get "MIXER:Current/InCh/ToMix/PrePost" ${i} ${mixIndex}\n`
           );
-          */
+
+          // Query Pan
           // Query Pan
           this.tcpClient.write(
             `get "MIXER:Current/InCh/ToMix/Pan" ${i} ${mixIndex}\n`
@@ -526,19 +545,20 @@ export class ConnectionManager {
           this.stateManager.updateInputSend(8, inputIndex + 1, { level });
         }
       }
-      // Check for InCh ToMix/ToSt Pre (Using "Point")
-      else if (content.includes("/Point")) {
-        // ToMix Point
-        if (content.includes("ToMix/Point")) {
+      // Check for InCh ToMix/ToSt Pre (Using "PrePost")
+      else if (content.includes("/PrePost") || content.includes("/Point")) {
+        // Keep Point just in case
+        // ToMix PrePost
+        if (content.includes("ToMix/PrePost")) {
           const match = content.match(
-            /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/Point"?\s+(\d+)\s+(\d+)\s+(\d+)/
+            /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/PrePost"?\s+(\d+)\s+(\d+)\s+(\d+)/
           );
           if (match) {
             const inputIndex = parseInt(match[1]);
             const mixIndex = parseInt(match[2]);
-            const pointValue = parseInt(match[3]);
-            // Assumption: 0 = Pre, 1 = Post (so Pre = (val === 0))
-            const pre = pointValue === 0;
+            const val = parseInt(match[3]);
+            // Assumption: 0 = Pre, 1 = Post
+            const pre = val === 0;
 
             const outputId = mixIndex + 1;
             this.stateManager.updateInputSend(outputId, inputIndex + 1, {
@@ -563,6 +583,7 @@ export class ConnectionManager {
           });
         }
       }
+
       // Check for Main Pan (for Stereo Sends)
       else if (content.includes("MIXER:Current/InCh/Fader/Pan")) {
         const match = content.match(
@@ -577,6 +598,19 @@ export class ConnectionManager {
           this.stateManager.updateInputSend(8, inputIndex + 1, { pan });
         }
       }
+      // Check for Input Patch
+      else if (content.includes("MIXER:Current/InCh/Input/Patch")) {
+        // Regex: ... "Patch" ch 0 "Value"
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/InCh\/Input\/Patch"?\s+(\d+)\s+0\s+"?([^"\n]+)"?/
+        );
+        if (match) {
+          const inputIndex = parseInt(match[1]);
+          const patch = match[2];
+          this.stateManager.updateChannel(inputIndex + 1, { patch });
+          this.logger.info(`Updated CH${inputIndex + 1} patch: ${patch}`);
+        }
+      }
     }
   }
 
@@ -589,6 +623,7 @@ export class ConnectionManager {
           this.tcpClient.write(`get "MIXER:Current/InCh/Fader/Level" ${i} 0\n`);
           this.tcpClient.write(`get "MIXER:Current/InCh/Label/Name" ${i} 0\n`);
           this.tcpClient.write(`get "MIXER:Current/InCh/Fader/On" ${i} 0\n`); // Mute status
+          // this.tcpClient.write(`get "MIXER:Current/InCh/Input/Patch" ${i} 0\n`); // Patch - Disabled for DM3
         }
 
         // Query Mix 1-6 (Indices 0-5)

@@ -3,7 +3,8 @@ export interface MixerChannel {
   name: string;
   faderLevel: number; // 0.0 to 1.0
   isMuted: boolean;
-  inputSource?: string;
+  inputSource?: string; // Existing, maybe deprecated or same usage
+  patch?: string; // e.g. "Dante 1", "Analog 1"
 }
 
 export interface MixerOutput {

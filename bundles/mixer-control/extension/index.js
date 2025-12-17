@@ -253,15 +253,15 @@ class ConnectionManager {
       if (outputId <= 6) {
         const val = pre ? 0 : 1;
         this.logger.info(
-          `Setting Input Send Pre (Point): Out${outputId} In${inputId} ${pre} (Val ${val})`
+          `Setting Input Send Pre (PrePost): Out${outputId} In${inputId} ${pre} (Val ${val})`
         );
         const mixIndex = outputId - 1;
         this.tcpClient.write(
-          `set "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex} ${val}
+          `set "MIXER:Current/InCh/ToMix/PrePost" ${inputId - 1} ${mixIndex} ${val}
 `
         );
         this.tcpClient.write(
-          `get "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex}
+          `get "MIXER:Current/InCh/ToMix/PrePost" ${inputId - 1} ${mixIndex}
 `
         );
       } else if (outputId === 7 || outputId === 8) {
@@ -293,6 +293,13 @@ class ConnectionManager {
       }
     }
   }
+  setInputPatch(channelId, patch) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      this.logger.warn(
+        "Input Patch command not supported via RCP for this mixer model (UnknownAddress)."
+      );
+    }
+  }
   queryOutputRouting(outputId) {
     if (this.tcpClient && this.shouldBeConnected) {
       this.logger.info(`Querying routing for Output ${outputId}`);
@@ -305,6 +312,10 @@ class ConnectionManager {
           );
           this.tcpClient.write(
             `get "MIXER:Current/InCh/ToMix/Level" ${i} ${mixIndex}
+`
+          );
+          this.tcpClient.write(
+            `get "MIXER:Current/InCh/ToMix/PrePost" ${i} ${mixIndex}
 `
           );
           this.tcpClient.write(
@@ -462,16 +473,16 @@ class ConnectionManager {
           this.stateManager.updateInputSend(7, inputIndex + 1, { level });
           this.stateManager.updateInputSend(8, inputIndex + 1, { level });
         }
-      } else if (content.includes("/Point")) {
-        if (content.includes("ToMix/Point")) {
+      } else if (content.includes("/PrePost") || content.includes("/Point")) {
+        if (content.includes("ToMix/PrePost")) {
           const match = content.match(
-            /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/Point"?\s+(\d+)\s+(\d+)\s+(\d+)/
+            /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/PrePost"?\s+(\d+)\s+(\d+)\s+(\d+)/
           );
           if (match) {
             const inputIndex = parseInt(match[1]);
             const mixIndex = parseInt(match[2]);
-            const pointValue = parseInt(match[3]);
-            const pre = pointValue === 0;
+            const val = parseInt(match[3]);
+            const pre = val === 0;
             const outputId = mixIndex + 1;
             this.stateManager.updateInputSend(outputId, inputIndex + 1, {
               pre
@@ -500,6 +511,16 @@ class ConnectionManager {
           const pan = parseInt(match[2]);
           this.stateManager.updateInputSend(7, inputIndex + 1, { pan });
           this.stateManager.updateInputSend(8, inputIndex + 1, { pan });
+        }
+      } else if (content.includes("MIXER:Current/InCh/Input/Patch")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/InCh\/Input\/Patch"?\s+(\d+)\s+0\s+"?([^"\n]+)"?/
+        );
+        if (match) {
+          const inputIndex = parseInt(match[1]);
+          const patch = match[2];
+          this.stateManager.updateChannel(inputIndex + 1, { patch });
+          this.logger.info(`Updated CH${inputIndex + 1} patch: ${patch}`);
         }
       }
     }
@@ -612,6 +633,10 @@ class StateManager {
       }
       if (data.name !== void 0 && channel.name !== data.name) {
         channel.name = data.name;
+        changed = true;
+      }
+      if (data.patch !== void 0 && channel.patch !== data.patch) {
+        channel.patch = data.patch;
         changed = true;
       }
       if (changed) {
@@ -789,4 +814,10 @@ module.exports = function(nodecg) {
   nodecg.listenFor("queryOutputRouting", (data) => {
     connectionManager.queryOutputRouting(data.outputId);
   });
+  nodecg.listenFor(
+    "setMixerInputPatch",
+    (data) => {
+      connectionManager.setInputPatch(data.channelId, data.patch);
+    }
+  );
 };

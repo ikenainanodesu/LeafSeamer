@@ -96,6 +96,10 @@ export class StateManager {
         channel.name = data.name;
         changed = true;
       }
+      if (data.patch !== undefined && channel.patch !== data.patch) {
+        channel.patch = data.patch;
+        changed = true;
+      }
 
       if (changed) {
         this.mixerStateRep.value.lastUpdate = getCurrentTimestamp();
