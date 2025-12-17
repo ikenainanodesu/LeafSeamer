@@ -17,3 +17,28 @@ server_error.*
 
 # 构建产物
 dist/
+
+# Temporary and Debug files
+bootstrap_debug.js
+bootstrap_source.txt
+test-require.js
+debug_log_full.md
+debug_log_full.txt
+debug_output.txt
+error_log_copy.txt
+server_error.log
+server_error.txt
+server_error_debug.md
+start_error.log
+startup.log
+
+# Editor directories
+.vscode/
+.idea/
+
+# Common temp files
+*.tmp
+*.bak
+npm-debug.log
+yarn-error.log
+coverage/
