@@ -319,7 +319,9 @@ class ConnectionManager {
           const onValue = parseInt(match[3]);
           const active = onValue === 1;
           const outputId = mixIndex + 1;
-          this.updateOutputInputSend(outputId, inputIndex + 1, { active });
+          this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+            active
+          });
         }
       } else if (content.includes("MIXER:Current/InCh/ToMix/Level")) {
         const match = content.match(
@@ -333,7 +335,9 @@ class ConnectionManager {
             `Parsed ToMix Level: Input ${inputIndex}, Mix ${mixIndex}, Level ${level}`
           );
           const outputId = mixIndex + 1;
-          this.updateOutputInputSend(outputId, inputIndex + 1, { level });
+          this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+            level
+          });
         }
       } else if (content.includes("MIXER:Current/InCh/ToSt/On")) {
         const match = content.match(
@@ -343,8 +347,8 @@ class ConnectionManager {
           const inputIndex = parseInt(match[1]);
           const onValue = parseInt(match[2]);
           const active = onValue === 1;
-          this.updateOutputInputSend(7, inputIndex + 1, { active });
-          this.updateOutputInputSend(8, inputIndex + 1, { active });
+          this.stateManager.updateInputSend(7, inputIndex + 1, { active });
+          this.stateManager.updateInputSend(8, inputIndex + 1, { active });
         }
       } else if (content.includes("MIXER:Current/InCh/ToSt/Level")) {
         const match = content.match(
@@ -356,39 +360,10 @@ class ConnectionManager {
           this.logger.info(
             `Parsed ToSt Level: Input ${inputIndex}, Level ${level}`
           );
-          this.updateOutputInputSend(7, inputIndex + 1, { level });
-          this.updateOutputInputSend(8, inputIndex + 1, { level });
+          this.stateManager.updateInputSend(7, inputIndex + 1, { level });
+          this.stateManager.updateInputSend(8, inputIndex + 1, { level });
         }
       }
-    }
-  }
-  updateOutputInputSend(outputId, inputId, data) {
-    const mixerState = this.stateManager.getMixerState();
-    const outputs = mixerState == null ? void 0 : mixerState.outputs;
-    if (!outputs) return;
-    const output = outputs.find((o) => o.id === outputId);
-    if (!output) return;
-    let send = output.inputSends.find((s) => s.inputId === inputId);
-    if (!send) {
-      const channels = mixerState == null ? void 0 : mixerState.channels;
-      const inputChannel = channels == null ? void 0 : channels.find((c) => c.id === inputId);
-      const inputName = (inputChannel == null ? void 0 : inputChannel.name) || `CH${inputId}`;
-      send = {
-        inputId,
-        inputName,
-        active: false,
-        level: -32768
-      };
-      output.inputSends.push(send);
-    }
-    if (data.active !== void 0) {
-      send.active = data.active;
-    }
-    if (data.level !== void 0) {
-      send.level = data.level;
-    }
-    if (mixerState) {
-      mixerState.lastUpdate = Date.now();
     }
   }
   startHeartbeat() {
@@ -531,6 +506,49 @@ class StateManager {
       }
       if (changed) {
         this.mixerStateRep.value.lastUpdate = getCurrentTimestamp();
+      }
+    }
+  }
+  updateInputSend(outputId, inputId, data) {
+    const outputs = this.mixerStateRep.value.outputs;
+    if (!outputs) return;
+    const outputIndex = outputs.findIndex(
+      (o) => o.id === outputId
+    );
+    if (outputIndex === -1) return;
+    const output = outputs[outputIndex];
+    let sendIndex = output.inputSends.findIndex(
+      (s) => s.inputId === inputId
+    );
+    let changed = false;
+    if (sendIndex === -1) {
+      const channels = this.mixerStateRep.value.channels;
+      const inputChannel = channels == null ? void 0 : channels.find((c) => c.id === inputId);
+      const inputName = (inputChannel == null ? void 0 : inputChannel.name) || `CH${inputId}`;
+      const newSend = {
+        inputId,
+        inputName,
+        active: data.active !== void 0 ? data.active : false,
+        level: data.level !== void 0 ? data.level : -32768
+      };
+      output.inputSends.push(newSend);
+      sendIndex = output.inputSends.length - 1;
+      changed = true;
+    } else {
+      const send = output.inputSends[sendIndex];
+      if (data.active !== void 0 && send.active !== data.active) {
+        send.active = data.active;
+        changed = true;
+      }
+      if (data.level !== void 0 && send.level !== data.level) {
+        send.level = data.level;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.mixerStateRep.value.lastUpdate = getCurrentTimestamp();
+      if (sendIndex !== -1) {
+        output.inputSends[sendIndex] = { ...output.inputSends[sendIndex] };
       }
     }
   }

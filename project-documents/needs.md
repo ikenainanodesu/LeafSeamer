@@ -135,3 +135,8 @@
             - 选择下一个需要切换的场景
       - 用户可以添加多个卡片,每个卡片可以添加并执行卡片内的一系列行为
       - 用户可以将卡片保存为一个json,并可以将json拖入卡片区域
+
+- 我需要,在output ch中,点开 input sends后,为每一个输入增加:
+  - on/off作为按钮,我可以开关input sends
+  - 增加 pre 按钮,用于切换pre fader功能
+  - 增加滑块,用于调节input sends的gain(dB)

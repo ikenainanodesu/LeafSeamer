@@ -145,6 +145,69 @@ export class StateManager {
     }
   }
 
+  updateInputSend(
+    outputId: number,
+    inputId: number,
+    data: { active?: boolean; level?: number }
+  ) {
+    const outputs = this.mixerStateRep.value.outputs;
+    if (!outputs) return;
+
+    const outputIndex = outputs.findIndex(
+      (o: MixerOutput) => o.id === outputId
+    );
+    if (outputIndex === -1) return;
+
+    const output = outputs[outputIndex];
+    let sendIndex = output.inputSends.findIndex(
+      (s: any) => s.inputId === inputId
+    );
+
+    let changed = false;
+
+    // If sends doesn't exist, Create it
+    if (sendIndex === -1) {
+      const channels = this.mixerStateRep.value.channels;
+      const inputChannel = channels?.find((c: any) => c.id === inputId);
+      const inputName = inputChannel?.name || `CH${inputId}`;
+
+      const newSend = {
+        inputId: inputId,
+        inputName: inputName,
+        active: data.active !== undefined ? data.active : false,
+        level: data.level !== undefined ? data.level : -32768,
+      };
+
+      // Push to array
+      output.inputSends.push(newSend);
+      sendIndex = output.inputSends.length - 1;
+      changed = true;
+    } else {
+      // Update existing
+      const send = output.inputSends[sendIndex];
+      if (data.active !== undefined && send.active !== data.active) {
+        send.active = data.active;
+        changed = true;
+      }
+      if (data.level !== undefined && send.level !== data.level) {
+        send.level = data.level;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.mixerStateRep.value.lastUpdate = getCurrentTimestamp();
+
+      // CRITICAL: Force Replicant update for deep nested arrays
+      // NodeCG Replicants (using proxies) sometimes miss changes deep in arrays unless we trigger a set
+      // Re-assigning the specific send object back to the array helps, or re-assigning the array
+      if (sendIndex !== -1) {
+        // Re-assign the specific item to ensure the proxy detects the write
+        output.inputSends[sendIndex] = { ...output.inputSends[sendIndex] };
+      }
+    }
+  }
+
   getMixerState() {
     return this.mixerStateRep.value;
   }

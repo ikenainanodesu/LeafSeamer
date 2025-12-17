@@ -346,7 +346,9 @@ export class ConnectionManager {
 
           // Update the corresponding output (Mix 1 = outputId 1, etc.)
           const outputId = mixIndex + 1;
-          this.updateOutputInputSend(outputId, inputIndex + 1, { active });
+          this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+            active,
+          });
         }
       }
       // Check for InCh ToMix Level
@@ -365,7 +367,9 @@ export class ConnectionManager {
           );
 
           const outputId = mixIndex + 1;
-          this.updateOutputInputSend(outputId, inputIndex + 1, { level });
+          this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+            level,
+          });
         }
       }
       // Check for InCh ToSt On (Routing to Stereo)
@@ -379,8 +383,8 @@ export class ConnectionManager {
           const active = onValue === 1;
 
           // Update both Stereo L (7) and R (8)
-          this.updateOutputInputSend(7, inputIndex + 1, { active });
-          this.updateOutputInputSend(8, inputIndex + 1, { active });
+          this.stateManager.updateInputSend(7, inputIndex + 1, { active });
+          this.stateManager.updateInputSend(8, inputIndex + 1, { active });
         }
       }
       // Check for InCh ToSt Level
@@ -397,53 +401,10 @@ export class ConnectionManager {
             `Parsed ToSt Level: Input ${inputIndex}, Level ${level}`
           );
 
-          this.updateOutputInputSend(7, inputIndex + 1, { level });
-          this.updateOutputInputSend(8, inputIndex + 1, { level });
+          this.stateManager.updateInputSend(7, inputIndex + 1, { level });
+          this.stateManager.updateInputSend(8, inputIndex + 1, { level });
         }
       }
-    }
-  }
-
-  private updateOutputInputSend(
-    outputId: number,
-    inputId: number,
-    data: { active?: boolean; level?: number }
-  ) {
-    const mixerState = this.stateManager.getMixerState();
-    const outputs = mixerState?.outputs;
-    if (!outputs) return;
-
-    const output = outputs.find((o: any) => o.id === outputId);
-    if (!output) return;
-
-    // Find or create the inputSend entry
-    let send = output.inputSends.find((s: any) => s.inputId === inputId);
-    if (!send) {
-      // Get input name from channels
-      const channels = mixerState?.channels;
-      const inputChannel = channels?.find((c: any) => c.id === inputId);
-      const inputName = inputChannel?.name || `CH${inputId}`;
-
-      send = {
-        inputId: inputId,
-        inputName: inputName,
-        active: false,
-        level: -32768,
-      };
-      output.inputSends.push(send);
-    }
-
-    // Update the send data
-    if (data.active !== undefined) {
-      send.active = data.active;
-    }
-    if (data.level !== undefined) {
-      send.level = data.level;
-    }
-
-    // Trigger replicant update
-    if (mixerState) {
-      mixerState.lastUpdate = Date.now();
     }
   }
 

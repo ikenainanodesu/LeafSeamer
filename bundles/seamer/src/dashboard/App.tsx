@@ -158,7 +158,7 @@ const App = () => {
   return (
     <div
       className="seamer-app"
-      style={{ padding: 20, minHeight: "100vh", boxSizing: "border-box" }}
+      style={{ padding: 20, minHeight: "auto", boxSizing: "border-box" }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
