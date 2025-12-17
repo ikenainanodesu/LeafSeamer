@@ -1,5 +1,5 @@
 
-<img src="misc-resorce/seamer-logo-128x128.png" alt="isolated" width="200"/>
+<img src="../../misc-resorce/seamer-logo-128x128.png" alt="isolated" width="200"/>
 
 # LeafSeamer
 
