@@ -1,6 +1,6 @@
 [简体中文](Manual/chs/README.md) | [日本語](Manual/jpn/README.md) | [English](README.md)
 
-<img src="misc-resorce/seamer-logo-128x128.png" alt="isolated" width="400"/>
+<img src="misc-resorce/seamer-logo-128x128.png" alt="isolated" width="250"/>
 
 # LeafSeamer
 
