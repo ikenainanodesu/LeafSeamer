@@ -9,7 +9,8 @@
         "title": "Mixer Connection",
         "width": 4,
         "file": "mixer-connection.html",
-        "headerColor": "#525252"
+        "headerColor": "#525252",
+        "workspace": "Mixer Control"
       },
       {
         "name": "mixer-panel",

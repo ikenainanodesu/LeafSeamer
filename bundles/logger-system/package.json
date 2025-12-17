@@ -9,7 +9,8 @@
         "title": "Log Viewer",
         "width": 4,
         "file": "log-viewer.html",
-        "headerColor": "#525252"
+        "headerColor": "#525252",
+        "workspace": "Misc"
       }
     ]
   },

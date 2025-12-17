@@ -9,7 +9,8 @@
         "title": "Graphics Control",
         "width": 4,
         "file": "graphics-control.html",
-        "headerColor": "#525252"
+        "headerColor": "#525252",
+        "workspace": "Graphic Control"
       }
     ],
     "graphics": [

@@ -32,7 +32,8 @@
         "title": "VB Matrix Control",
         "width": 4,
         "file": "control-panel.html",
-        "headerColor": "#525F78"
+        "headerColor": "#525F78",
+        "workspace": "VB Control"
       }
     ]
   },

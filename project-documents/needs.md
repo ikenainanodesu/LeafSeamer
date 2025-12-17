@@ -119,6 +119,10 @@
       - 可以被拖入预设管理,并将预设管理保存为一个卡片
       - 被拖入的预设卡片上显示预设名字
 
+- 我希望为obs connection添加连接多个obs的功能
+  - 增加一个卡片能让我点击后增加obs connection的ui
+    - 每增加一个obs连接,同时增加相应的obs control面板
+
 - 帮我增加一个bundle,名为seamer
   - 在nodecg的gui中创建新的workspace
   - 在这个bundle中:
@@ -161,3 +165,8 @@
   - 新增名为`Graphic Control`的workspace
     - 将graphics control移动到该workspace下
   - 将Mixer Connection移动到Mixer Control workspace下
+
+- 我希望为VB matrix control添加连接多个vb matrix的功能
+- 分离network configuration为独立窗口
+  - 增加一个卡片能让我点击后增加network configuration的ui
+- 在patch control中增加已连接的vb matrix的下拉列表选择ui
