@@ -204,6 +204,95 @@ class ConnectionManager {
       }
     }
   }
+  setInputSendActive(outputId, inputId, active) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      const val = active ? 1 : 0;
+      this.logger.info(
+        `Setting Input Send Active: Out${outputId} In${inputId} ${active}`
+      );
+      if (outputId <= 6) {
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/On" ${inputId - 1} ${mixIndex} ${val}
+`
+        );
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToMix/On" ${inputId - 1} ${mixIndex}
+`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToSt/On" ${inputId - 1} 0 ${val}
+`
+        );
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToSt/On" ${inputId - 1} 0
+`
+        );
+      }
+    }
+  }
+  setInputSendLevel(outputId, inputId, level) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      if (outputId <= 6) {
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/Level" ${inputId - 1} ${mixIndex} ${level}
+`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToSt/Level" ${inputId - 1} 0 ${level}
+`
+        );
+      }
+    }
+  }
+  setInputSendPre(outputId, inputId, pre) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      if (outputId <= 6) {
+        const val = pre ? 0 : 1;
+        this.logger.info(
+          `Setting Input Send Pre (Point): Out${outputId} In${inputId} ${pre} (Val ${val})`
+        );
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex} ${val}
+`
+        );
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex}
+`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.logger.warn("Cannot set Pre/Post for Stereo Output (Always Post)");
+      }
+    }
+  }
+  setInputSendPan(outputId, inputId, pan) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      if (outputId <= 6) {
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/Pan" ${inputId - 1} ${mixIndex} ${pan}
+`
+        );
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToMix/Pan" ${inputId - 1} ${mixIndex}
+`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/Fader/Pan" ${inputId - 1} 0 ${pan}
+`
+        );
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/Fader/Pan" ${inputId - 1} 0
+`
+        );
+      }
+    }
+  }
   queryOutputRouting(outputId) {
     if (this.tcpClient && this.shouldBeConnected) {
       this.logger.info(`Querying routing for Output ${outputId}`);
@@ -218,10 +307,16 @@ class ConnectionManager {
             `get "MIXER:Current/InCh/ToMix/Level" ${i} ${mixIndex}
 `
           );
+          this.tcpClient.write(
+            `get "MIXER:Current/InCh/ToMix/Pan" ${i} ${mixIndex}
+`
+          );
         } else if (outputId === 7 || outputId === 8) {
           this.tcpClient.write(`get "MIXER:Current/InCh/ToSt/On" ${i} 0
 `);
           this.tcpClient.write(`get "MIXER:Current/InCh/ToSt/Level" ${i} 0
+`);
+          this.tcpClient.write(`get "MIXER:Current/InCh/Fader/Pan" ${i} 0
 `);
         }
       }
@@ -229,6 +324,10 @@ class ConnectionManager {
   }
   handleRCPMessage(line) {
     this.logger.info(`RCP RX: ${line}`);
+    if (line.startsWith("ERROR")) {
+      this.logger.error(`RCP ERROR: ${line}`);
+      return;
+    }
     if (line.startsWith("OK") || line.startsWith("NOTIFY")) {
       const content = line.replace(/^(OK|NOTIFY)\s+/, "");
       if (content.includes("MIXER:Current/InCh/Fader/Level")) {
@@ -362,6 +461,45 @@ class ConnectionManager {
           );
           this.stateManager.updateInputSend(7, inputIndex + 1, { level });
           this.stateManager.updateInputSend(8, inputIndex + 1, { level });
+        }
+      } else if (content.includes("/Point")) {
+        if (content.includes("ToMix/Point")) {
+          const match = content.match(
+            /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/Point"?\s+(\d+)\s+(\d+)\s+(\d+)/
+          );
+          if (match) {
+            const inputIndex = parseInt(match[1]);
+            const mixIndex = parseInt(match[2]);
+            const pointValue = parseInt(match[3]);
+            const pre = pointValue === 0;
+            const outputId = mixIndex + 1;
+            this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+              pre
+            });
+          }
+        }
+      } else if (content.includes("ToMix/Pan")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/Pan"?\s+(\d+)\s+(\d+)\s+(-?\d+)/
+        );
+        if (match) {
+          const inputIndex = parseInt(match[1]);
+          const mixIndex = parseInt(match[2]);
+          const pan = parseInt(match[3]);
+          const outputId = mixIndex + 1;
+          this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+            pan
+          });
+        }
+      } else if (content.includes("MIXER:Current/InCh/Fader/Pan")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/InCh\/Fader\/Pan"?\s+(\d+)\s+0\s+(-?\d+)/
+        );
+        if (match) {
+          const inputIndex = parseInt(match[1]);
+          const pan = parseInt(match[2]);
+          this.stateManager.updateInputSend(7, inputIndex + 1, { pan });
+          this.stateManager.updateInputSend(8, inputIndex + 1, { pan });
         }
       }
     }
@@ -529,19 +667,33 @@ class StateManager {
         inputId,
         inputName,
         active: data.active !== void 0 ? data.active : false,
-        level: data.level !== void 0 ? data.level : -32768
+        level: data.level !== void 0 ? data.level : -32768,
+        pre: data.pre !== void 0 ? data.pre : false,
+        // Default Post
+        pan: data.pan !== void 0 ? data.pan : 0
+        // Default Center
       };
       output.inputSends.push(newSend);
       sendIndex = output.inputSends.length - 1;
       changed = true;
     } else {
       const send = output.inputSends[sendIndex];
+      if (send.pre === void 0) send.pre = false;
+      if (send.pan === void 0) send.pan = 0;
       if (data.active !== void 0 && send.active !== data.active) {
         send.active = data.active;
         changed = true;
       }
       if (data.level !== void 0 && send.level !== data.level) {
         send.level = data.level;
+        changed = true;
+      }
+      if (data.pre !== void 0 && send.pre !== data.pre) {
+        send.pre = data.pre;
+        changed = true;
+      }
+      if (data.pan !== void 0 && send.pan !== data.pan) {
+        send.pan = data.pan;
         changed = true;
       }
     }
@@ -600,6 +752,38 @@ module.exports = function(nodecg) {
     "setMixerOutputMute",
     (data) => {
       connectionManager.setOutputMute(data.outputId, data.isMuted);
+    }
+  );
+  nodecg.listenFor(
+    "setMixerInputSendActive",
+    (data) => {
+      connectionManager.setInputSendActive(
+        data.outputId,
+        data.inputId,
+        data.active
+      );
+    }
+  );
+  nodecg.listenFor(
+    "setMixerInputSendLevel",
+    (data) => {
+      connectionManager.setInputSendLevel(
+        data.outputId,
+        data.inputId,
+        data.level
+      );
+    }
+  );
+  nodecg.listenFor(
+    "setMixerInputSendPre",
+    (data) => {
+      connectionManager.setInputSendPre(data.outputId, data.inputId, data.pre);
+    }
+  );
+  nodecg.listenFor(
+    "setMixerInputSendPan",
+    (data) => {
+      connectionManager.setInputSendPan(data.outputId, data.inputId, data.pan);
     }
   );
   nodecg.listenFor("queryOutputRouting", (data) => {

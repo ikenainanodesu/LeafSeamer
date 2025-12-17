@@ -61,6 +61,42 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     }
   );
 
+  nodecg.listenFor(
+    "setMixerInputSendActive",
+    (data: { outputId: number; inputId: number; active: boolean }) => {
+      connectionManager.setInputSendActive(
+        data.outputId,
+        data.inputId,
+        data.active
+      );
+    }
+  );
+
+  nodecg.listenFor(
+    "setMixerInputSendLevel",
+    (data: { outputId: number; inputId: number; level: number }) => {
+      connectionManager.setInputSendLevel(
+        data.outputId,
+        data.inputId,
+        data.level
+      );
+    }
+  );
+
+  nodecg.listenFor(
+    "setMixerInputSendPre",
+    (data: { outputId: number; inputId: number; pre: boolean }) => {
+      connectionManager.setInputSendPre(data.outputId, data.inputId, data.pre);
+    }
+  );
+
+  nodecg.listenFor(
+    "setMixerInputSendPan",
+    (data: { outputId: number; inputId: number; pan: number }) => {
+      connectionManager.setInputSendPan(data.outputId, data.inputId, data.pan);
+    }
+  );
+
   nodecg.listenFor("queryOutputRouting", (data: { outputId: number }) => {
     connectionManager.queryOutputRouting(data.outputId);
   });

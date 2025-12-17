@@ -16,6 +16,8 @@ export interface MixerOutput {
     inputName: string;
     active: boolean; // If routed
     level: number; // Send level
+    pre: boolean; // true = Pre Fader, false = Post Fader
+    pan: number; // -63 to +63 (0 = Center)
   }[];
 }
 

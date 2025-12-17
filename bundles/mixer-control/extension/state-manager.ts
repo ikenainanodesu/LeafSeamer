@@ -148,7 +148,7 @@ export class StateManager {
   updateInputSend(
     outputId: number,
     inputId: number,
-    data: { active?: boolean; level?: number }
+    data: { active?: boolean; level?: number; pre?: boolean; pan?: number }
   ) {
     const outputs = this.mixerStateRep.value.outputs;
     if (!outputs) return;
@@ -176,6 +176,8 @@ export class StateManager {
         inputName: inputName,
         active: data.active !== undefined ? data.active : false,
         level: data.level !== undefined ? data.level : -32768,
+        pre: data.pre !== undefined ? data.pre : false, // Default Post
+        pan: data.pan !== undefined ? data.pan : 0, // Default Center
       };
 
       // Push to array
@@ -185,12 +187,24 @@ export class StateManager {
     } else {
       // Update existing
       const send = output.inputSends[sendIndex];
+      // Init missing properties if they don't exist
+      if (send.pre === undefined) send.pre = false;
+      if (send.pan === undefined) send.pan = 0;
+
       if (data.active !== undefined && send.active !== data.active) {
         send.active = data.active;
         changed = true;
       }
       if (data.level !== undefined && send.level !== data.level) {
         send.level = data.level;
+        changed = true;
+      }
+      if (data.pre !== undefined && send.pre !== data.pre) {
+        send.pre = data.pre;
+        changed = true;
+      }
+      if (data.pan !== undefined && send.pan !== data.pan) {
+        send.pan = data.pan;
         changed = true;
       }
     }

@@ -138,5 +138,7 @@
 
 - 我需要,在output ch中,点开 input sends后,为每一个输入增加:
   - on/off作为按钮,我可以开关input sends
-  - 增加 pre 按钮,用于切换pre fader功能
+  - 增加 `pre` toggle按钮,用于切换pre fader功能
   - 增加滑块,用于调节input sends的gain(dB)
+  - 点击电平可以手动输入数值(dB)
+  - 查询lr pan,同时增加L/R pan滑块

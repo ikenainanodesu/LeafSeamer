@@ -147,16 +147,204 @@ const OutputControlPanel = () => {
                   output.inputSends.map((send) => (
                     <div
                       key={send.inputId}
-                      style={{ fontSize: "0.9em", marginBottom: "5px" }}
+                      style={{
+                        marginBottom: "10px",
+                        padding: "8px",
+                        backgroundColor: "#333",
+                        borderRadius: "4px",
+                        borderLeft: send.active
+                          ? "3px solid #4caf50"
+                          : "3px solid #777",
+                      }}
                     >
-                      <span>{send.inputName}</span>
-                      <span style={{ float: "right" }}>
-                        {send.active ? "ON" : "OFF"} /{" "}
-                        {send.level <= -32768
-                          ? "-∞"
-                          : (send.level / 100).toFixed(1)}
-                        dB
-                      </span>
+                      {/* Row 1: Name + On/Off + Pre */}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        <span style={{ fontWeight: "bold", fontSize: "0.9em" }}>
+                          {send.inputName}
+                        </span>
+                        <div style={{ display: "flex", gap: "5px" }}>
+                          {/* Pre Toggle */}
+                          <button
+                            onClick={() => {
+                              nodecg.sendMessageToBundle(
+                                "setMixerInputSendPre",
+                                "mixer-control",
+                                {
+                                  outputId: output.id,
+                                  inputId: send.inputId,
+                                  pre: !send.pre,
+                                }
+                              );
+                            }}
+                            style={{
+                              fontSize: "0.7em",
+                              padding: "2px 5px",
+                              backgroundColor: send.pre ? "#ff9800" : "#555",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "2px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {send.pre ? "PRE" : "POST"}
+                          </button>
+                          {/* On/Off Toggle */}
+                          <button
+                            onClick={() => {
+                              nodecg.sendMessageToBundle(
+                                "setMixerInputSendActive",
+                                "mixer-control",
+                                {
+                                  outputId: output.id,
+                                  inputId: send.inputId,
+                                  active: !send.active,
+                                }
+                              );
+                            }}
+                            style={{
+                              fontSize: "0.7em",
+                              padding: "2px 5px",
+                              backgroundColor: send.active ? "#4caf50" : "#555",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "2px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {send.active ? "ON" : "OFF"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Level Slider + Value */}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "2px",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.8em",
+                            color: "#ccc",
+                          }}
+                        >
+                          <span>Lvl</span>
+                          <span
+                            style={{
+                              cursor: "pointer",
+                              backgroundColor: "#ff9800",
+                              color: "white",
+                              padding: "2px 6px",
+                              borderRadius: "3px",
+                              fontWeight: "bold",
+                              fontSize: "0.9em",
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                            }}
+                            onClick={() => {
+                              const newVal = prompt(
+                                "Enter Level (dB):",
+                                (send.level / 100).toFixed(2)
+                              );
+                              if (newVal !== null) {
+                                let db = parseFloat(newVal);
+                                if (isNaN(db)) return;
+                                // Clanp dB
+                                if (db > 10) db = 10;
+                                if (db < -100) db = -100; // arbitrary floor
+                                const raw = Math.round(db * 100);
+                                nodecg.sendMessageToBundle(
+                                  "setMixerInputSendLevel",
+                                  "mixer-control",
+                                  {
+                                    outputId: output.id,
+                                    inputId: send.inputId,
+                                    level: raw,
+                                  }
+                                );
+                              }
+                            }}
+                          >
+                            {send.level <= -32768
+                              ? "-∞"
+                              : (send.level / 100).toFixed(1)}{" "}
+                            dB
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-10000" // -100.00 dB
+                          max="1000" // +10.00 dB
+                          step="10" // 0.1 dB
+                          value={send.level <= -32768 ? -10000 : send.level}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            // If dragging to min, maybe set to -inf (-32768)?
+                            // For smooth sliding, just send val.
+                            nodecg.sendMessageToBundle(
+                              "setMixerInputSendLevel",
+                              "mixer-control",
+                              {
+                                outputId: output.id,
+                                inputId: send.inputId,
+                                level: val <= -10000 ? -32768 : val,
+                              }
+                            );
+                          }}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+
+                      {/* Row 3: Pan Slider */}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "2px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.8em",
+                            color: "#ccc",
+                          }}
+                        >
+                          <span>Pan</span>
+                          <span>{send.pan}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-63"
+                          max="63"
+                          value={send.pan || 0}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            nodecg.sendMessageToBundle(
+                              "setMixerInputSendPan",
+                              "mixer-control",
+                              {
+                                outputId: output.id,
+                                inputId: send.inputId,
+                                pan: val,
+                              }
+                            );
+                          }}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
                     </div>
                   ))
                 ) : (

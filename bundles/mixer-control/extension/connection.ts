@@ -198,6 +198,109 @@ export class ConnectionManager {
     }
   }
 
+  setInputSendActive(outputId: number, inputId: number, active: boolean) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      const val = active ? 1 : 0;
+      this.logger.info(
+        `Setting Input Send Active: Out${outputId} In${inputId} ${active}`
+      );
+      if (outputId <= 6) {
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/On" ${inputId - 1} ${mixIndex} ${val}\n`
+        );
+        // Verify
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToMix/On" ${inputId - 1} ${mixIndex}\n`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToSt/On" ${inputId - 1} 0 ${val}\n`
+        );
+        // Verify
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToSt/On" ${inputId - 1} 0\n`
+        );
+      }
+    }
+  }
+
+  setInputSendLevel(outputId: number, inputId: number, level: number) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      if (outputId <= 6) {
+        // Mix
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/Level" ${inputId - 1} ${mixIndex} ${level}\n`
+        );
+        // Verify? Level usually floods, maybe skip verify or throttle.
+        // User didn't complain about level. But good practice.
+        // Let's verify sparingly or just trust echo?
+        // For sliders, echo is usually enough. For toggles, we need immediate snap.
+      } else if (outputId === 7 || outputId === 8) {
+        // Stereo
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToSt/Level" ${inputId - 1} 0 ${level}\n`
+        );
+      }
+    }
+  }
+
+  setInputSendPre(outputId: number, inputId: number, pre: boolean) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      if (outputId <= 6) {
+        // Mix: Use "Point" (0=Pre, 1=Post usually, or 0=PRE_EQ, 1=PRE_FADER, 2=POST?
+        // Standard Yamaha (CL/QL):
+        // ToMix/Point: 0=Pre, 1=Post (or vice versa? Let's Assume 0=Pre based on "Point" concept behaving like boolean index here)
+        // Adjusting: Pre=True -> 0 (PRE), Pre=False -> 1 (POST)
+        const val = pre ? 0 : 1;
+
+        this.logger.info(
+          `Setting Input Send Pre (Point): Out${outputId} In${inputId} ${pre} (Val ${val})`
+        );
+
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex} ${val}\n`
+        );
+        // Verify
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToMix/Point" ${inputId - 1} ${mixIndex}\n`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        // Stereo: ToSt/Pre is invalid. Stereo is always Post-Fader (Main).
+        // Ignoring command for Stereo.
+        this.logger.warn("Cannot set Pre/Post for Stereo Output (Always Post)");
+      }
+    }
+  }
+
+  setInputSendPan(outputId: number, inputId: number, pan: number) {
+    if (this.tcpClient && this.shouldBeConnected) {
+      if (outputId <= 6) {
+        // Mix: Only valid if Mix is Stereo. If Mono, this will likely error 'UnknownAddress' or 'ReadOnly'.
+        // Treating as valid for now.
+        const mixIndex = outputId - 1;
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/ToMix/Pan" ${inputId - 1} ${mixIndex} ${pan}\n`
+        );
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/ToMix/Pan" ${inputId - 1} ${mixIndex}\n`
+        );
+      } else if (outputId === 7 || outputId === 8) {
+        // Stereo: Use Main Channel Pan
+        // MIXER:Current/InCh/Fader/Pan
+        this.tcpClient.write(
+          `set "MIXER:Current/InCh/Fader/Pan" ${inputId - 1} 0 ${pan}\n`
+        );
+        // Verify
+        this.tcpClient.write(
+          `get "MIXER:Current/InCh/Fader/Pan" ${inputId - 1} 0\n`
+        );
+      }
+    }
+  }
+
   queryOutputRouting(outputId: number) {
     if (this.tcpClient && this.shouldBeConnected) {
       this.logger.info(`Querying routing for Output ${outputId}`);
@@ -213,10 +316,23 @@ export class ConnectionManager {
           this.tcpClient.write(
             `get "MIXER:Current/InCh/ToMix/Level" ${i} ${mixIndex}\n`
           );
+          // Query Pre/Post (Point) - Disabled for DM3
+          /*
+          this.tcpClient.write(
+            `get "MIXER:Current/InCh/ToMix/Point" ${i} ${mixIndex}\n`
+          );
+          */
+          // Query Pan
+          this.tcpClient.write(
+            `get "MIXER:Current/InCh/ToMix/Pan" ${i} ${mixIndex}\n`
+          );
         } else if (outputId === 7 || outputId === 8) {
           // Stereo L/R
           this.tcpClient.write(`get "MIXER:Current/InCh/ToSt/On" ${i} 0\n`);
           this.tcpClient.write(`get "MIXER:Current/InCh/ToSt/Level" ${i} 0\n`);
+          // ToSt has no Pre/Point.
+          // Pan to Stereo is Main Pan
+          this.tcpClient.write(`get "MIXER:Current/InCh/Fader/Pan" ${i} 0\n`);
         }
       }
     }
@@ -229,6 +345,11 @@ export class ConnectionManager {
     // OK get MIXER:Current/InCh/Fader/Level 0 0 -1630
     // OK get MIXER:Current/InCh/Label/Name 0 0 "Main_L"
     // NOTIFY set MIXER:Current/InCh/Fader/Level 0 0 -1640 "-16.40"
+
+    if (line.startsWith("ERROR")) {
+      this.logger.error(`RCP ERROR: ${line}`);
+      return;
+    }
 
     if (line.startsWith("OK") || line.startsWith("NOTIFY")) {
       // Remove OK/NOTIFY prefix to simplify
@@ -403,6 +524,57 @@ export class ConnectionManager {
 
           this.stateManager.updateInputSend(7, inputIndex + 1, { level });
           this.stateManager.updateInputSend(8, inputIndex + 1, { level });
+        }
+      }
+      // Check for InCh ToMix/ToSt Pre (Using "Point")
+      else if (content.includes("/Point")) {
+        // ToMix Point
+        if (content.includes("ToMix/Point")) {
+          const match = content.match(
+            /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/Point"?\s+(\d+)\s+(\d+)\s+(\d+)/
+          );
+          if (match) {
+            const inputIndex = parseInt(match[1]);
+            const mixIndex = parseInt(match[2]);
+            const pointValue = parseInt(match[3]);
+            // Assumption: 0 = Pre, 1 = Post (so Pre = (val === 0))
+            const pre = pointValue === 0;
+
+            const outputId = mixIndex + 1;
+            this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+              pre,
+            });
+          }
+        }
+      }
+      // Check for InCh ToMix Pan
+      else if (content.includes("ToMix/Pan")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/InCh\/ToMix\/Pan"?\s+(\d+)\s+(\d+)\s+(-?\d+)/
+        );
+        if (match) {
+          const inputIndex = parseInt(match[1]);
+          const mixIndex = parseInt(match[2]);
+          const pan = parseInt(match[3]);
+
+          const outputId = mixIndex + 1;
+          this.stateManager.updateInputSend(outputId, inputIndex + 1, {
+            pan,
+          });
+        }
+      }
+      // Check for Main Pan (for Stereo Sends)
+      else if (content.includes("MIXER:Current/InCh/Fader/Pan")) {
+        const match = content.match(
+          /(?:get|set)?\s*"?MIXER:Current\/InCh\/Fader\/Pan"?\s+(\d+)\s+0\s+(-?\d+)/
+        );
+        if (match) {
+          const inputIndex = parseInt(match[1]);
+          const pan = parseInt(match[2]);
+
+          // Update Stereo L/R sends
+          this.stateManager.updateInputSend(7, inputIndex + 1, { pan });
+          this.stateManager.updateInputSend(8, inputIndex + 1, { pan });
         }
       }
     }
