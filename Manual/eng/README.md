@@ -1,4 +1,3 @@
-[简体中文](Manual\chs\README.md) | [日本語](Manual\jpn\README.md) | [English](README.md)
 # LeafSeamer
 
 A broadcast production control system based on NodeCG, integrating unified control for Mixer, OBS, Graphics Overlay, VB-Audio Matrix, and other devices and services.
@@ -162,8 +161,8 @@ LeafSeamer's Dashboard is organized into multiple workspaces by function:
 
 For detailed installation and usage instructions, please refer to:
 
-- [Installation Guide](Manual\eng\INSTALLATION.md)
-- [User Manual](Manual\eng\USER_MANUAL.md)
+- [Installation Guide](./INSTALLATION.md)
+- [User Manual](./USER_MANUAL.md)
 
 ### Basic Commands
 
