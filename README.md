@@ -115,6 +115,10 @@ LeafSeamer is a modern broadcast production control system providing centralized
 - **@dnd-kit/core** v6.3.1 - Drag and Drop Support
 - **uuid** - UUID Generation
 
+## Special Thanks
+
+This project is built on top of [NodeCG](https://github.com/nodecg/nodecg), a broadcast graphics framework and dashboard. None of this would be possible without their amazing work.
+
 ## Project Structure
 
 ```
@@ -209,4 +213,4 @@ After startup visit:
 
 ## License
 
-Apache-2.0
+MIT

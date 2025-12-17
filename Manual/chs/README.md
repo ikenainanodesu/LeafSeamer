@@ -113,6 +113,10 @@ LeafSeamer 是一个现代化的广播制作控制系统，为视频直播和节
 - **@dnd-kit/core** v6.3.1 - 拖拽功能支持
 - **uuid** - 唯一标识符生成
 
+## 特别感谢
+
+本项目基于广播图形框架和仪表板 [NodeCG](https://github.com/nodecg/nodecg) 构建。没有他们的出色工作，这一切都不可能实现。
+
 ## 项目结构
 
 ```
@@ -207,4 +211,4 @@ npm run typecheck
 
 ## 许可证
 
-Apache-2.0
+MIT
