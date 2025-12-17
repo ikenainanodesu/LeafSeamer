@@ -1,28 +1,41 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
-import { NetworkConfig } from "./NetworkConfig";
 import { PatchSelector } from "./PatchSelector";
 import { PatchStatus } from "./PatchStatus";
 import { PresetManager } from "./PresetManager";
 import { Bank } from "./Bank";
+import { NetworkConfig } from "../../types";
 
 export const Panel: React.FC = () => {
   const [presetName, setPresetName] = React.useState("New Preset");
-  const [localIPs, setLocalIPs] = React.useState<string[]>([]);
+  const [activeConnectionId, setActiveConnectionId] =
+    React.useState<string>("");
+  const [networkConfigs, setNetworkConfigs] = React.useState<NetworkConfig[]>(
+    []
+  );
   // patches state
   const [patches, setPatches] = React.useState<any[]>([]);
 
-  React.useEffect(() => {
-    const hostRep = nodecg.Replicant<{ ips: string[] }>("hostInfo");
-    hostRep.on("change", (val: { ips: string[] } | undefined) => {
-      if (val && val.ips) setLocalIPs(val.ips);
+  useEffect(() => {
+    const netRep = nodecg.Replicant<NetworkConfig[]>("networkConfigs");
+    netRep.on("change", (val) => {
+      if (val) {
+        setNetworkConfigs(val);
+        // Default to first connection if none selected or current one removed
+        if (
+          val.length > 0 &&
+          (!activeConnectionId || !val.find((c) => c.id === activeConnectionId))
+        ) {
+          setActiveConnectionId(val[0].id);
+        }
+      }
     });
 
     const activePatchesRep = nodecg.Replicant<any[]>("activePatches");
     activePatchesRep.on("change", (val: any[]) => {
       if (val) setPatches(val);
     });
-  }, []);
+  }, [activeConnectionId]); // Add dependency if we need to react to ID change, but logic is inside handle
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { over } = event;
@@ -37,12 +50,17 @@ export const Panel: React.FC = () => {
   };
 
   const handleAddPatch = () => {
-    nodecg.sendMessage("addPatch");
+    if (!activeConnectionId) return;
+    nodecg.sendMessage("addPatch", activeConnectionId);
   };
 
   const handleRemovePatch = (id: string) => {
     nodecg.sendMessage("removePatch", id);
   };
+
+  const filteredPatches = patches.filter(
+    (p) => p.connectionId === activeConnectionId
+  );
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
@@ -56,97 +74,107 @@ export const Panel: React.FC = () => {
       >
         <h2>VB Matrix Control</h2>
 
-        <div
-          style={{
-            border: "1px solid #ccc",
-            padding: "10px",
-            borderRadius: "4px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
+        <div style={{ marginBottom: "10px" }}>
+          <label style={{ fontWeight: "bold", marginRight: "10px" }}>
+            Select Matrix:
+          </label>
+          <select
+            value={activeConnectionId}
+            onChange={(e) => setActiveConnectionId(e.target.value)}
+            style={{ padding: "5px", fontSize: "1em" }}
           >
-            <h3>Network Configuration</h3>
-            <div
-              style={{
-                fontSize: "0.9em",
-                color: "#d1d1d1ff",
-                textAlign: "right",
-              }}
-            >
-              {localIPs.length > 0
-                ? localIPs.map((ip) => <div key={ip}>{ip}</div>)
-                : "Loading..."}
-            </div>
-          </div>
-          <NetworkConfig />
+            {networkConfigs.length === 0 && (
+              <option value="">No Configurations</option>
+            )}
+            {networkConfigs.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.ip})
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ccc",
-            padding: "10px",
-            borderRadius: "4px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-          }}
-        >
+        {activeConnectionId ? (
           <div
             style={{
+              border: "1px solid #ccc",
+              padding: "10px",
+              borderRadius: "4px",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              flexDirection: "column",
+              gap: "10px",
             }}
           >
-            <h3 style={{ margin: 0 }}>Patch Control</h3>
-            <button
-              onClick={handleAddPatch}
-              style={{ fontSize: "1.2em", padding: "0 10px" }}
-            >
-              +
-            </button>
-          </div>
-
-          {patches.map((patch, index) => (
             <div
-              key={patch.id}
               style={{
-                borderTop: index > 0 ? "1px dashed #ccc" : "none",
-                paddingTop: index > 0 ? "10px" : "0",
-                position: "relative",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
               }}
             >
-              {index > 0 && (
-                <button
-                  onClick={() => handleRemovePatch(patch.id)}
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: index > 0 ? "10px" : 0,
-                    background: "none",
-                    border: "none",
-                    color: "red",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                  }}
-                >
-                  X
-                </button>
-              )}
-              <PatchSelector
-                patchId={patch.id}
-                status={patch}
-                onSelectionChange={() => {}}
-              />
-              <PatchStatus status={patch} />
+              <h3 style={{ margin: 0 }}>Patch Control</h3>
+              <button
+                onClick={handleAddPatch}
+                style={{ fontSize: "1.2em", padding: "0 10px" }}
+              >
+                +
+              </button>
             </div>
-          ))}
-        </div>
+
+            {filteredPatches.length === 0 && (
+              <div style={{ color: "#888", fontStyle: "italic" }}>
+                No patches for this matrix.
+              </div>
+            )}
+
+            {filteredPatches.map((patch, index) => (
+              <div
+                key={patch.id}
+                style={{
+                  borderTop: index > 0 ? "1px dashed #ccc" : "none",
+                  paddingTop: index > 0 ? "10px" : "0",
+                  position: "relative",
+                }}
+              >
+                {index > 0 && (
+                  <button
+                    onClick={() => handleRemovePatch(patch.id)}
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: index > 0 ? "10px" : 0,
+                      background: "none",
+                      border: "none",
+                      color: "red",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    X
+                  </button>
+                )}
+                <PatchSelector
+                  patchId={patch.id}
+                  connectionId={activeConnectionId}
+                  status={patch}
+                  onSelectionChange={() => {}}
+                />
+                <PatchStatus status={patch} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: "20px",
+              textAlign: "center",
+              color: "#666",
+              border: "1px dashed #ccc",
+            }}
+          >
+            Please add a Network Configuration in the dedicated panel.
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: "20px" }}>
           <div

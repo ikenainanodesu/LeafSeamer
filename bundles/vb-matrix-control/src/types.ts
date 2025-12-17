@@ -1,7 +1,10 @@
 export interface NetworkConfig {
+  id: string;
+  name: string;
   ip: string;
   port: number;
   streamName: string; // Target stream name (e.g. "Command1")
+  connected?: boolean;
 }
 
 export interface PatchPoint {
@@ -15,6 +18,7 @@ export interface PatchPoint {
 
 export interface PatchInfo {
   id: string; // Unique ID for keying
+  connectionId: string;
   inputDevice: string;
   inputChannel: number;
   outputDevice: string;
@@ -25,6 +29,7 @@ export interface PatchInfo {
 // Current patch status: combines device/channel info with gain/mute
 export interface CurrentPatchStatus {
   id: string; // Unique ID for keying
+  connectionId: string;
   inputDevice: string;
   inputChannel: number;
   outputDevice: string;
@@ -37,11 +42,12 @@ export interface CurrentPatchStatus {
 export interface Preset {
   id: string; // Slot ID
   name: string;
-  network: NetworkConfig;
+  networkConfigs: NetworkConfig[];
   patches: CurrentPatchStatus[];
 }
 
 export interface DeviceInfo {
+  connectionId: string;
   suid: string;
   name: string;
   inputs: number;

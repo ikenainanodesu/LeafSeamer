@@ -28,9 +28,17 @@
     "compatibleRange": "^2.0.0",
     "dashboardPanels": [
       {
+        "name": "network-config",
+        "title": "VB Network Config",
+        "width": 3,
+        "file": "network-config.html",
+        "headerColor": "#525F78",
+        "workspace": "VB Control"
+      },
+      {
         "name": "control-panel",
         "title": "VB Matrix Control",
-        "width": 4,
+        "width": 5,
         "file": "control-panel.html",
         "headerColor": "#525F78",
         "workspace": "VB Control"

@@ -3,9 +3,10 @@ import { CurrentPatchStatus, DeviceInfo } from "../../types";
 
 export const PatchSelector: React.FC<{
   patchId: string;
+  connectionId: string;
   status?: CurrentPatchStatus;
   onSelectionChange: (valid: boolean) => void;
-}> = ({ patchId, status, onSelectionChange }) => {
+}> = ({ patchId, connectionId, status, onSelectionChange }) => {
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
 
   // Selection state
@@ -65,15 +66,26 @@ export const PatchSelector: React.FC<{
       status.outputChannel === outputCh;
 
     if (valid && !isSameAsProp) {
+      // Include connectionId in message implicitly by using the patch ID which backend knows about?
+      // Actually, backend needs connectionId if it's a new patch or if we want to change connection (which we don't allow here).
+      // But for safety, we should assume the backend knows the patch's connectionId from activePatches Replicant,
+      // OR we send it for validation.
+      // Let's rely on patch ID mostly, but sending everything is safer.
       nodecg.sendMessage("selectPatch", {
         id: patchId,
+        connectionId: connectionId, // Added connectionId
         inputDevice: inputDev,
         inputChannel: inputCh,
         outputDevice: outputDev,
         outputChannel: outputCh,
       });
     }
-  }, [inputDev, inputCh, outputDev, outputCh]);
+  }, [inputDev, inputCh, outputDev, outputCh, connectionId]);
+
+  // Filter devices by connectionId
+  const connectionDevices = devices.filter(
+    (d) => d.connectionId === connectionId
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -86,7 +98,7 @@ export const PatchSelector: React.FC<{
             onChange={(e) => setInputDev(e.target.value)}
           >
             <option value="">Select Device</option>
-            {devices
+            {connectionDevices
               .filter((d) => d.inputs > 0)
               .map((d) => (
                 <option key={d.suid} value={d.suid}>
@@ -101,9 +113,12 @@ export const PatchSelector: React.FC<{
             value={inputCh}
             onChange={(e) => setInputCh(parseInt(e.target.value))}
           >
-            {devices.find((d) => d.suid === inputDev) &&
+            {connectionDevices.find((d) => d.suid === inputDev) &&
               [
-                ...Array(devices.find((d) => d.suid === inputDev)?.inputs || 8),
+                ...Array(
+                  connectionDevices.find((d) => d.suid === inputDev)?.inputs ||
+                    8
+                ),
               ].map((_, i) => (
                 <option key={i + 1} value={i + 1}>
                   {i + 1}
@@ -128,7 +143,7 @@ export const PatchSelector: React.FC<{
             onChange={(e) => setOutputDev(e.target.value)}
           >
             <option value="">Select Device</option>
-            {devices
+            {connectionDevices
               .filter((d) => d.outputs > 0)
               .map((d) => (
                 <option key={d.suid} value={d.suid}>
@@ -143,10 +158,11 @@ export const PatchSelector: React.FC<{
             value={outputCh}
             onChange={(e) => setOutputCh(parseInt(e.target.value))}
           >
-            {devices.find((d) => d.suid === outputDev) &&
+            {connectionDevices.find((d) => d.suid === outputDev) &&
               [
                 ...Array(
-                  devices.find((d) => d.suid === outputDev)?.outputs || 8
+                  connectionDevices.find((d) => d.suid === outputDev)
+                    ?.outputs || 8
                 ),
               ].map((_, i) => (
                 <option key={i + 1} value={i + 1}>

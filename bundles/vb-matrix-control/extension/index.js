@@ -77,9 +77,9 @@ class VBANTransmitter extends events.EventEmitter {
 }
 class MatrixManager {
   constructor(nodecg) {
+    this.connections = /* @__PURE__ */ new Map();
     this.deviceCache = /* @__PURE__ */ new Map();
     this.nodecg = nodecg;
-    this.vban = new VBANTransmitter();
     this.initReplicants();
     this.initListeners();
     this.loadPresetsFromFile();
@@ -98,13 +98,12 @@ class MatrixManager {
     return ips;
   }
   initReplicants() {
-    this.netConfigRep = this.nodecg.Replicant("networkConfig", {
-      defaultValue: {
-        ip: "127.0.0.1",
-        port: 6980,
-        streamName: "Command1"
+    this.netConfigsRep = this.nodecg.Replicant(
+      "networkConfigs",
+      {
+        defaultValue: []
       }
-    });
+    );
     this.hostInfoRep = this.nodecg.Replicant("hostInfo", {
       defaultValue: { ips: this.getLocalIPs() },
       persistent: false
@@ -115,44 +114,75 @@ class MatrixManager {
     this.activePatchesRep = this.nodecg.Replicant(
       "activePatches",
       {
-        defaultValue: [
-          {
-            id: "default",
-            inputDevice: "",
-            inputChannel: 1,
-            outputDevice: "",
-            outputChannel: 1,
-            gain: -144,
-            mute: false,
-            exists: false
-          }
-        ]
+        defaultValue: []
       }
     );
-    this.nodecg.Replicant("availableDevices", {
-      defaultValue: []
+    this.availableDevicesRep = this.nodecg.Replicant(
+      "availableDevices",
+      {
+        defaultValue: []
+      }
+    );
+    this.netConfigsRep.on("change", (newVal) => {
+      this.updateConnections(newVal || []);
     });
-    this.netConfigRep.on("change", (newVal) => {
-      this.vban.setConfig(newVal.ip, newVal.port, newVal.streamName);
+  }
+  updateConnections(configs) {
+    const activeIds = /* @__PURE__ */ new Set();
+    for (const config of configs) {
+      activeIds.add(config.id);
+      let vban = this.connections.get(config.id);
+      if (!vban) {
+        vban = new VBANTransmitter();
+        this.setupConnectionListeners(vban, config.id);
+        this.connections.set(config.id, vban);
+        this.nodecg.log.info(
+          `[VBAN] Added connection: ${config.name} (${config.id})`
+        );
+      }
+      vban.setConfig(config.ip, config.port, config.streamName);
+    }
+    for (const [id, vban] of this.connections) {
+      if (!activeIds.has(id)) {
+        vban.destroy();
+        this.connections.delete(id);
+        this.nodecg.log.info(`[VBAN] Removed connection: ${id}`);
+        const devices = this.availableDevicesRep.value || [];
+        this.availableDevicesRep.value = devices.filter(
+          (d) => d.connectionId !== id
+        );
+      }
+    }
+  }
+  setupConnectionListeners(vban, connectionId) {
+    vban.on("data", (data) => {
+      this.handleResponse(data, connectionId);
+    });
+    vban.on("error", (err) => {
+      this.nodecg.log.error(`[VBAN ${connectionId}] Error:`, err.message);
     });
   }
   initListeners() {
-    this.nodecg.listenFor("sendVBAN", (command) => {
-      this.vban.send(command);
+    this.nodecg.listenFor(
+      "sendVBAN",
+      (data) => {
+        if (data.connectionId) {
+          const vban = this.connections.get(data.connectionId);
+          if (vban) vban.send(data.command);
+        } else {
+          this.connections.forEach((vban) => vban.send(data.command));
+        }
+      }
+    );
+    this.nodecg.listenFor("ping", (connectionId) => {
+      this.ping(connectionId);
     });
-    this.vban.on("data", (data) => {
-      this.handleResponse(data);
-    });
-    this.vban.on("error", (err) => {
-      this.nodecg.log.error("VBAN Error:", err.message);
-    });
-    this.nodecg.listenFor("ping", () => {
-      this.ping();
-    });
-    this.nodecg.listenFor("addPatch", () => {
+    this.nodecg.listenFor("addPatch", (connectionId) => {
+      if (!connectionId) return;
       const currentPatches = this.activePatchesRep.value || [];
       const newPatch = {
         id: Math.random().toString(36).substr(2, 9),
+        connectionId,
         inputDevice: "",
         inputChannel: 1,
         outputDevice: "",
@@ -172,9 +202,16 @@ class MatrixManager {
     this.nodecg.listenFor(
       "selectPatch",
       (patch) => {
-        if (!patch.id || !patch.inputDevice || !patch.outputDevice) {
+        if (!patch.id || !patch.connectionId || !patch.inputDevice || !patch.outputDevice) {
           this.nodecg.log.warn(
             "[selectPatch] Invalid patch: missing id or device(s)"
+          );
+          return;
+        }
+        const vban = this.connections.get(patch.connectionId);
+        if (!vban) {
+          this.nodecg.log.warn(
+            `[selectPatch] Connection ${patch.connectionId} not found.`
           );
           return;
         }
@@ -190,6 +227,7 @@ class MatrixManager {
         const updatedPatch = {
           ...currentPatches[patchIndex],
           ...patch,
+          // Updates connectionId if changed (unlikely here) and devices
           gain: -144,
           // Reset to unknown/default until read
           mute: false,
@@ -202,26 +240,27 @@ class MatrixManager {
         const gainQuery = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = ?;`;
         const muteQuery = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ?;`;
         this.nodecg.log.info(
-          `[selectPatch] Sending Queries: ${gainQuery} ; ${muteQuery}`
+          `[selectPatch] Sending Queries to ${patch.connectionId}: ${gainQuery}`
         );
-        this.vban.send(gainQuery);
-        this.vban.send(muteQuery);
+        vban.send(gainQuery);
+        vban.send(muteQuery);
       }
     );
     this.nodecg.listenFor("updatePatch", (patch) => {
+      if (!patch.connectionId) return;
+      const vban = this.connections.get(patch.connectionId);
+      if (!vban) return;
       this.nodecg.log.info("Update Patch:", patch);
       if (patch.inputDevice && patch.outputDevice) {
         const inCh = patch.inputChannel || 1;
         const outCh = patch.outputChannel || 1;
         if (patch.exists === false) {
           const removeCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Remove;`;
-          this.nodecg.log.info(`[VBAN Send] ${removeCmd}`);
-          this.vban.send(removeCmd);
+          vban.send(removeCmd);
         } else {
           if (typeof patch.gain === "number") {
             const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = ${patch.gain.toFixed(1)};`;
-            this.nodecg.log.info(`[VBAN Send] ${gainCmd}`);
-            this.vban.send(gainCmd);
+            vban.send(gainCmd);
           } else if (patch.exists === true && typeof patch.gain === "undefined") {
             const currentPatches2 = this.activePatchesRep.value || [];
             const existing = currentPatches2.find(
@@ -229,17 +268,13 @@ class MatrixManager {
             );
             if (existing && !existing.exists) {
               const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = 0.0;`;
-              this.nodecg.log.info(
-                `[VBAN Send] ${gainCmd} (Default connection)`
-              );
-              this.vban.send(gainCmd);
+              vban.send(gainCmd);
               patch.gain = 0;
             }
           }
           if (typeof patch.mute === "boolean") {
             const muteCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ${patch.mute ? 1 : 0};`;
-            this.nodecg.log.info(`[VBAN Send] ${muteCmd}`);
-            this.vban.send(muteCmd);
+            vban.send(muteCmd);
           }
         }
       }
@@ -288,9 +323,11 @@ class MatrixManager {
         "KS1",
         "KS2"
       ];
-      commonSlots.forEach((suid) => {
-        this.vban.send(`Slot(${suid}).Device = ?;`);
-        this.vban.send(`Slot(${suid}).Info = ?;`);
+      this.connections.forEach((vban) => {
+        commonSlots.forEach((suid) => {
+          vban.send(`Slot(${suid}).Device = ?;`);
+          vban.send(`Slot(${suid}).Info = ?;`);
+        });
       });
     });
     this.nodecg.listenFor(
@@ -299,11 +336,11 @@ class MatrixManager {
         const currentPatches = JSON.parse(
           JSON.stringify(this.activePatchesRep.value || [])
         );
-        const netConfig = JSON.parse(JSON.stringify(this.netConfigRep.value));
+        const netConfigs = JSON.parse(JSON.stringify(this.netConfigsRep.value));
         const newPreset = {
           id: data.slotId,
           name: data.name,
-          network: netConfig,
+          networkConfigs: netConfigs,
           patches: currentPatches
         };
         const currentPresets = this.presetsRep.value || [];
@@ -321,7 +358,6 @@ class MatrixManager {
       }
     );
     this.nodecg.listenFor("deletePreset", (presetId) => {
-      this.nodecg.log.info(`[deletePreset] Request to delete: ${presetId}`);
       const currentPresets = JSON.parse(
         JSON.stringify(this.presetsRep.value || [])
       );
@@ -336,20 +372,26 @@ class MatrixManager {
       const preset = presets.find((p) => p.id === presetId);
       if (preset) {
         this.nodecg.log.info(`Loading Preset: ${preset.name}`);
-        this.netConfigRep.value = JSON.parse(JSON.stringify(preset.network));
+        if (preset.networkConfigs) {
+          this.netConfigsRep.value = JSON.parse(
+            JSON.stringify(preset.networkConfigs)
+          );
+        }
         if (preset.patches) {
           const patchesToLoad = JSON.parse(JSON.stringify(preset.patches));
           this.activePatchesRep.value = patchesToLoad;
           patchesToLoad.forEach((p) => {
+            const vban = this.connections.get(p.connectionId);
+            if (!vban) return;
             const inCh = p.inputChannel || 1;
             const outCh = p.outputChannel || 1;
             if (typeof p.gain === "number") {
-              this.vban.send(
+              vban.send(
                 `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).dBGain = ${p.gain.toFixed(1)};`
               );
             }
             if (typeof p.mute === "boolean") {
-              this.vban.send(
+              vban.send(
                 `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).Mute = ${p.mute ? 1 : 0};`
               );
             }
@@ -381,36 +423,43 @@ class MatrixManager {
       this.nodecg.log.error("Failed to load presets:", err.message);
     }
   }
-  ping() {
+  ping(connectionId) {
     const versionQuery = "Command.Version = ?;";
-    this.nodecg.log.debug(`[VBAN Ping] Sending: ${versionQuery}`);
-    this.vban.send(versionQuery);
+    if (connectionId) {
+      const vban = this.connections.get(connectionId);
+      if (vban) vban.send(versionQuery);
+    } else {
+      this.connections.forEach((vban) => vban.send(versionQuery));
+    }
   }
-  // ... listener added in initListeners
-  // (Using separate tool call for initListeners update)
-  handleResponse(data) {
-    this.nodecg.log.info(`[VBAN Response] Raw: ${data}`);
+  handleResponse(data, connectionId) {
     const lines = data.split(/[\r\n]+/).map((line) => line.trim()).filter((line) => line.length > 0);
     for (const line of lines) {
       const commands = line.split(";").map((cmd) => cmd.trim()).filter((cmd) => cmd.length > 0);
       for (const cmd of commands) {
-        this.parseLine(cmd);
+        this.parseLine(cmd, connectionId);
       }
     }
   }
-  parseLine(line) {
-    this.nodecg.log.debug(`[VBAN Parse] Line: ${line}`);
+  parseLine(line, connectionId) {
     if (line.includes("=")) {
       const [key, value] = line.split("=").map((s) => s.trim());
-      this.nodecg.log.info(`[VBAN] ${key} -> ${value}`);
       if (key === "Command.Version") {
-        this.nodecg.sendMessage("pingSuccess", value);
+        this.nodecg.sendMessage("pingSuccess", {
+          connectionId,
+          version: value
+        });
       }
       if (key.includes("Slot") && key.includes(".Device")) {
         const match = key.match(/Slot\(([^)]+)\)\.Device/);
         if (match && value && value !== '""' && value !== "" && value !== "Err") {
           const suid = match[1];
-          this.updateDeviceInfo(suid, "device", value.replace(/"/g, ""));
+          this.updateDeviceInfo(
+            connectionId,
+            suid,
+            "device",
+            value.replace(/"/g, "")
+          );
         }
       }
       if (key.includes("Slot") && key.includes(".Info")) {
@@ -419,7 +468,7 @@ class MatrixManager {
           const suid = match[1];
           const infoMatch = value.match(/In:(\d+),\s*Out:(\d+)/i);
           if (infoMatch) {
-            this.updateDeviceInfo(suid, "info", {
+            this.updateDeviceInfo(connectionId, suid, "info", {
               inputs: parseInt(infoMatch[1]),
               outputs: parseInt(infoMatch[2])
             });
@@ -437,7 +486,8 @@ class MatrixManager {
             let updated = false;
             const updatedPatches = currentPatches.map(
               (patch) => {
-                if (patch.inputDevice === match[1] && (patch.inputChannel || 1) === parseInt(match[2]) && patch.outputDevice === match[3] && (patch.outputChannel || 1) === parseInt(match[4])) {
+                if (patch.connectionId === connectionId && // Check connection
+                patch.inputDevice === match[1] && (patch.inputChannel || 1) === parseInt(match[2]) && patch.outputDevice === match[3] && (patch.outputChannel || 1) === parseInt(match[4])) {
                   updated = true;
                   return { ...patch, gain: gainValue, exists: true };
                 }
@@ -461,7 +511,8 @@ class MatrixManager {
             let updated = false;
             const updatedPatches = currentPatches.map(
               (patch) => {
-                if (patch.inputDevice === match[1] && (patch.inputChannel || 1) === parseInt(match[2]) && patch.outputDevice === match[3] && (patch.outputChannel || 1) === parseInt(match[4])) {
+                if (patch.connectionId === connectionId && // Check connection
+                patch.inputDevice === match[1] && (patch.inputChannel || 1) === parseInt(match[2]) && patch.outputDevice === match[3] && (patch.outputChannel || 1) === parseInt(match[4])) {
                   updated = true;
                   return { ...patch, mute: muteValue === 1, exists: true };
                 }
@@ -474,14 +525,15 @@ class MatrixManager {
           }
         }
       }
-      if (key.includes("Point") && key.includes("dBGain")) ;
     }
   }
-  updateDeviceInfo(suid, type, data) {
-    let device = this.deviceCache.get(suid) || {
+  // Key: "connectionId:suid"
+  updateDeviceInfo(connectionId, suid, type, data) {
+    const key = `${connectionId}:${suid}`;
+    let device = this.deviceCache.get(key) || {
+      connectionId,
       suid,
       name: suid,
-      // Use SUID as default name
       inputs: 0,
       outputs: 0
     };
@@ -491,20 +543,11 @@ class MatrixManager {
       device.inputs = data.inputs;
       device.outputs = data.outputs;
     }
-    this.deviceCache.set(suid, device);
+    this.deviceCache.set(key, device);
     const devices = Array.from(this.deviceCache.values()).filter(
       (d) => d.inputs > 0 || d.outputs > 0
     );
-    this.nodecg.Replicant("availableDevices").value = devices;
-    this.nodecg.log.info(
-      `[Device Discovery] Updated devices: ${devices.map((d) => `${d.suid}(${d.name})`).join(", ")}`
-    );
-  }
-  getReplicants() {
-    return {
-      networkConfig: this.netConfigRep,
-      presets: this.presetsRep
-    };
+    this.availableDevicesRep.value = devices;
   }
 }
 module.exports = (nodecg) => {

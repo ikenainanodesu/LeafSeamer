@@ -3,21 +3,26 @@ import * as fs from "fs";
 import * as path from "path";
 import NodeCG from "nodecg/types";
 import { VBANTransmitter } from "./vban";
-import { NetworkConfig, Preset, CurrentPatchStatus } from "../src/types";
+import {
+  NetworkConfig,
+  Preset,
+  CurrentPatchStatus,
+  DeviceInfo,
+} from "../src/types";
 
 export class MatrixManager {
   private nodecg: NodeCG.ServerAPI;
-  private vban: VBANTransmitter;
+  private connections: Map<string, VBANTransmitter> = new Map();
 
   // Replicants
-  private netConfigRep: any;
+  private netConfigsRep: any;
   private activePatchesRep: any;
   private presetsRep: any;
   private hostInfoRep: any;
+  private availableDevicesRep: any;
 
   constructor(nodecg: NodeCG.ServerAPI) {
     this.nodecg = nodecg;
-    this.vban = new VBANTransmitter();
 
     this.initReplicants();
     this.initListeners();
@@ -40,13 +45,12 @@ export class MatrixManager {
   }
 
   private initReplicants() {
-    this.netConfigRep = this.nodecg.Replicant<NetworkConfig>("networkConfig", {
-      defaultValue: {
-        ip: "127.0.0.1",
-        port: 6980,
-        streamName: "Command1",
-      },
-    });
+    this.netConfigsRep = this.nodecg.Replicant<NetworkConfig[]>(
+      "networkConfigs",
+      {
+        defaultValue: [],
+      }
+    );
 
     this.hostInfoRep = this.nodecg.Replicant("hostInfo", {
       defaultValue: { ips: this.getLocalIPs() },
@@ -61,53 +65,106 @@ export class MatrixManager {
     this.activePatchesRep = this.nodecg.Replicant<CurrentPatchStatus[]>(
       "activePatches",
       {
-        defaultValue: [
-          {
-            id: "default",
-            inputDevice: "",
-            inputChannel: 1,
-            outputDevice: "",
-            outputChannel: 1,
-            gain: -144.0,
-            mute: false,
-            exists: false,
-          },
-        ],
+        defaultValue: [],
       }
     );
-    this.nodecg.Replicant<any[]>("availableDevices", {
-      defaultValue: [],
-    });
+    this.availableDevicesRep = this.nodecg.Replicant<DeviceInfo[]>(
+      "availableDevices",
+      {
+        defaultValue: [],
+      }
+    );
 
     // Handle config changes
-    this.netConfigRep.on("change", (newVal: NetworkConfig) => {
-      this.vban.setConfig(newVal.ip, newVal.port, newVal.streamName);
+    this.netConfigsRep.on("change", (newVal: NetworkConfig[]) => {
+      this.updateConnections(newVal || []);
+    });
+  }
+
+  private updateConnections(configs: NetworkConfig[]) {
+    const activeIds = new Set<string>();
+
+    for (const config of configs) {
+      activeIds.add(config.id);
+
+      let vban = this.connections.get(config.id);
+      if (!vban) {
+        // Create new connection
+        vban = new VBANTransmitter();
+        this.setupConnectionListeners(vban, config.id);
+        this.connections.set(config.id, vban);
+        this.nodecg.log.info(
+          `[VBAN] Added connection: ${config.name} (${config.id})`
+        );
+      }
+
+      // Always update config in case IP/Port changed
+      vban.setConfig(config.ip, config.port, config.streamName);
+    }
+
+    // Cleanup removed connections
+    for (const [id, vban] of this.connections) {
+      if (!activeIds.has(id)) {
+        vban.destroy();
+        this.connections.delete(id);
+        this.nodecg.log.info(`[VBAN] Removed connection: ${id}`);
+
+        // Also cleanup devices and patches associated with this connection?
+        // Maybe keep patches but mark disconnected? For now, we keep them in memory
+        // until User explicitly removes, or we could filter them out.
+        // Let's filter availableDevices at least.
+        const devices = this.availableDevicesRep.value || [];
+        this.availableDevicesRep.value = devices.filter(
+          (d: DeviceInfo) => d.connectionId !== id
+        );
+      }
+    }
+  }
+
+  private setupConnectionListeners(
+    vban: VBANTransmitter,
+    connectionId: string
+  ) {
+    vban.on("data", (data: string) => {
+      this.handleResponse(data, connectionId);
+    });
+
+    vban.on("error", (err: Error) => {
+      this.nodecg.log.error(`[VBAN ${connectionId}] Error:`, err.message);
     });
   }
 
   private initListeners() {
     // VBAN Listeners
-    this.nodecg.listenFor("sendVBAN", (command: string) => {
-      this.vban.send(command);
-    });
+    // sendVBAN might need target. Default to all? Or specific?
+    // Let's assume specific if ID provided, else all?
+    // Actually, usually commands are specific.
+    this.nodecg.listenFor(
+      "sendVBAN",
+      (data: { command: string; connectionId?: string }) => {
+        if (data.connectionId) {
+          const vban = this.connections.get(data.connectionId);
+          if (vban) vban.send(data.command);
+        } else {
+          // Broadcast? Or error.
+          // For legacy compat (if any), maybe broadcast to first?
+          this.connections.forEach((vban) => vban.send(data.command));
+        }
+      }
+    );
 
-    this.vban.on("data", (data: string) => {
-      this.handleResponse(data);
-    });
-
-    this.vban.on("error", (err: Error) => {
-      this.nodecg.log.error("VBAN Error:", err.message);
-    });
-
-    this.nodecg.listenFor("ping", () => {
-      this.ping();
+    this.nodecg.listenFor("ping", (connectionId?: string) => {
+      this.ping(connectionId);
     });
 
     // Dashboard Listeners
-    this.nodecg.listenFor("addPatch", () => {
+    this.nodecg.listenFor("addPatch", (connectionId: string) => {
+      if (!connectionId) return;
+
       const currentPatches = this.activePatchesRep.value || [];
       const newPatch: CurrentPatchStatus = {
         id: Math.random().toString(36).substr(2, 9),
+        connectionId: connectionId,
         inputDevice: "",
         inputChannel: 1,
         outputDevice: "",
@@ -130,15 +187,29 @@ export class MatrixManager {
       "selectPatch",
       (patch: {
         id: string;
+        connectionId: string;
         inputDevice: string;
         inputChannel: number;
         outputDevice: string;
         outputChannel: number;
       }) => {
         // Validate input
-        if (!patch.id || !patch.inputDevice || !patch.outputDevice) {
+        if (
+          !patch.id ||
+          !patch.connectionId ||
+          !patch.inputDevice ||
+          !patch.outputDevice
+        ) {
           this.nodecg.log.warn(
             "[selectPatch] Invalid patch: missing id or device(s)"
+          );
+          return;
+        }
+
+        const vban = this.connections.get(patch.connectionId);
+        if (!vban) {
+          this.nodecg.log.warn(
+            `[selectPatch] Connection ${patch.connectionId} not found.`
           );
           return;
         }
@@ -157,7 +228,7 @@ export class MatrixManager {
 
         const updatedPatch = {
           ...currentPatches[patchIndex],
-          ...patch,
+          ...patch, // Updates connectionId if changed (unlikely here) and devices
           gain: -144.0, // Reset to unknown/default until read
           mute: false,
           exists: false,
@@ -175,18 +246,22 @@ export class MatrixManager {
         const muteQuery = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ?;`;
 
         this.nodecg.log.info(
-          `[selectPatch] Sending Queries: ${gainQuery} ; ${muteQuery}`
+          `[selectPatch] Sending Queries to ${patch.connectionId}: ${gainQuery}`
         );
-        this.vban.send(gainQuery);
-        this.vban.send(muteQuery);
+        vban.send(gainQuery);
+        vban.send(muteQuery);
       }
     );
 
     this.nodecg.listenFor("updatePatch", (patch: any) => {
+      // patch must have connectionId
+      if (!patch.connectionId) return;
+      const vban = this.connections.get(patch.connectionId);
+      if (!vban) return;
+
       this.nodecg.log.info("Update Patch:", patch);
 
       // Send VBAN commands to Matrix
-      // Format: Point(SUID.IN[n], SUID.OUT[j]).dBGain = X;
       if (patch.inputDevice && patch.outputDevice) {
         const inCh = patch.inputChannel || 1;
         const outCh = patch.outputChannel || 1;
@@ -194,16 +269,14 @@ export class MatrixManager {
         // Handle "Unpatch" (Remove)
         if (patch.exists === false) {
           const removeCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Remove;`;
-          this.nodecg.log.info(`[VBAN Send] ${removeCmd}`);
-          this.vban.send(removeCmd);
+          vban.send(removeCmd);
         } else {
           // Handle "Patch" / Update
 
           // Set gain
           if (typeof patch.gain === "number") {
             const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = ${patch.gain.toFixed(1)};`;
-            this.nodecg.log.info(`[VBAN Send] ${gainCmd}`);
-            this.vban.send(gainCmd);
+            vban.send(gainCmd);
           } else if (
             patch.exists === true &&
             typeof patch.gain === "undefined"
@@ -217,10 +290,7 @@ export class MatrixManager {
             if (existing && !existing.exists) {
               // Was unconnected, now connecting -> Default 0dB
               const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = 0.0;`;
-              this.nodecg.log.info(
-                `[VBAN Send] ${gainCmd} (Default connection)`
-              );
-              this.vban.send(gainCmd);
+              vban.send(gainCmd);
               patch.gain = 0;
             }
           }
@@ -228,8 +298,7 @@ export class MatrixManager {
           // Set mute
           if (typeof patch.mute === "boolean") {
             const muteCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ${patch.mute ? 1 : 0};`;
-            this.nodecg.log.info(`[VBAN Send] ${muteCmd}`);
-            this.vban.send(muteCmd);
+            vban.send(muteCmd);
           }
         }
       }
@@ -246,8 +315,7 @@ export class MatrixManager {
     });
 
     this.nodecg.listenFor("refreshDevices", () => {
-      // Query Matrix for available slots
-      // SUID should be complete slot names like "ASIO1", "VBAN1"
+      // Query ALL connections
       const commonSlots = [
         "ASIO1",
         "ASIO2",
@@ -284,10 +352,11 @@ export class MatrixManager {
         "KS2",
       ];
 
-      // Query each slot for device info
-      commonSlots.forEach((suid) => {
-        this.vban.send(`Slot(${suid}).Device = ?;`);
-        this.vban.send(`Slot(${suid}).Info = ?;`);
+      this.connections.forEach((vban) => {
+        commonSlots.forEach((suid) => {
+          vban.send(`Slot(${suid}).Device = ?;`);
+          vban.send(`Slot(${suid}).Info = ?;`);
+        });
       });
     });
 
@@ -298,14 +367,12 @@ export class MatrixManager {
         const currentPatches = JSON.parse(
           JSON.stringify(this.activePatchesRep.value || [])
         );
-        const netConfig = JSON.parse(JSON.stringify(this.netConfigRep.value));
-
-        // removed "no patch selected" check as we can save even empty or multiple configs
+        const netConfigs = JSON.parse(JSON.stringify(this.netConfigsRep.value));
 
         const newPreset: Preset = {
           id: data.slotId,
           name: data.name,
-          network: netConfig,
+          networkConfigs: netConfigs,
           patches: currentPatches,
         };
 
@@ -328,9 +395,6 @@ export class MatrixManager {
     );
 
     this.nodecg.listenFor("deletePreset", (presetId: string) => {
-      // ... (existing implementation is mostly fine, just ensuring context match)
-      this.nodecg.log.info(`[deletePreset] Request to delete: ${presetId}`);
-
       const currentPresets = JSON.parse(
         JSON.stringify(this.presetsRep.value || [])
       );
@@ -347,7 +411,12 @@ export class MatrixManager {
       const preset = presets.find((p: Preset) => p.id === presetId);
       if (preset) {
         this.nodecg.log.info(`Loading Preset: ${preset.name}`);
-        this.netConfigRep.value = JSON.parse(JSON.stringify(preset.network));
+        if (preset.networkConfigs) {
+          this.netConfigsRep.value = JSON.parse(
+            JSON.stringify(preset.networkConfigs)
+          );
+          // Wait for connections to update? Replicant handler updates Map immediately.
+        }
 
         if (preset.patches) {
           // Deep clone status
@@ -356,15 +425,18 @@ export class MatrixManager {
 
           // Send Commands for ALL patches
           patchesToLoad.forEach((p: CurrentPatchStatus) => {
+            const vban = this.connections.get(p.connectionId);
+            if (!vban) return; // Can't send if connection missing
+
             const inCh = p.inputChannel || 1;
             const outCh = p.outputChannel || 1;
             if (typeof p.gain === "number") {
-              this.vban.send(
+              vban.send(
                 `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).dBGain = ${p.gain.toFixed(1)};`
               );
             }
             if (typeof p.mute === "boolean") {
-              this.vban.send(
+              vban.send(
                 `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).Mute = ${p.mute ? 1 : 0};`
               );
             }
@@ -399,63 +471,56 @@ export class MatrixManager {
     }
   }
 
-  public ping() {
-    // Poll for basic info to ensure connection
+  public ping(connectionId?: string) {
     const versionQuery = "Command.Version = ?;";
-    this.nodecg.log.debug(`[VBAN Ping] Sending: ${versionQuery}`);
-    this.vban.send(versionQuery);
+    if (connectionId) {
+      const vban = this.connections.get(connectionId);
+      if (vban) vban.send(versionQuery);
+    } else {
+      this.connections.forEach((vban) => vban.send(versionQuery));
+    }
   }
 
-  // ... listener added in initListeners
-  // (Using separate tool call for initListeners update)
-
-  private handleResponse(data: string) {
+  private handleResponse(data: string, connectionId: string) {
     // Parse response from Matrix
-    // Log raw response for debugging
-    this.nodecg.log.info(`[VBAN Response] Raw: ${data}`);
+    // this.nodecg.log.debug(`[VBAN ${connectionId}] Raw: ${data}`);
 
-    // Split by lines first, then by semicolons
-    // Matrix responses are typically line-based, with semicolons ending each command
     const lines = data
       .split(/[\r\n]+/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
     for (const line of lines) {
-      // Each line may contain multiple semicolon-terminated commands
       const commands = line
         .split(";")
         .map((cmd) => cmd.trim())
         .filter((cmd) => cmd.length > 0);
 
       for (const cmd of commands) {
-        this.parseLine(cmd);
+        this.parseLine(cmd, connectionId);
       }
     }
   }
 
-  private parseLine(line: string) {
+  private parseLine(line: string, connectionId: string) {
     // Example: "Point(Input,Output).dBGain = -6.0"
     // Example response to "?": "Command.Version = Matrix 1.0.1.8"
-    this.nodecg.log.debug(`[VBAN Parse] Line: ${line}`);
 
     if (line.includes("=")) {
       const [key, value] = line.split("=").map((s) => s.trim());
-
-      // Update local state or Replicants based on key
-      // This is a simplified handler. State parsing logic will need to vary
-      // based on exact response format which we need to verify in practice.
-      this.nodecg.log.info(`[VBAN] ${key} -> ${value}`);
+      // this.nodecg.log.debug(`[VBAN ${connectionId}] ${key} -> ${value}`);
 
       // Basic Version Check
       if (key === "Command.Version") {
-        // Could store this status
-        this.nodecg.sendMessage("pingSuccess", value);
+        // Send success with connectionId
+        this.nodecg.sendMessage("pingSuccess", {
+          connectionId,
+          version: value,
+        });
       }
 
       // Device discovery responses
       if (key.includes("Slot") && key.includes(".Device")) {
-        // Extract SUID from key: Slot(ASIO128).Device.ASIO or Slot(ASIO128).Device
         const match = key.match(/Slot\(([^)]+)\)\.Device/);
         if (
           match &&
@@ -464,13 +529,17 @@ export class MatrixManager {
           value !== "" &&
           value !== "Err"
         ) {
-          const suid = match[1]; // e.g., "ASIO128" or "VBAN1"
-          this.updateDeviceInfo(suid, "device", value.replace(/"/g, ""));
+          const suid = match[1];
+          this.updateDeviceInfo(
+            connectionId,
+            suid,
+            "device",
+            value.replace(/"/g, "")
+          );
         }
       }
 
       if (key.includes("Slot") && key.includes(".Info")) {
-        // Extract SUID and parse info: "In:18, Out:18, MaxIn:128, MaxOut:128"
         const match = key.match(/Slot\(([^)]+)\)\.Info/);
         if (
           match &&
@@ -479,11 +548,10 @@ export class MatrixManager {
           value !== "" &&
           value !== "Err"
         ) {
-          const suid = match[1]; // e.g., "ASIO128" or "VBAN1"
-          // Parse "In:4, Out:8" (case-insensitive)
+          const suid = match[1];
           const infoMatch = value.match(/In:(\d+),\s*Out:(\d+)/i);
           if (infoMatch) {
-            this.updateDeviceInfo(suid, "info", {
+            this.updateDeviceInfo(connectionId, suid, "info", {
               inputs: parseInt(infoMatch[1]),
               outputs: parseInt(infoMatch[2]),
             });
@@ -491,8 +559,7 @@ export class MatrixManager {
         }
       }
 
-      // Patch Status - Query responses
-      // Point(SUID.IN[n], SUID.OUT[j]).dBGain = -6.0
+      // Patch Status -> dBGain
       if (key.includes("Point") && key.includes(".dBGain")) {
         const match = key.match(
           /Point\(([^.]+)\.IN\[(\d+)\],\s*([^.]+)\.OUT\[(\d+)\]\)\.dBGain/
@@ -504,10 +571,10 @@ export class MatrixManager {
             const currentPatches = this.activePatchesRep.value || [];
             let updated = false;
 
-            // Find all matching patches and update them
             const updatedPatches = currentPatches.map(
               (patch: CurrentPatchStatus) => {
                 if (
+                  patch.connectionId === connectionId && // Check connection
                   patch.inputDevice === match[1] &&
                   (patch.inputChannel || 1) === parseInt(match[2]) &&
                   patch.outputDevice === match[3] &&
@@ -527,7 +594,7 @@ export class MatrixManager {
         }
       }
 
-      // Point(SUID.IN[n], SUID.OUT[j]).Mute = 1
+      // Patch Status -> Mute
       if (key.includes("Point") && key.includes(".Mute")) {
         const match = key.match(
           /Point\(([^.]+)\.IN\[(\d+)\],\s*([^.]+)\.OUT\[(\d+)\]\)\.Mute/
@@ -539,10 +606,10 @@ export class MatrixManager {
             const currentPatches = this.activePatchesRep.value || [];
             let updated = false;
 
-            // Find all matching patches and update them
             const updatedPatches = currentPatches.map(
               (patch: CurrentPatchStatus) => {
                 if (
+                  patch.connectionId === connectionId && // Check connection
                   patch.inputDevice === match[1] &&
                   (patch.inputChannel || 1) === parseInt(match[2]) &&
                   patch.outputDevice === match[3] &&
@@ -561,48 +628,38 @@ export class MatrixManager {
           }
         }
       }
-
-      // Patch Status
-      // key: Point(SUID.IN[2], SUID.OUT[3]).dBGain
-      if (key.includes("Point") && key.includes("dBGain")) {
-        // Parse indices and update patch Replicant
-      }
     }
   }
 
-  private deviceCache: Map<string, any> = new Map();
+  private deviceCache: Map<string, DeviceInfo> = new Map(); // Key: "connectionId:suid"
 
-  private updateDeviceInfo(suid: string, type: "device" | "info", data: any) {
-    let device = this.deviceCache.get(suid) || {
+  private updateDeviceInfo(
+    connectionId: string,
+    suid: string,
+    type: "device" | "info",
+    data: any
+  ) {
+    const key = `${connectionId}:${suid}`;
+    let device = this.deviceCache.get(key) || {
+      connectionId,
       suid,
-      name: suid, // Use SUID as default name
+      name: suid,
       inputs: 0,
       outputs: 0,
     };
 
     if (type === "device") {
-      device.name = data || suid; // Use device name or fallback to SUID
+      device.name = data || suid;
     } else if (type === "info") {
       device.inputs = data.inputs;
       device.outputs = data.outputs;
     }
 
-    this.deviceCache.set(suid, device);
+    this.deviceCache.set(key, device);
 
-    // Update Replicant with devices that have channel info
     const devices = Array.from(this.deviceCache.values()).filter(
       (d) => d.inputs > 0 || d.outputs > 0
     );
-    this.nodecg.Replicant("availableDevices").value = devices;
-    this.nodecg.log.info(
-      `[Device Discovery] Updated devices: ${devices.map((d) => `${d.suid}(${d.name})`).join(", ")}`
-    );
-  }
-
-  public getReplicants() {
-    return {
-      networkConfig: this.netConfigRep,
-      presets: this.presetsRep,
-    };
+    this.availableDevicesRep.value = devices;
   }
 }
