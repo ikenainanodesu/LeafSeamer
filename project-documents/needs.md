@@ -142,3 +142,22 @@
   - 增加滑块,用于调节input sends的gain(dB)
   - 点击电平可以手动输入数值(dB)
   - 查询lr pan,同时增加L/R pan滑块
+
+- 将seamer control中动作选择器中的mixer fader改名为mixer control
+  - 增加子功能选择
+    - sends 选择:可以设定某一输入ch送到某一输出ch的属性
+      - 输入 ch 选择
+      - 输出 ch 选择
+      - gain(dB) 调节
+      - on/off选择
+      - pre toggle
+      - pan(L/R)调节
+  
+- 现在来修改一下dashboard的gui
+  - 新增名为`VB Control`的workspace
+    - 将现有的VB Matrix Control移动到该workspace下
+  - 新增名为`Misc`的workspace
+    - 将backup control和Log viewer移动到该workspace下
+  - 新增名为`Graphic Control`的workspace
+    - 将graphics control移动到该workspace下
+  - 将Mixer Connection移动到Mixer Control workspace下

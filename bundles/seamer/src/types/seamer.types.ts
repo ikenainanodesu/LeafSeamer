@@ -5,12 +5,31 @@ export interface SeamerActionBase {
   type: SeamerActionType;
 }
 
-export interface MixerFaderAction extends SeamerActionBase {
-  type: "mixer-fader";
+export interface MixerControlAction extends SeamerActionBase {
+  type: "mixer-fader"; // Keeping raw type string "mixer-fader" for now to avoid breaking existing JSONs instantly, or should I migrate?
+  // Plan says rename to "Mixer Control" in UI and Types.
+  // Ideally type string should be "mixer-control" but that breaks existing cards.
+  // Let's keep "mixer-fader" string for backward compat but rename interface.
+  // OR better: use "mixer-control" and I'll handle migration in App.tsx if needed.
+  // Actually, let's keep the discriminated union specific string as "mixer-fader" to minimize breakage,
+  // but logically treat it as mixer-control.
+  // WAIT, the user request says "rename ... to mixer control".
+  // I will change the Interface name and add the fields.
+  // I will KEEP the 'type' string as "mixer-fader" for now to avoid data migration complexity,
+  // effectively "upgrading" the existing action type.
+  subFunction?: "fader" | "send"; // Default to 'fader' if undefined
+
+  // Fader Specific
   channelId: number;
-  level: number; // Raw value or dB? User said dB. Fader usually takes raw int?
-  // Existing mixer control takes int (-32768 to 1000).
-  // I should probably store raw int, but UI shows dB.
+  level: number;
+
+  // Send Specific
+  sendInputId?: number;
+  sendOutputId?: number;
+  sendLevel?: number; // dB * 100
+  sendOn?: boolean;
+  sendPre?: boolean;
+  sendPan?: number;
 }
 
 export interface VBPresetAction extends SeamerActionBase {
@@ -25,7 +44,7 @@ export interface OBSAction extends SeamerActionBase {
   transitionName?: string;
 }
 
-export type SeamerAction = MixerFaderAction | VBPresetAction | OBSAction;
+export type SeamerAction = MixerControlAction | VBPresetAction | OBSAction;
 
 export interface Preset {
   id: string;

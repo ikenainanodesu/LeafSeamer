@@ -4,7 +4,7 @@ import {
   SeamerAction,
   Preset,
   SeamerActionType,
-  MixerFaderAction,
+  MixerControlAction,
   VBPresetAction,
   OBSAction,
 } from "../../types/seamer.types";
@@ -61,9 +61,10 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             return {
               id,
               type,
+              subFunction: "fader",
               channelId: -1,
               level: -1000,
-            } as MixerFaderAction;
+            } as MixerControlAction;
           } else if (type === "vb-preset") {
             return {
               id,
@@ -140,30 +141,152 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
   const renderActionDetails = (action: SeamerAction) => {
     if (action.type === "mixer-fader") {
       const mixerChs = mixerState?.channels || [];
+      const mixerOuts = mixerState?.outputs || []; // Need outputs for Sends
+
+      // Default subFunction to 'fader' if missing (backward compat)
+      const subFunc = (action as MixerControlAction).subFunction || "fader";
+
       return (
-        <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
-          <select
-            value={action.channelId}
-            onChange={(e) =>
-              updateAction(action.id, { channelId: Number(e.target.value) })
-            }
-          >
-            <option value={-1}>Select Channel</option>
-            {mixerChs.map((ch: any) => (
-              <option key={ch.id} value={ch.id}>
-                {ch.userLabel || `Ch ${ch.id}`}
-              </option>
-            ))}
-          </select>
-          <NumberInput
-            value={action.level / 100}
-            onChange={(val) =>
-              updateAction(action.id, { level: Math.round(val * 100) })
-            }
-            placeholder="dB Level"
-            style={{ width: "80px" }}
-          />
-          <span>dB</span>
+        <div style={{ marginTop: "5px" }}>
+          {/* Sub Function Selector */}
+          <div style={{ marginBottom: "5px" }}>
+            <label style={{ marginRight: "10px" }}>Function:</label>
+            <select
+              value={subFunc}
+              onChange={(e) =>
+                updateAction(action.id, {
+                  subFunction: e.target.value as "fader" | "send",
+                })
+              }
+            >
+              <option value="fader">Fader Control</option>
+              <option value="send">Sends Control</option>
+            </select>
+          </div>
+
+          {subFunc === "fader" && (
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <select
+                value={action.channelId}
+                onChange={(e) =>
+                  updateAction(action.id, { channelId: Number(e.target.value) })
+                }
+              >
+                <option value={-1}>Select Input Channel</option>
+                {mixerChs.map((ch: any) => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.userLabel || `Ch ${ch.id}`}
+                  </option>
+                ))}
+              </select>
+              <NumberInput
+                value={(action.level || 0) / 100}
+                onChange={(val) =>
+                  updateAction(action.id, { level: Math.round(val * 100) })
+                }
+                placeholder="dB"
+                style={{ width: "60px" }}
+              />
+              <span>dB</span>
+            </div>
+          )}
+
+          {subFunc === "send" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "5px" }}
+            >
+              {/* Input Select */}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <label style={{ width: "60px" }}>Input:</label>
+                <select
+                  style={{ flex: 1 }}
+                  value={(action as MixerControlAction).sendInputId || -1}
+                  onChange={(e) =>
+                    updateAction(action.id, {
+                      sendInputId: Number(e.target.value),
+                    })
+                  }
+                >
+                  <option value={-1}>Select Input</option>
+                  {mixerChs.map((ch: any) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.userLabel || `Ch ${ch.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Output Select */}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <label style={{ width: "60px" }}>Output:</label>
+                <select
+                  style={{ flex: 1 }}
+                  value={(action as MixerControlAction).sendOutputId || -1}
+                  onChange={(e) =>
+                    updateAction(action.id, {
+                      sendOutputId: Number(e.target.value),
+                    })
+                  }
+                >
+                  <option value={-1}>Select Output</option>
+                  {mixerOuts.map((out: any) => (
+                    <option key={out.id} value={out.id}>
+                      {out.name || `Mix ${out.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Controls Row 1: Gain, On/Off */}
+              <div
+                style={{ display: "flex", gap: "10px", alignItems: "center" }}
+              >
+                <label>Gain:</label>
+                <NumberInput
+                  value={((action as MixerControlAction).sendLevel || 0) / 100}
+                  onChange={(val) =>
+                    updateAction(action.id, {
+                      sendLevel: Math.round(val * 100),
+                    })
+                  }
+                  placeholder="dB"
+                  style={{ width: "60px" }}
+                />
+                <span>dB</span>
+
+                <label style={{ marginLeft: "10px" }}>On:</label>
+                <input
+                  type="checkbox"
+                  checked={(action as MixerControlAction).sendOn || false}
+                  onChange={(e) =>
+                    updateAction(action.id, { sendOn: e.target.checked })
+                  }
+                />
+              </div>
+
+              {/* Controls Row 2: Pre/Post, Pan */}
+              <div
+                style={{ display: "flex", gap: "10px", alignItems: "center" }}
+              >
+                <label>Pre:</label>
+                <input
+                  type="checkbox"
+                  checked={(action as MixerControlAction).sendPre || false}
+                  onChange={(e) =>
+                    updateAction(action.id, { sendPre: e.target.checked })
+                  }
+                />
+
+                <label style={{ marginLeft: "10px" }}>Pan:</label>
+                <NumberInput
+                  value={(action as MixerControlAction).sendPan || 0}
+                  onChange={(val) => updateAction(action.id, { sendPan: val })}
+                  placeholder="Pan"
+                  style={{ width: "50px" }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       );
     } else if (action.type === "vb-preset") {
@@ -349,7 +472,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                   )
                 }
               >
-                <option value="mixer-fader">Mixer Fader</option>
+                <option value="mixer-fader">Mixer Control</option>
                 <option value="vb-preset">VB Matrix Preset</option>
                 <option value="obs-action">OBS Control</option>
               </select>

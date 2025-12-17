@@ -87,10 +87,75 @@ const App = () => {
     card.actions.forEach((action) => {
       switch (action.type) {
         case "mixer-fader":
-          nodecg.sendMessageToBundle("setMixerFader", "mixer-control", {
-            channelId: action.channelId,
-            level: action.level,
-          });
+          // Need to cast or check subFunction
+          // We know it is MixerControlAction locally, but type is strictly string "mixer-fader"
+          const mixerAction = action as any; // Quick cast to access new fields
+          const subFunc = mixerAction.subFunction || "fader";
+
+          if (subFunc === "fader") {
+            nodecg.sendMessageToBundle("setMixerFader", "mixer-control", {
+              channelId: action.channelId,
+              level: action.level,
+            });
+          } else if (subFunc === "send") {
+            if (
+              mixerAction.sendInputId !== undefined &&
+              mixerAction.sendOutputId !== undefined
+            ) {
+              const basePayload = {
+                inputId: mixerAction.sendInputId,
+                outputId: mixerAction.sendOutputId,
+              };
+
+              // Send Level
+              if (mixerAction.sendLevel !== undefined) {
+                nodecg.sendMessageToBundle(
+                  "setMixerInputSendLevel",
+                  "mixer-control",
+                  {
+                    ...basePayload,
+                    level: mixerAction.sendLevel,
+                  }
+                );
+              }
+
+              // Send On/Off
+              if (mixerAction.sendOn !== undefined) {
+                nodecg.sendMessageToBundle(
+                  "setMixerInputSendActive",
+                  "mixer-control",
+                  {
+                    ...basePayload,
+                    active: mixerAction.sendOn,
+                  }
+                );
+              }
+
+              // Send Pre/Post
+              if (mixerAction.sendPre !== undefined) {
+                nodecg.sendMessageToBundle(
+                  "setMixerInputSendPre",
+                  "mixer-control",
+                  {
+                    ...basePayload,
+                    pre: mixerAction.sendPre,
+                  }
+                );
+              }
+
+              // Send Pan
+              if (mixerAction.sendPan !== undefined) {
+                nodecg.sendMessageToBundle(
+                  "setMixerInputSendPan",
+                  "mixer-control",
+                  {
+                    ...basePayload,
+                    pan: mixerAction.sendPan,
+                  }
+                );
+              }
+            }
+          }
           break;
         case "vb-preset":
           nodecg.sendMessageToBundle(
