@@ -1,1 +1,132 @@
-[]
+[
+  {
+    "id": "bank-0",
+    "name": "1",
+    "networkConfigs": [
+      {
+        "id": "bks7w2a6j",
+        "name": "Matrix 1",
+        "ip": "192.168.100.220",
+        "port": 6980,
+        "streamName": "Command1"
+      },
+      {
+        "id": "an1s63yin",
+        "name": "Matrix 2",
+        "ip": "192.168.100.132",
+        "port": 6980,
+        "streamName": "Command1"
+      }
+    ],
+    "patches": [
+      {
+        "id": "default",
+        "inputDevice": "ASIO128",
+        "inputChannel": 7,
+        "outputDevice": "VBAN2",
+        "outputChannel": 1,
+        "gain": 0,
+        "mute": false,
+        "exists": true
+      },
+      {
+        "id": "ysgl80052",
+        "connectionId": "bks7w2a6j",
+        "inputDevice": "",
+        "inputChannel": 1,
+        "outputDevice": "",
+        "outputChannel": 1,
+        "gain": -144,
+        "mute": false,
+        "exists": false
+      },
+      {
+        "id": "crgvsdg9n",
+        "connectionId": "bks7w2a6j",
+        "inputDevice": "",
+        "inputChannel": 1,
+        "outputDevice": "",
+        "outputChannel": 1,
+        "gain": -144,
+        "mute": false,
+        "exists": false
+      }
+    ]
+  },
+  {
+    "id": "bank-1",
+    "name": "2",
+    "networkConfigs": [
+      {
+        "id": "bks7w2a6j",
+        "name": "Matrix 1",
+        "ip": "192.168.100.220",
+        "port": 6980,
+        "streamName": "Command1"
+      },
+      {
+        "id": "an1s63yin",
+        "name": "Matrix 2",
+        "ip": "192.168.100.132",
+        "port": 6980,
+        "streamName": "Command1"
+      }
+    ],
+    "patches": [
+      {
+        "id": "default",
+        "inputDevice": "ASIO128",
+        "inputChannel": 7,
+        "outputDevice": "VBAN2",
+        "outputChannel": 1,
+        "gain": 0,
+        "mute": false,
+        "exists": true
+      },
+      {
+        "id": "ysgl80052",
+        "connectionId": "bks7w2a6j",
+        "inputDevice": "",
+        "inputChannel": 1,
+        "outputDevice": "",
+        "outputChannel": 1,
+        "gain": -144,
+        "mute": false,
+        "exists": false
+      },
+      {
+        "id": "crgvsdg9n",
+        "connectionId": "bks7w2a6j",
+        "inputDevice": "",
+        "inputChannel": 1,
+        "outputDevice": "",
+        "outputChannel": 1,
+        "gain": -144,
+        "mute": false,
+        "exists": false
+      },
+      {
+        "id": "39l6ttlkf",
+        "connectionId": "an1s63yin",
+        "inputDevice": "",
+        "inputChannel": 1,
+        "outputDevice": "",
+        "outputChannel": 1,
+        "gain": -144,
+        "mute": false,
+        "exists": false
+      },
+      {
+        "id": "d3xcuanwq",
+        "connectionId": "an1s63yin",
+        "inputDevice": "",
+        "inputChannel": 1,
+        "outputDevice": "",
+        "outputChannel": 1,
+        "gain": -144,
+        "mute": false,
+        "exists": false
+      }
+    ]
+  }
+]
