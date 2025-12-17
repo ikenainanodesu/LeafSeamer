@@ -1,3 +1,6 @@
+
+<img src="misc-resorce/seamer-logo-128x128.png" alt="isolated" width="200"/>
+
 # LeafSeamer
 
 NodeCGベースの放送制作管理システムであり、ミキサー、OBS、グラフィックスオーバーレイ、VB-Audio Matrixなどの複数のデバイスとサービスの統合制御プラットフォームです。

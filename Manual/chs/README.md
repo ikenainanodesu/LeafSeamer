@@ -1,3 +1,6 @@
+
+<img src="misc-resorce\seamer-logo-128x128.png" alt="isolated" width="200"/>
+
 # LeafSeamer
 
 基于 NodeCG 的广播制作控制系统，集成调音台、OBS、图形 Overlay、VB-Audio Matrix 等多种设备和服务的统一控制平台。
