@@ -18,13 +18,14 @@ export const Panel: React.FC = () => {
 
   useEffect(() => {
     const netRep = nodecg.Replicant<NetworkConfig[]>("networkConfigs");
-    netRep.on("change", (val) => {
+    netRep.on("change", (val: NetworkConfig[]) => {
       if (val) {
         setNetworkConfigs(val);
         // Default to first connection if none selected or current one removed
         if (
           val.length > 0 &&
-          (!activeConnectionId || !val.find((c) => c.id === activeConnectionId))
+          (!activeConnectionId ||
+            !val.find((c: NetworkConfig) => c.id === activeConnectionId))
         ) {
           setActiveConnectionId(val[0].id);
         }

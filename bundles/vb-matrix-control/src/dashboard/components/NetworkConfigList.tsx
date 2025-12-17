@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { NetworkConfig } from "../../types";
 
-export const NetworkConfigList: React.FC = () => {
+const NetworkConfigList: React.FC = () => {
   const [configs, setConfigs] = useState<NetworkConfig[]>([]);
   const [localIPs, setLocalIPs] = useState<string[]>([]);
 
@@ -11,14 +11,14 @@ export const NetworkConfigList: React.FC = () => {
     });
 
     // First value load
-    rep.on("change", (newVal) => {
+    rep.on("change", (newVal: NetworkConfig[]) => {
       if (newVal) {
         setConfigs(newVal);
       }
     });
 
     const hostRep = nodecg.Replicant<{ ips: string[] }>("hostInfo");
-    hostRep.on("change", (val) => {
+    hostRep.on("change", (val: { ips: string[] }) => {
       if (val && val.ips) setLocalIPs(val.ips);
     });
   }, []);
@@ -271,3 +271,5 @@ const PingTestButton: React.FC<{ configId: string }> = ({ configId }) => {
     </button>
   );
 };
+
+export default NetworkConfigList;
