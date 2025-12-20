@@ -1,0 +1,43 @@
+{
+  "name": "atem-control",
+  "version": "1.1.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "dashboardPanels": [
+      {
+        "name": "atem-connection",
+        "title": "ATEM Connection",
+        "width": 3,
+        "file": "atem-connection.html",
+        "headerColor": "#525252",
+        "workspace": "ATEM Control"
+      },
+      {
+        "name": "atem-control",
+        "title": "ATEM Control",
+        "width": 5,
+        "file": "atem-control.html",
+        "headerColor": "#525252",
+        "workspace": "ATEM Control"
+      }
+    ]
+  },
+  "scripts": {
+    "build:extension": "cross-env BUNDLE_NAME=atem-control vite build --config ../../vite.config.extension.ts",
+    "build:dashboard": "cross-env BUNDLE_NAME=atem-control vite build --config ../../vite.config.dashboard.ts",
+    "build": "npm run build:extension && npm run build:dashboard",
+    "watch:extension": "cross-env BUNDLE_NAME=atem-control vite build --config ../../vite.config.extension.ts --watch",
+    "watch": "cross-env BUNDLE_NAME=atem-control npm run watch:extension"
+  },
+  "dependencies": {
+    "atem-connection": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.1",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}

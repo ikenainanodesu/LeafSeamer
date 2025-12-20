@@ -51,6 +51,7 @@ export default defineConfig(({ command, mode }) => {
           "archiver",
           "async",
           "googleapis",
+          "atem-connection",
         ],
         output: {
           // 确保输出为 CommonJS 格式

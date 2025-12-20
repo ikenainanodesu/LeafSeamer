@@ -1,4 +1,3 @@
-
 <img src="../../misc-resorce/seamer-logo-128x128.png" alt="isolated" width="200"/>
 
 # LeafSeamer
@@ -41,6 +40,17 @@ LeafSeamerは、ビデオ配信や番組制作のためのデバイス制御と�
 - リアルタイム状態監視（ストリーム状態、統計情報）
 - 自動再接続メカニズム（最大3回、2秒間隔）
 - 接続状態のフィードバック
+
+#### ATEM Control - Blackmagic ATEM スイッチャーコントロール
+
+- ネットワーク経由でATEMスイッチャーを制御
+- リアルタイムProgram/Previewバス制御
+- Cut/Autoトランジション制御
+- トランジションスタイルとレートの設定
+- Upstream/Downstream Keyerステータス監視
+- マクロの記録と再生制御
+- 接続情報の永続的管理
+- Web Dashboard 接続管理
 
 #### VB Matrix Control - VB-Audio Matrix コントロール
 
@@ -110,6 +120,7 @@ LeafSeamerは、ビデオ配信や番組制作のためのデバイス制御と�
 
 - **GSAP** v3.13.0 - 高性能アニメーションライブラリ
 - **obs-websocket-js** v5.0.7 - OBS WebSocketクライアント
+- **atem-connection** - ATEM制御ライブラリ
 - ~~**node-osc** v11.1.1 - OSCプロトコルサポート~~
 - **googleapis** v166.0.0 - Google APIクライアント
 - **archiver** v7.0.1 - ファイルアーカイブツール
@@ -127,6 +138,7 @@ LeafSeamer/
 ├── bundles/                      # NodeCGバンドルモジュールディレクトリ
 │   ├── seamer/                   # シーンコントロールカードシステム
 │   ├── mixer-control/            # ミキサーコントロール
+│   ├── atem-control/             # ATEMコントロール
 │   ├── obs-control/              # OBSコントロール
 │   ├── vb-matrix-control/        # VB-Audio Matrixコントロール
 │   ├── graphics-package/         # グラフィックスパッケージ（GSAPアニメーション）
@@ -159,6 +171,7 @@ LeafSeamerのDashboardは、機能ごとに複数のワークスペースに整�
 
 - **Seamer**：シーンコントロールカードシステム
 - **Mixer Control**：ミキサー接続とコントロール
+- **ATEM Control**：ATEMスイッチャー接続とコントロール
 - **OBS Control**：OBS接続とコントロール
 - **VB Control**：VB-Audio Matrixネットワーク構成とマトリックスコントロール
 - **Graphic Control**：グラフィックスパッケージコントロール
@@ -208,9 +221,9 @@ npm run typecheck
 
 ## バージョン情報
 
-**現在のバージョン**：1.0.0
-**リリース日**：2025-12-17
-**最終更新日**：2025-12-17
+**現在のバージョン**：1.1.0
+**リリース日**：2025-12-20
+**最終更新日**：2025-12-20
 
 ## ライセンス
 

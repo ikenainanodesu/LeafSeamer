@@ -1,4 +1,3 @@
-
 <img src="../../misc-resorce/seamer-logo-128x128.png" alt="isolated" width="200"/>
 
 # LeafSeamer
@@ -41,6 +40,17 @@ LeafSeamer 是一个现代化的广播制作控制系统，为视频直播和节
 - 实时状态监控（流状态、统计信息）
 - 自动重连机制（最多 3 次，2 秒间隔）
 - 连接状态反馈
+
+#### ATEM Control - Blackmagic ATEM 切换台控制
+
+- 通过网络控制 ATEM 切换台
+- 实时 Program/Preview 总线控制
+- Cut/Auto 转场控制
+- 转场样式和速率配置
+- Upstream/Downstream Keyer 状态监控
+- 宏录制与播放控制
+- 连接信息持久化管理
+- Web Dashboard 连接管理
 
 #### VB Matrix Control - VB-Audio Matrix 控制
 
@@ -110,6 +120,7 @@ LeafSeamer 是一个现代化的广播制作控制系统，为视频直播和节
 
 - **GSAP** v3.13.0 - 高性能动画库
 - **obs-websocket-js** v5.0.7 - OBS WebSocket 客户端
+- **atem-connection** - ATEM 控制库
 - ~~**node-osc** v11.1.1 - OSC 协议支持~~
 - **googleapis** v166.0.0 - Google API 客户端
 - **archiver** v7.0.1 - 文件归档工具
@@ -127,6 +138,7 @@ LeafSeamer/
 ├── bundles/                      # NodeCG bundles 模块目录
 │   ├── seamer/                   # 场景控制卡片系统
 │   ├── mixer-control/            # 调音台控制
+│   ├── atem-control/             # ATEM 控制
 │   ├── obs-control/              # OBS 控制
 │   ├── vb-matrix-control/        # VB-Audio Matrix 控制
 │   ├── graphics-package/         # 图形包（GSAP 动画）
@@ -159,6 +171,7 @@ LeafSeamer 的 Dashboard 按功能组织为多个工作区：
 
 - **Seamer**：场景控制卡片系统
 - **Mixer Control**：调音台连接和控制
+- **ATEM Control**：ATEM 切换台连接和控制
 - **OBS Control**：OBS 连接和控制
 - **VB Control**：VB-Audio Matrix 网络配置和矩阵控制
 - **Graphic Control**：图形包控制
@@ -208,9 +221,9 @@ npm run typecheck
 
 ## 版本信息
 
-**当前版本**：1.0.0
-**发布日期**：2025-12-17
-**Last Update**: 2025-12-17
+**当前版本**：1.1.0
+**发布日期**：2025-12-20
+**Last Update**: 2025-12-20
 
 ## 许可证
 
