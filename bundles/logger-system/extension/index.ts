@@ -11,6 +11,12 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   // Expose logger to other bundles via extensions API
   // This allows other bundles (server-side) to call nodecg.extensions['logger-system'].log(...)
+
+  process.on("warning", (e) => {
+    console.warn(e.stack);
+    logger.log("warn", "System", `Process Warning: ${e.stack}`);
+  });
+
   return {
     log: (
       level: "info" | "warn" | "error",

@@ -65,6 +65,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     if (managers.has(ip)) return managers.get(ip)!;
 
     const atem = new Atem();
+    log.info(`Creating new ATEM Manager for ${ip}`);
     const manager: AtemManager = {
       atem,
       ip,

@@ -47,3 +47,10 @@ coverage/
 .agent/
 .agent\rules/
 project-documents/
+
+# NodeCG Bundle Build Artifacts
+bundles/*/dashboard/
+bundles/*/graphics/
+bundles/*/shared/
+bundles/*/extension/index.js
+bundles/*/extension/index.js.map
