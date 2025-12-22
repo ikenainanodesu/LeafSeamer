@@ -43,6 +43,17 @@ LeafSeamer is a modern broadcast production control system providing centralized
 - Auto-reconnect mechanism (Max 3 times, 2s interval)
 - Connection status feedback
 
+#### ATEM Control - Blackmagic ATEM Switcher Control
+
+- Control ATEM switchers via network
+- Real-time Program/Preview bus control
+- Cut/Auto transition control
+- Transition style and rate configuration
+- Upstream/Downstream Keyer status monitoring
+- Macro recording and playback control
+- Connection status persistent management
+- Web Dashboard Connection Management
+
 #### VB Matrix Control - VB-Audio Matrix Control
 
 - Control VB-Audio Matrix via VBAN protocol
@@ -111,15 +122,12 @@ LeafSeamer is a modern broadcast production control system providing centralized
 
 - **GSAP** v3.13.0 - High-performance Animation Library
 - **obs-websocket-js** v5.0.7 - OBS WebSocket Client
+- **atem-connection** - ATEM Control Library
 - ~~**node-osc** v11.1.1 - OSC Protocol Support~~
 - **googleapis** v166.0.0 - Google API Client
 - **archiver** v7.0.1 - File Archiver Tool
 - **@dnd-kit/core** v6.3.1 - Drag and Drop Support
 - **uuid** - UUID Generation
-
-## Special Thanks
-
-This project is built on top of [NodeCG](https://github.com/nodecg/nodecg), a broadcast graphics framework and dashboard. None of this would be possible without their amazing work.
 
 ## Project Structure
 
@@ -128,6 +136,7 @@ LeafSeamer/
 ├── bundles/                      # NodeCG bundles directory
 │   ├── seamer/                   # Scene Control Card System
 │   ├── mixer-control/            # Mixer Control
+│   ├── atem-control/             # ATEM Control
 │   ├── obs-control/              # OBS Control
 │   ├── vb-matrix-control/        # VB-Audio Matrix Control
 │   ├── graphics-package/         # Graphics Package (GSAP Animation)
@@ -160,6 +169,7 @@ LeafSeamer's Dashboard is organized into multiple workspaces by function:
 
 - **Seamer**: Scene control card system
 - **Mixer Control**: Mixer connection and control
+- **ATEM Control**: ATEM switcher connection and control
 - **OBS Control**: OBS connection and control
 - **VB Control**: VB-Audio Matrix network config and matrix control
 - **Graphic Control**: Graphics package control
@@ -169,8 +179,8 @@ LeafSeamer's Dashboard is organized into multiple workspaces by function:
 
 For detailed installation and usage instructions, please refer to:
 
-- [Installation Guide](./Manual/eng/INSTALLATION.md)
-- [User Manual](./Manual/eng/USER_MANUAL.md)
+- [Installation Guide](./INSTALLATION.md)
+- [User Manual](./USER_MANUAL.md)
 
 ### Basic Commands
 
@@ -209,9 +219,9 @@ After startup visit:
 
 ## Version Information
 
-**Current Version**: 1.0.0
-**Release Date**: 2025-12-17
-**Last Update**: 2025-12-17
+**Current Version**: 1.1.0
+**Release Date**: 2025-12-20
+**Last Update**: 2025-12-20
 
 ## License
 
