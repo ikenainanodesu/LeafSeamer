@@ -36,36 +36,56 @@ export class SceneManager {
 
   ensureState(obsId: string) {
     if (!this.obsStatesRep.value[obsId]) {
-      this.obsStatesRep.value[obsId] = this.getDefaultState();
+      this.obsStatesRep.value = {
+        ...this.obsStatesRep.value,
+        [obsId]: this.getDefaultState(),
+      };
+    }
+  }
+
+  // Helper to update state immutably
+  private updateState(obsId: string, transform: (state: OBSState) => OBSState) {
+    this.ensureState(obsId); // Ensure it exists first
+    const currentState = this.obsStatesRep.value[obsId];
+    if (currentState) {
+      this.obsStatesRep.value = {
+        ...this.obsStatesRep.value,
+        [obsId]: transform({ ...currentState }),
+      };
     }
   }
 
   setConnected(obsId: string, connected: boolean) {
-    this.ensureState(obsId);
-    this.obsStatesRep.value[obsId].connected = connected;
-    this.obsStatesRep.value[obsId].status = connected
-      ? "connected"
-      : "disconnected";
+    this.updateState(obsId, (state) => ({
+      ...state,
+      connected,
+      status: connected ? "connected" : "disconnected",
+    }));
   }
 
   setStatus(obsId: string, status: OBSConnectionStatus) {
-    this.ensureState(obsId);
-    this.obsStatesRep.value[obsId].status = status;
-    this.obsStatesRep.value[obsId].connected = status === "connected";
+    this.updateState(obsId, (state) => ({
+      ...state,
+      status,
+      connected: status === "connected",
+    }));
   }
 
   setCurrentScene(obsId: string, sceneName: string) {
-    this.ensureState(obsId);
-    this.obsStatesRep.value[obsId].currentScene = sceneName;
+    this.updateState(obsId, (state) => ({
+      ...state,
+      currentScene: sceneName,
+    }));
   }
 
   setCurrentTransition(obsId: string, transitionName: string) {
-    this.ensureState(obsId);
-    this.obsStatesRep.value[obsId].currentTransition = transitionName;
+    this.updateState(obsId, (state) => ({
+      ...state,
+      currentTransition: transitionName,
+    }));
   }
 
   async updateScenes(obsId: string, obs: OBSWebSocket) {
-    this.ensureState(obsId);
     try {
       const response = await obs.call("GetSceneList");
       const scenes: OBSScene[] = response.scenes.map(
@@ -75,44 +95,51 @@ export class SceneManager {
         })
       );
 
-      this.obsStatesRep.value[obsId].scenes = JSON.parse(
-        JSON.stringify(scenes)
-      );
-      this.obsStatesRep.value[obsId].currentScene =
-        response.currentProgramSceneName;
+      this.updateState(obsId, (state) => ({
+        ...state,
+        scenes: scenes,
+        currentScene: response.currentProgramSceneName,
+      }));
     } catch (error) {
       this.nodecg.log.error(`[${obsId}] Failed to update scenes`, error);
     }
   }
 
   async updateTransitions(obsId: string, obs: OBSWebSocket) {
-    this.ensureState(obsId);
     try {
       const response = await obs.call("GetSceneTransitionList");
-      this.obsStatesRep.value[obsId].transitions = response.transitions.map(
+      const transitions = response.transitions.map(
         (t: any) => t.transitionName
       );
-      this.obsStatesRep.value[obsId].currentTransition =
-        response.currentSceneTransitionName;
+
+      this.updateState(obsId, (state) => ({
+        ...state,
+        transitions: transitions,
+        currentTransition: response.currentSceneTransitionName,
+      }));
     } catch (error) {
       this.nodecg.log.error(`[${obsId}] Failed to update transitions`, error);
     }
   }
 
   updateStreamStats(obsId: string, stats: any) {
-    this.ensureState(obsId);
-    this.obsStatesRep.value[obsId].streamStats = {
-      fps: stats.fps || 0,
-      kbitsPerSec: stats.kbitsPerSec || 0,
-      averageFrameTime: stats.averageFrameTime || 0,
-      outputTimecode: stats.outputTimecode,
-    };
-    this.obsStatesRep.value[obsId].isStreaming = stats.outputActive;
+    this.updateState(obsId, (state) => ({
+      ...state,
+      streamStats: {
+        fps: stats.fps || 0,
+        kbitsPerSec: stats.kbitsPerSec || 0,
+        averageFrameTime: stats.averageFrameTime || 0,
+        outputTimecode: stats.outputTimecode,
+      },
+      isStreaming: stats.outputActive,
+    }));
   }
 
   deleteState(obsId: string) {
     if (this.obsStatesRep.value[obsId]) {
-      delete this.obsStatesRep.value[obsId];
+      const newVal = { ...this.obsStatesRep.value };
+      delete newVal[obsId];
+      this.obsStatesRep.value = newVal;
     }
   }
 }

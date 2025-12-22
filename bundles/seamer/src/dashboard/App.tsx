@@ -9,8 +9,14 @@ import {
   OBSConnectionSettings,
   OBSState,
 } from "../../../../shared/types/obs.types";
+import TriggerPage from "./trigger/TriggerPage";
+import { AtemSwitcherInfo } from "../../../../shared/types/atem.types";
+import { DeviceInfo } from "../../../vb-matrix-control/src/types";
 
 const App = () => {
+  const [activeTab, setActiveTab] = useState<"workspace" | "triggers">(
+    "workspace"
+  );
   const [cards, setCards] = useState<SeamerCard[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [currentCard, setCurrentCard] = useState<SeamerCard | null>(null);
@@ -22,6 +28,10 @@ const App = () => {
     []
   );
   const [obsStates, setObsStates] = useState<Record<string, OBSState>>({});
+
+  // New Data for Triggers
+  const [atemSwitchers, setAtemSwitchers] = useState<AtemSwitcherInfo[]>([]);
+  const [vbDevices, setVbDevices] = useState<DeviceInfo[]>([]);
 
   useEffect(() => {
     // Seamer Cards Replicant
@@ -48,6 +58,13 @@ const App = () => {
     );
     presetsRep.on("change", (newVal: Preset[]) => setPresets(newVal || []));
 
+    // VB Available Devices
+    const vbDevRep = nodecg.Replicant<DeviceInfo[]>(
+      "availableDevices",
+      "vb-matrix-control"
+    );
+    vbDevRep.on("change", (newVal: DeviceInfo[]) => setVbDevices(newVal || []));
+
     // OBS Connections
     const obsConRep = nodecg.Replicant<OBSConnectionSettings[]>(
       "obsConnections",
@@ -64,6 +81,15 @@ const App = () => {
     );
     obsStateRep.on("change", (newVal: Record<string, OBSState>) =>
       setObsStates(newVal || {})
+    );
+
+    // ATEM Switchers
+    const atemSwRep = nodecg.Replicant<AtemSwitcherInfo[]>(
+      "atem:switchers",
+      "atem-control"
+    );
+    atemSwRep.on("change", (newVal: AtemSwitcherInfo[]) =>
+      setAtemSwitchers(newVal || [])
     );
   }, []);
 
@@ -294,58 +320,109 @@ const App = () => {
           marginBottom: 20,
           display: "flex",
           justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
-        <h2>Seamer Workspace</h2>
-        <button
-          onClick={() => {
-            setCurrentCard({ id: uuidv4(), title: "New Card", actions: [] });
-            setIsEditing(true);
-          }}
-          style={{ padding: "10px 20px", fontSize: "1.1em", cursor: "pointer" }}
-        >
-          + Add Empty Card
-        </button>
-      </header>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <h2 style={{ margin: 0 }}>Seamer Workspace</h2>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => setActiveTab("workspace")}
+              style={{
+                padding: "5px 15px",
+                background: activeTab === "workspace" ? "#444" : "transparent",
+                color: activeTab === "workspace" ? "#fff" : "#888",
+                border: "1px solid #444",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              Workspace
+            </button>
+            <button
+              onClick={() => setActiveTab("triggers")}
+              style={{
+                padding: "5px 15px",
+                background: activeTab === "triggers" ? "#444" : "transparent",
+                color: activeTab === "triggers" ? "#fff" : "#888",
+                border: "1px solid #444",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              Seamer Trigger
+            </button>
+          </div>
+        </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-          gap: 20,
-        }}
-      >
-        {cards.map((card) => (
-          <Card
-            key={card.id}
-            card={card}
-            onRun={() => runCard(card)}
-            onEdit={() => {
-              setCurrentCard(card);
+        {activeTab === "workspace" && (
+          <button
+            onClick={() => {
+              setCurrentCard({ id: uuidv4(), title: "New Card", actions: [] });
               setIsEditing(true);
             }}
-            onDelete={() => deleteCard(card.id)}
-          />
-        ))}
-        {/* Placeholder for visual consistency if empty */}
-        {cards.length === 0 && (
-          <div
             style={{
-              border: "2px dashed #666",
-              borderRadius: 8,
-              height: 200,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#888",
+              padding: "10px 20px",
+              fontSize: "1.1em",
+              cursor: "pointer",
+              background: "#444",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
             }}
           >
-            Drag JSON here or click Add
-          </div>
+            + Add Empty Card
+          </button>
         )}
-      </div>
+      </header>
 
-      {isEditing && currentCard && (
+      {activeTab === "workspace" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+            gap: 20,
+          }}
+        >
+          {cards.map((card) => (
+            <Card
+              key={card.id}
+              card={card}
+              onRun={() => runCard(card)}
+              onEdit={() => {
+                setCurrentCard(card);
+                setIsEditing(true);
+              }}
+              onDelete={() => deleteCard(card.id)}
+            />
+          ))}
+          {cards.length === 0 && (
+            <div
+              style={{
+                border: "2px dashed #666",
+                borderRadius: 8,
+                height: 200,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#888",
+              }}
+            >
+              Drag JSON here or click Add
+            </div>
+          )}
+        </div>
+      ) : (
+        <TriggerPage
+          mixerState={mixerState}
+          obsConnections={obsConnections}
+          obsStates={obsStates}
+          vbDevices={vbDevices}
+          atemSwitchers={atemSwitchers}
+        />
+      )}
+
+      {isEditing && currentCard && activeTab === "workspace" && (
         <EditCardModal
           initialCard={currentCard}
           onSave={saveCard}

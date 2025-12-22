@@ -70,3 +70,102 @@ export interface SeamerCard {
   title: string;
   actions: SeamerAction[];
 }
+
+// --- Trigger Types ---
+
+export type TriggerModule = "mixer" | "atem" | "obs" | "vb";
+
+// Conditions
+export interface TriggerConditionBase {
+  module: TriggerModule;
+}
+
+export interface MixerTriggerCondition extends TriggerConditionBase {
+  module: "mixer";
+  channelId: number;
+  property: "faderLevel" | "isMuted";
+  operator: "eq" | "gt" | "lt";
+  value: number | boolean;
+}
+
+export interface AtemTriggerCondition extends TriggerConditionBase {
+  module: "atem";
+  switcherIp: string;
+  property: "programInput";
+  value: number; // Source ID
+}
+
+export interface OBSTriggerCondition extends TriggerConditionBase {
+  module: "obs";
+  connectionId: string;
+  property: "currentScene" | "isStreaming";
+  value: string | boolean;
+}
+
+export interface VBTriggerCondition extends TriggerConditionBase {
+  module: "vb";
+  connectionId: string;
+  inputDevice: string;
+  inputChannel: number;
+  outputDevice: string;
+  outputChannel: number;
+  status: "patched" | "unpatched";
+}
+
+export type TriggerCondition =
+  | MixerTriggerCondition
+  | AtemTriggerCondition
+  | OBSTriggerCondition
+  | VBTriggerCondition;
+
+// Actions (Results)
+export interface OutputActionBase {
+  module: TriggerModule;
+}
+
+export interface MixerTriggerAction extends OutputActionBase {
+  module: "mixer";
+  channelId: number;
+  property: "faderLevel" | "isMuted";
+  value: number | boolean;
+}
+
+export interface AtemTriggerAction extends OutputActionBase {
+  module: "atem";
+  switcherIp: string;
+  target: "program" | "preview" | "aux";
+  auxId?: number; // Required if target is aux
+  source: number;
+}
+
+export interface OBSTriggerAction extends OutputActionBase {
+  module: "obs";
+  connectionId: string;
+  actionType: "setScene" | "setStreaming";
+  value: string | boolean; // Scene Name or Streaming State
+}
+
+export interface VBTriggerAction extends OutputActionBase {
+  module: "vb";
+  connectionId: string;
+  inputDevice: string;
+  inputChannel: number;
+  outputDevice: string;
+  outputChannel: number;
+  actionType: "patch" | "unpatch" | "toggle";
+}
+
+export type TriggerResultAction =
+  | MixerTriggerAction
+  | AtemTriggerAction
+  | OBSTriggerAction
+  | VBTriggerAction;
+
+export interface SeamerTrigger {
+  id: string;
+  name?: string;
+  condition: TriggerCondition;
+  action: TriggerResultAction;
+  delay: number; // ms
+  enabled: boolean;
+}
