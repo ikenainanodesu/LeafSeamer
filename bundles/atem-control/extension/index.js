@@ -38,6 +38,7 @@ module.exports = function(nodecg) {
   function createAtemManager(ip) {
     if (managers.has(ip)) return managers.get(ip);
     const atem = new atemConnection.Atem();
+    log.info(`Creating new ATEM Manager for ${ip}`);
     const manager = {
       atem,
       ip,

@@ -7,6 +7,9 @@ import {
   MixerControlAction,
   VBPresetAction,
   OBSAction,
+  AtemControlAction,
+  AtemFunctionType,
+  AtemTargetType,
 } from "../../types/seamer.types";
 import { v4 as uuidv4 } from "uuid";
 import { MixerState } from "../../../../../shared/types/mixer.types";
@@ -14,6 +17,12 @@ import {
   OBSConnectionSettings,
   OBSState,
 } from "../../../../../shared/types/obs.types";
+import {
+  AtemSwitcherInfo,
+  AtemState,
+} from "../../../../../shared/types/atem.types";
+
+declare const nodecg: any;
 
 interface EditCardModalProps {
   initialCard: SeamerCard;
@@ -35,6 +44,40 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
   obsStates,
 }) => {
   const [localCard, setLocalCard] = useState<SeamerCard>(initialCard);
+  const [atemSwitchers, setAtemSwitchers] = useState<AtemSwitcherInfo[]>([]);
+  const [atemStates, setAtemStates] = useState<Record<string, AtemState>>({});
+
+  React.useEffect(() => {
+    // ATEM Switchers
+    const atemSwRep = nodecg.Replicant("atem:switchers", "atem-control");
+    atemSwRep.on("change", (newVal: AtemSwitcherInfo[]) => {
+      setAtemSwitchers(newVal || []);
+    });
+  }, []);
+
+  // Effect to load ATEM state when an IP is selected (or pre-existing)
+  React.useEffect(() => {
+    const ipsToWatch = new Set<string>();
+    localCard.actions.forEach((a) => {
+      if (a.type === "atem-action" && a.switcherIp) {
+        ipsToWatch.add(a.switcherIp);
+      }
+    });
+
+    ipsToWatch.forEach((ip) => {
+      if (!atemStates[ip]) {
+        nodecg.readReplicant(
+          `atem:state:${ip}`,
+          "atem-control",
+          (val: AtemState) => {
+            if (val) {
+              setAtemStates((prev) => ({ ...prev, [ip]: val }));
+            }
+          }
+        );
+      }
+    });
+  }, [localCard.actions]);
 
   const updateAction = (id: string, updates: Partial<SeamerAction>) => {
     setLocalCard((prev: SeamerCard) => ({
@@ -71,6 +114,13 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
               type,
               presetId: "",
             } as VBPresetAction;
+          } else if (type === "atem-action") {
+            return {
+              id,
+              type,
+              switcherIp: "",
+              functionType: "macro",
+            } as AtemControlAction;
           } else {
             // OBS Action default
             return {
@@ -375,6 +425,148 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
           </div>
         </div>
       );
+    } else if (action.type === "atem-action") {
+      const atemAction = action as AtemControlAction;
+      const switcherIp = atemAction.switcherIp;
+      const state = atemStates[switcherIp];
+      const macros = state?.macros || {};
+      const sources = state?.sources || {};
+
+      // Filter Sources for Dropdown
+      const sourceOptions = Object.entries(sources).filter(([id, name]) => {
+        // Simple filter if needed, similar to AtemPanel
+        // For dropdowns usually we show mos, maybe filter 'dir' if undesired
+        return !name.toLowerCase().includes("dir");
+      });
+
+      return (
+        <div
+          style={{
+            marginTop: 5,
+            display: "flex",
+            flexDirection: "column",
+            gap: 5,
+          }}
+        >
+          {/* Switcher Select */}
+          <select
+            value={atemAction.switcherIp}
+            onChange={(e) =>
+              updateAction(action.id, { switcherIp: e.target.value })
+            }
+          >
+            <option value="">Select ATEM Switcher</option>
+            {atemSwitchers.map((s) => (
+              <option key={s.ip} value={s.ip}>
+                {s.alias || s.ip} {s.connected ? "(Online)" : "(Offline)"}
+              </option>
+            ))}
+          </select>
+
+          {/* Function Type */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <label>Function:</label>
+            <select
+              value={atemAction.functionType}
+              onChange={(e) =>
+                updateAction(action.id, {
+                  functionType: e.target.value as AtemFunctionType,
+                })
+              }
+            >
+              <option value="macro">Macro</option>
+              <option value="source">Source Control</option>
+            </select>
+          </div>
+
+          {atemAction.functionType === "macro" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <label>Macro:</label>
+              <select
+                value={
+                  atemAction.macroIndex !== undefined
+                    ? atemAction.macroIndex
+                    : -1
+                }
+                onChange={(e) =>
+                  updateAction(action.id, {
+                    macroIndex: Number(e.target.value),
+                  })
+                }
+              >
+                <option value={-1}>Select Macro</option>
+                {Object.entries(macros).map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {atemAction.functionType === "source" && (
+            <>
+              {/* Target */}
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <label>Target:</label>
+                <select
+                  value={atemAction.target || "preview"}
+                  onChange={(e) =>
+                    updateAction(action.id, {
+                      target: e.target.value as AtemTargetType,
+                    })
+                  }
+                >
+                  <option value="program">PGM (Program)</option>
+                  <option value="preview">PVW (Preview)</option>
+                  <option value="output">Output (Aux 1)</option>
+                  <option value="webcam">Webcam Out (Aux 2)</option>
+                </select>
+              </div>
+
+              {/* Source Selection */}
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <label>Source:</label>
+                <select
+                  value={
+                    atemAction.sourceId !== undefined ? atemAction.sourceId : -1
+                  }
+                  onChange={(e) =>
+                    updateAction(action.id, {
+                      sourceId: Number(e.target.value),
+                    })
+                  }
+                >
+                  <option value={-1}>Select Source</option>
+                  {sourceOptions.map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Transition (Only for PGM) */}
+              {atemAction.target === "program" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <label>Transition:</label>
+                  <select
+                    value={atemAction.transition || "cut"}
+                    onChange={(e) =>
+                      updateAction(action.id, {
+                        transition: e.target.value as any,
+                      })
+                    }
+                  >
+                    <option value="cut">Cut</option>
+                    <option value="auto">Auto</option>
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      );
     }
     return null;
   };
@@ -475,6 +667,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 <option value="mixer-fader">Mixer Control</option>
                 <option value="vb-preset">VB Matrix Preset</option>
                 <option value="obs-action">OBS Control</option>
+                <option value="atem-action">ATEM Control</option>
               </select>
 
               {renderActionDetails(action)}

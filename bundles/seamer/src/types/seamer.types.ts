@@ -1,4 +1,8 @@
-export type SeamerActionType = "mixer-fader" | "vb-preset" | "obs-action";
+export type SeamerActionType =
+  | "mixer-fader"
+  | "vb-preset"
+  | "obs-action"
+  | "atem-action";
 
 export interface SeamerActionBase {
   id: string;
@@ -6,17 +10,7 @@ export interface SeamerActionBase {
 }
 
 export interface MixerControlAction extends SeamerActionBase {
-  type: "mixer-fader"; // Keeping raw type string "mixer-fader" for now to avoid breaking existing JSONs instantly, or should I migrate?
-  // Plan says rename to "Mixer Control" in UI and Types.
-  // Ideally type string should be "mixer-control" but that breaks existing cards.
-  // Let's keep "mixer-fader" string for backward compat but rename interface.
-  // OR better: use "mixer-control" and I'll handle migration in App.tsx if needed.
-  // Actually, let's keep the discriminated union specific string as "mixer-fader" to minimize breakage,
-  // but logically treat it as mixer-control.
-  // WAIT, the user request says "rename ... to mixer control".
-  // I will change the Interface name and add the fields.
-  // I will KEEP the 'type' string as "mixer-fader" for now to avoid data migration complexity,
-  // effectively "upgrading" the existing action type.
+  type: "mixer-fader";
   subFunction?: "fader" | "send"; // Default to 'fader' if undefined
 
   // Fader Specific
@@ -44,7 +38,27 @@ export interface OBSAction extends SeamerActionBase {
   transitionName?: string;
 }
 
-export type SeamerAction = MixerControlAction | VBPresetAction | OBSAction;
+export type AtemFunctionType = "macro" | "source";
+export type AtemTargetType = "program" | "preview" | "output" | "webcam";
+export type AtemTransitionType = "cut" | "auto";
+
+export interface AtemControlAction extends SeamerActionBase {
+  type: "atem-action";
+  switcherIp: string;
+  functionType: AtemFunctionType;
+  // Macro
+  macroIndex?: number;
+  // Source
+  target?: AtemTargetType;
+  sourceId?: number;
+  transition?: AtemTransitionType; // Only for Program target
+}
+
+export type SeamerAction =
+  | MixerControlAction
+  | VBPresetAction
+  | OBSAction
+  | AtemControlAction;
 
 export interface Preset {
   id: string;

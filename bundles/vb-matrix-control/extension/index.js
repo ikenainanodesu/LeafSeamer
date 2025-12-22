@@ -34,6 +34,7 @@ class VBANTransmitter extends events.EventEmitter {
     this.streamName = "Command1";
     this.packetCounter = 0;
     this.socket = dgram.createSocket("udp4");
+    this.socket.setMaxListeners(50);
     this.socket.on("listening", () => {
       const address = this.socket.address();
       console.log(

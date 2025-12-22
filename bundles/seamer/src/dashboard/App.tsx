@@ -1,6 +1,6 @@
 /// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState, useCallback } from "react";
-import { SeamerCard, Preset } from "../types/seamer.types";
+import { SeamerCard, Preset, AtemControlAction } from "../types/seamer.types";
 import { v4 as uuidv4 } from "uuid";
 import Card from "./components/Card";
 import EditCardModal from "./components/EditCardModal";
@@ -180,6 +180,68 @@ const App = () => {
                 id: action.connectionId,
                 scene: action.sceneName,
               });
+            }
+          }
+          break;
+        case "atem-action":
+          const atemAction = action as AtemControlAction;
+          if (!atemAction.switcherIp) return;
+
+          if (atemAction.functionType === "macro") {
+            if (atemAction.macroIndex !== undefined) {
+              nodecg.sendMessageToBundle("atem:runMacro", "atem-control", {
+                ip: atemAction.switcherIp,
+                macroIndex: atemAction.macroIndex,
+              });
+            }
+          } else if (atemAction.functionType === "source") {
+            const ip = atemAction.switcherIp;
+            const target = atemAction.target || "preview";
+            const source = atemAction.sourceId;
+
+            if (source === undefined) return;
+
+            if (target === "output") {
+              // Aux 0
+              nodecg.sendMessageToBundle("atem:setAuxSource", "atem-control", {
+                ip,
+                auxId: 0,
+                source,
+              });
+            } else if (target === "webcam") {
+              // Aux 1
+              nodecg.sendMessageToBundle("atem:setAuxSource", "atem-control", {
+                ip,
+                auxId: 1,
+                source,
+              });
+            } else if (target === "preview") {
+              nodecg.sendMessageToBundle("atem:setSource", "atem-control", {
+                ip,
+                type: "preview",
+                source,
+              });
+            } else if (target === "program") {
+              const transition = atemAction.transition || "cut";
+              if (transition === "cut") {
+                nodecg.sendMessageToBundle("atem:setSource", "atem-control", {
+                  ip,
+                  type: "program",
+                  source,
+                });
+              } else {
+                // Auto: Set PVW then Auto
+                nodecg.sendMessageToBundle("atem:setSource", "atem-control", {
+                  ip,
+                  type: "preview",
+                  source,
+                });
+                setTimeout(() => {
+                  nodecg.sendMessageToBundle("atem:auto", "atem-control", {
+                    ip,
+                  });
+                }, 100);
+              }
             }
           }
           break;
