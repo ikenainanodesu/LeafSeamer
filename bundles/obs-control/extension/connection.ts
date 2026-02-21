@@ -1,12 +1,14 @@
 import { OBSWebSocket } from "obs-websocket-js";
 import NodeCG from "nodecg/types";
 import { SceneManager } from "./scene-manager";
+import { SourceManager } from "./source-manager";
 import { createLogger } from "../../../shared/utils/logger";
 import { OBSConnectionSettings } from "../../../shared/types/obs.types";
 
 export class ConnectionManager {
   private nodecg: NodeCG.ServerAPI;
   private sceneManager: SceneManager;
+  private sourceManager: SourceManager;
   private obsInstances: Map<string, OBSWebSocket> = new Map();
   private logger = createLogger("OBSConnection");
   private config: any;
@@ -18,11 +20,13 @@ export class ConnectionManager {
   constructor(
     nodecg: NodeCG.ServerAPI,
     sceneManager: SceneManager,
-    obsConnectionsRep: any
+    sourceManager: SourceManager,
+    obsConnectionsRep: any,
   ) {
     this.nodecg = nodecg;
     this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
+    this.sourceManager = sourceManager;
     this.config = nodecg.bundleConfig;
     this.obsConnectionsRep = obsConnectionsRep;
 
@@ -42,7 +46,7 @@ export class ConnectionManager {
       "setOBSTransition",
       (data: { id: string; transition: string }, ack: any) => {
         this.logger.info(
-          `[setOBSTransition] Request for ID: ${data.id}, Transition: ${data.transition}`
+          `[setOBSTransition] Request for ID: ${data.id}, Transition: ${data.transition}`,
         );
         this.setTransition(data.id, data.transition)
           .then(() => {
@@ -52,7 +56,7 @@ export class ConnectionManager {
             this.logger.error(`[setOBSTransition] Error: ${err.message}`);
             if (ack && !ack.handled) ack(err);
           });
-      }
+      },
     );
 
     this.nodecg.listenFor(
@@ -65,7 +69,7 @@ export class ConnectionManager {
         } catch (err) {
           if (ack && !ack.handled) ack(err);
         }
-      }
+      },
     );
 
     this.nodecg.listenFor(
@@ -78,7 +82,7 @@ export class ConnectionManager {
         } catch (err) {
           if (ack && !ack.handled) ack(err);
         }
-      }
+      },
     );
 
     this.nodecg.listenFor(
@@ -90,7 +94,7 @@ export class ConnectionManager {
         } catch (err) {
           if (ack && !ack.handled) ack(err);
         }
-      }
+      },
     );
 
     this.nodecg.listenFor("connectOBS", (data: OBSConnectionSettings) => {
@@ -105,10 +109,205 @@ export class ConnectionManager {
       "setOBSScene",
       (data: { id: string; scene: string }) => {
         this.logger.info(
-          `[setOBSScene] Request for ID: ${data.id}, Scene: ${data.scene}`
+          `[setOBSScene] Request for ID: ${data.id}, Scene: ${data.scene}`,
         );
         this.setScene(data.id, data.scene);
-      }
+      },
+    );
+
+    // ===== 场景源管理相关消息 =====
+
+    // 获取指定场景的Source列表
+    this.nodecg.listenFor(
+      "getSceneItems",
+      async (data: { id: string; sceneName: string }, ack: any) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          const items = await this.sourceManager.getSceneItems(
+            obs,
+            data.sceneName,
+          );
+          if (ack && !ack.handled) ack(null, items);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 切换场景源的可见性
+    this.nodecg.listenFor(
+      "setSceneItemEnabled",
+      async (
+        data: {
+          id: string;
+          sceneName: string;
+          sceneItemId: number;
+          enabled: boolean;
+        },
+        ack: any,
+      ) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          await this.sourceManager.setSceneItemEnabled(
+            obs,
+            data.sceneName,
+            data.sceneItemId,
+            data.enabled,
+          );
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 调整场景源的层级顺序
+    this.nodecg.listenFor(
+      "setSceneItemIndex",
+      async (
+        data: {
+          id: string;
+          sceneName: string;
+          sceneItemId: number;
+          newIndex: number;
+        },
+        ack: any,
+      ) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          await this.sourceManager.setSceneItemIndex(
+            obs,
+            data.sceneName,
+            data.sceneItemId,
+            data.newIndex,
+          );
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 获取媒体输入的播放状态
+    this.nodecg.listenFor(
+      "getMediaStatus",
+      async (data: { id: string; inputName: string }, ack: any) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          const status = await this.sourceManager.getMediaStatus(
+            obs,
+            data.inputName,
+          );
+          if (ack && !ack.handled) ack(null, status);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 触发媒体输入操作（播放/暂停/停止/上一曲/下一曲/重置）
+    this.nodecg.listenFor(
+      "triggerMediaAction",
+      async (
+        data: { id: string; inputName: string; action: string },
+        ack: any,
+      ) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          await this.sourceManager.triggerMediaAction(
+            obs,
+            data.inputName,
+            data.action,
+          );
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 设置媒体输入的播放位置（进度条拖拽）
+    this.nodecg.listenFor(
+      "setMediaCursor",
+      async (
+        data: { id: string; inputName: string; cursor: number },
+        ack: any,
+      ) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          await this.sourceManager.setMediaCursor(
+            obs,
+            data.inputName,
+            data.cursor,
+          );
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 获取输入设置（用于VLC播放列表等）
+    this.nodecg.listenFor(
+      "getInputSettings",
+      async (data: { id: string; inputName: string }, ack: any) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          const settings = await this.sourceManager.getInputSettings(
+            obs,
+            data.inputName,
+          );
+          if (ack && !ack.handled) ack(null, settings);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 设置输入配置（用于VLC播放列表切换播放项等）
+    this.nodecg.listenFor(
+      "setInputSettings",
+      async (
+        data: { id: string; inputName: string; settings: any },
+        ack: any,
+      ) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          await this.sourceManager.setInputSettings(
+            obs,
+            data.inputName,
+            data.settings,
+          );
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
+    );
+
+    // 刷新Scene和Source列表（前端刷新按钮触发）
+    this.nodecg.listenFor(
+      "refreshOBSScenes",
+      async (data: { id: string }, ack: any) => {
+        try {
+          const obs = this.getObs(data.id);
+          if (!obs) throw new Error(`OBS实例 ${data.id} 未连接`);
+          // 重新获取Scene列表和Transition列表
+          await this.sceneManager.updateScenes(data.id, obs);
+          await this.sceneManager.updateTransitions(data.id, obs);
+          if (ack && !ack.handled) ack(null);
+        } catch (err) {
+          if (ack && !ack.handled) ack(err);
+        }
+      },
     );
   }
 
@@ -140,7 +339,7 @@ export class ConnectionManager {
       } catch (err: any) {
         this.logger.error(
           `[${obsId}] Failed to get initial stream status`,
-          err?.message || err
+          err?.message || err,
         );
       }
     });
@@ -165,7 +364,7 @@ export class ConnectionManager {
 
     obs.on("StreamStateChanged", (data) => {
       this.logger.info(
-        `[${obsId}] Stream State Changed: Active=${data.outputActive}`
+        `[${obsId}] Stream State Changed: Active=${data.outputActive}`,
       );
 
       this.sceneManager.updateStreamStats(obsId, {
@@ -177,8 +376,8 @@ export class ConnectionManager {
         this.syncStreamSettings(obsId, obs).catch((e) =>
           this.logger.error(
             `[${obsId}] Failed to sync settings on stream start`,
-            e
-          )
+            e,
+          ),
         );
       } else {
         this.stopStatsPolling(obsId);
@@ -277,7 +476,7 @@ export class ConnectionManager {
       useAuth: boolean;
       username?: string;
       password?: string;
-    }
+    },
   ) {
     const obs = this.getObs(id);
     if (!obs) return;
@@ -327,7 +526,7 @@ export class ConnectionManager {
 
       const streamSettingsRep = this.nodecg.Replicant<Record<string, any>>(
         "obsStreamSettings",
-        { defaultValue: {} }
+        { defaultValue: {} },
       );
       if (!streamSettingsRep.value) streamSettingsRep.value = {}; // Type safety
       streamSettingsRep.value[id] = newSettings;
@@ -336,7 +535,7 @@ export class ConnectionManager {
     } catch (error: any) {
       this.logger.error(
         `[${id}] Failed to sync stream settings`,
-        error.message
+        error.message,
       );
     }
   }

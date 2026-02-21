@@ -1,6 +1,7 @@
 import NodeCG from "nodecg/types";
 import { ConnectionManager } from "./connection";
 import { SceneManager } from "./scene-manager";
+import { SourceManager } from "./source-manager";
 import { createLogger } from "../../../shared/utils/logger";
 import { OBSConnectionSettings } from "../../../shared/types/obs.types";
 
@@ -24,6 +25,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
   });
 
   const sceneManager = new SceneManager(nodecg);
+  const sourceManager = new SourceManager(nodecg);
 
   // Replicant is defined earlier
   const obsConnectionsRep =
@@ -31,7 +33,8 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
   const connectionManager = new ConnectionManager(
     nodecg,
     sceneManager,
-    obsConnectionsRep
+    sourceManager,
+    obsConnectionsRep,
   );
   connectionManager.connectAll();
 

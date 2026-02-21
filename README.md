@@ -38,6 +38,9 @@ LeafSeamer is a modern broadcast production control system providing centralized
 
 - Connect and control multiple OBS instances via WebSocket
 - Scene switching, transition effect selection
+- **Advanced Scene Management**: Expand scenes to view and manage sources
+- **Source Control**: Drag-and-drop source reordering, visibility toggle
+- **Media Control**: Playback controls (Play, Pause, Stop, Seek), progress bar, and VLC playlist support for media sources
 - ~~Recording~~, Streaming control
 - Real-time status monitoring (Stream status, statistics)
 - Auto-reconnect mechanism (Max 3 times, 2s interval)
@@ -219,9 +222,9 @@ After startup visit:
 
 ## Version Information
 
-**Current Version**: 1.1.0
-**Release Date**: 2025-12-20
-**Last Update**: 2025-12-20
+**Current Version**: 1.1.3
+**Release Date**: 2026-02-21
+**Last Update**: 2026-02-21
 
 ## License
 
