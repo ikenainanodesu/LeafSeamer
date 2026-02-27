@@ -3,7 +3,8 @@
   "compilerOptions": {
     "outDir": "./extension",
     "rootDir": "../../",
-    "baseUrl": "../../"
+    "baseUrl": "../../",
+    "ignoreDeprecations": "5.0"
   },
   "include": ["extension/**/*", "../../shared/**/*"]
 }

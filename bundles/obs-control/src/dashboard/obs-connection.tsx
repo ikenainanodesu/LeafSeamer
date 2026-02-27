@@ -7,11 +7,12 @@ import {
   OBSConnectionStatus,
 } from "../../../../shared/types/obs.types";
 import { v4 as uuidv4 } from "uuid";
+import "./obs-connection.css";
 
 const ObsConnection = () => {
   const [connections, setConnections] = useState<OBSConnectionSettings[]>([]);
   const [statuses, setStatuses] = useState<Record<string, OBSConnectionStatus>>(
-    {}
+    {},
   );
 
   useEffect(() => {
@@ -19,13 +20,13 @@ const ObsConnection = () => {
       "obsConnections",
       {
         defaultValue: [],
-      }
+      },
     );
 
     // We changed the structure of obsStates to be a map keyed by ID
     const obsStatesRep = nodecg.Replicant<Record<string, OBSState>>(
       "obsStates",
-      { defaultValue: {} }
+      { defaultValue: {} },
     );
 
     obsStatesRep.on(
@@ -38,7 +39,7 @@ const ObsConnection = () => {
           });
           setStatuses(newStatuses);
         }
-      }
+      },
     );
 
     obsConnectionsRep.on(
@@ -47,14 +48,14 @@ const ObsConnection = () => {
         if (newVal) {
           setConnections(JSON.parse(JSON.stringify(newVal)));
         }
-      }
+      },
     );
   }, []);
 
   const updateSetting = (
     index: number,
     key: keyof OBSConnectionSettings,
-    value: string
+    value: string,
   ) => {
     const newConnections = [...connections];
     newConnections[index] = { ...newConnections[index], [key]: value };
@@ -94,27 +95,10 @@ const ObsConnection = () => {
   };
 
   return (
-    <div style={{ padding: "10px" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "15px",
-        }}
-      >
-        <h2 style={{ margin: 0 }}>OBS Connections</h2>
-        <button
-          onClick={addConnection}
-          style={{
-            padding: "5px 10px",
-            backgroundColor: "#4caf50",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
+    <div className="obs-conn-root">
+      <div className="obs-conn-header">
+        <h2>OBS Connections</h2>
+        <button onClick={addConnection} className="obs-conn-add-btn">
           + Add Connection
         </button>
       </div>
@@ -125,86 +109,48 @@ const ObsConnection = () => {
         const isConnecting = status === "connecting";
 
         return (
-          <div
-            key={conn.id}
-            style={{
-              marginBottom: "15px",
-              padding: "10px",
-              border: "1px solid #555",
-              borderRadius: "5px",
-              backgroundColor: "#333",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "10px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center" }}>
+          <div key={conn.id} className="obs-conn-card">
+            <div className="obs-conn-card-header">
+              <div className="obs-conn-card-title">
                 <div
-                  style={{
-                    width: "10px",
-                    height: "10px",
-                    borderRadius: "50%",
-                    backgroundColor: isConnected
-                      ? "#4caf50"
+                  className={`obs-conn-status-dot ${
+                    isConnected
+                      ? "obs-conn-status-dot--connected"
                       : status === "error"
-                        ? "#f44336"
-                        : "#757575",
-                    marginRight: "8px",
-                  }}
+                        ? "obs-conn-status-dot--error"
+                        : "obs-conn-status-dot--disconnected"
+                  }`}
                 />
                 <strong>{conn.name || `Connection ${index + 1}`}</strong>
               </div>
               {index > 0 && (
                 <button
                   onClick={() => removeConnection(index)}
-                  style={{
-                    backgroundColor: "transparent",
-                    color: "#f44336",
-                    border: "1px solid #f44336",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    fontSize: "0.8em",
-                  }}
+                  className="obs-conn-remove-btn"
                 >
                   Remove
                 </button>
               )}
             </div>
 
-            <div style={{ display: "flex", gap: "5px", marginBottom: "5px" }}>
+            <div className="obs-conn-input-row">
               <input
                 type="text"
                 placeholder="Name"
                 value={conn.name || ""}
                 onChange={(e) => updateSetting(index, "name", e.target.value)}
-                style={{
-                  padding: "5px",
-                  flex: 1,
-                  backgroundColor: "#222",
-                  border: "1px solid #444",
-                  color: "white",
-                }}
+                className="obs-conn-input obs-conn-input--flex1"
               />
             </div>
 
-            <div style={{ display: "flex", gap: "5px", marginBottom: "5px" }}>
+            <div className="obs-conn-input-row">
               <input
                 type="text"
                 placeholder="IP Address"
                 value={conn.host}
                 onChange={(e) => updateSetting(index, "host", e.target.value)}
                 disabled={isConnected || isConnecting}
-                style={{
-                  padding: "5px",
-                  flex: 2,
-                  backgroundColor: "#222",
-                  border: "1px solid #444",
-                  color: "white",
-                }}
+                className="obs-conn-input obs-conn-input--flex2"
               />
               <input
                 type="number"
@@ -212,13 +158,7 @@ const ObsConnection = () => {
                 value={conn.port}
                 onChange={(e) => updateSetting(index, "port", e.target.value)}
                 disabled={isConnected || isConnecting}
-                style={{
-                  padding: "5px",
-                  flex: 1,
-                  backgroundColor: "#222",
-                  border: "1px solid #444",
-                  color: "white",
-                }}
+                className="obs-conn-input obs-conn-input--flex1"
               />
             </div>
             <input
@@ -227,45 +167,26 @@ const ObsConnection = () => {
               value={conn.password || ""}
               onChange={(e) => updateSetting(index, "password", e.target.value)}
               disabled={isConnected || isConnecting}
-              style={{
-                padding: "5px",
-                width: "100%",
-                marginBottom: "10px",
-                backgroundColor: "#222",
-                border: "1px solid #444",
-                color: "white",
-              }}
+              className="obs-conn-input obs-conn-input--full"
             />
 
-            <div style={{ display: "flex" }}>
+            <div className="obs-conn-actions">
               {!isConnected ? (
                 <button
                   onClick={() => handleConnect(conn)}
                   disabled={isConnecting}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: isConnecting ? "#aaa" : "#2196f3",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: isConnecting ? "default" : "pointer",
-                    width: "100%",
-                  }}
+                  className={`obs-conn-connect-btn ${
+                    isConnecting
+                      ? "obs-conn-connect-btn--connecting"
+                      : "obs-conn-connect-btn--ready"
+                  }`}
                 >
                   {isConnecting ? "Connecting..." : "Connect"}
                 </button>
               ) : (
                 <button
                   onClick={() => handleDisconnect(conn.id)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#f44336",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    width: "100%",
-                  }}
+                  className="obs-conn-disconnect-btn"
                 >
                   Disconnect
                 </button>

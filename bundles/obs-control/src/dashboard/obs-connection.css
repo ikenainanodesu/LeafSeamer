@@ -1,0 +1,132 @@
+/* ===== ObsConnection root ===== */
+.obs-conn-root {
+  padding: 10px;
+}
+
+.obs-conn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.obs-conn-header h2 {
+  margin: 0;
+}
+
+.obs-conn-add-btn {
+  padding: 5px 10px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ===== Connection card ===== */
+.obs-conn-card {
+  margin-bottom: 15px;
+  padding: 10px;
+  border: 1px solid #555;
+  border-radius: 5px;
+  background-color: #333;
+}
+
+.obs-conn-card-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.obs-conn-card-title {
+  display: flex;
+  align-items: center;
+}
+
+.obs-conn-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.obs-conn-status-dot--connected {
+  background-color: #4caf50;
+}
+
+.obs-conn-status-dot--error {
+  background-color: #f44336;
+}
+
+.obs-conn-status-dot--disconnected {
+  background-color: #757575;
+}
+
+.obs-conn-remove-btn {
+  background-color: transparent;
+  color: #f44336;
+  border: 1px solid #f44336;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.8em;
+}
+
+/* ===== Input fields ===== */
+.obs-conn-input-row {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 5px;
+}
+
+.obs-conn-input {
+  padding: 5px;
+  background-color: #222;
+  border: 1px solid #444;
+  color: white;
+}
+
+.obs-conn-input--flex1 {
+  flex: 1;
+}
+
+.obs-conn-input--flex2 {
+  flex: 2;
+}
+
+.obs-conn-input--full {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+/* ===== Action buttons ===== */
+.obs-conn-actions {
+  display: flex;
+}
+
+.obs-conn-connect-btn {
+  padding: 8px 16px;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.obs-conn-connect-btn--ready {
+  background-color: #2196f3;
+  cursor: pointer;
+}
+
+.obs-conn-connect-btn--connecting {
+  background-color: #aaa;
+  cursor: default;
+}
+
+.obs-conn-disconnect-btn {
+  padding: 8px 16px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+}

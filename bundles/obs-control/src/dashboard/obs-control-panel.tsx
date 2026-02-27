@@ -9,6 +9,7 @@ import {
   OBSMediaState,
   OBSPlaylistItem,
 } from "../../../../shared/types/obs.types";
+import "./obs-control-panel.css";
 
 // ===== 工具函数 =====
 
@@ -67,100 +68,43 @@ const PlaylistDialog = ({
   onPlayItem: (index: number) => void;
 }) => {
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 9999,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          backgroundColor: "#2b2b2b",
-          border: "1px solid #555",
-          borderRadius: "8px",
-          padding: "15px",
-          maxWidth: "500px",
-          width: "90%",
-          maxHeight: "60vh",
-          overflow: "auto",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "10px",
-            borderBottom: "1px solid #444",
-            paddingBottom: "8px",
-          }}
-        >
-          <h4 style={{ margin: 0 }}>📋 Playlist</h4>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#aaa",
-              fontSize: "18px",
-              cursor: "pointer",
-            }}
-          >
+    <div className="playlist-overlay" onClick={onClose}>
+      <div className="playlist-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="playlist-header">
+          <h4 className="playlist-title">📋 Playlist</h4>
+          <button onClick={onClose} className="playlist-close-btn">
             ✕
           </button>
         </div>
         {playlist.length === 0 ? (
-          <p style={{ color: "#888" }}>Playlist is empty</p>
+          <p className="playlist-empty">Playlist is empty</p>
         ) : (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          <ul className="playlist-list">
             {playlist.map((item, idx) => (
               <li
                 key={idx}
-                style={{
-                  padding: "6px 8px",
-                  marginBottom: "2px",
-                  backgroundColor: item.selected ? "#3a5a3a" : "transparent",
-                  borderRadius: "3px",
-                  fontSize: "0.85em",
-                  color: item.hidden ? "#666" : "#ddd",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
+                className={`playlist-item ${
+                  item.selected
+                    ? "playlist-item--active"
+                    : item.hidden
+                      ? "playlist-item--hidden"
+                      : "playlist-item--normal"
+                }`}
               >
                 {/* 播放按钮 */}
                 <button
                   onClick={() => onPlayItem(idx)}
-                  style={{
-                    background: item.selected ? "#4caf50" : "#505050",
-                    border: "1px solid " + (item.selected ? "#66bb6a" : "#666"),
-                    borderRadius: "3px",
-                    color: "white",
-                    cursor: "pointer",
-                    padding: "2px 6px",
-                    fontSize: "12px",
-                    flexShrink: 0,
-                  }}
+                  className={`media-btn${item.selected ? " playlist-play-btn--active" : ""}`}
                   title={`Play: ${getFileName(item.value)}`}
                 >
                   ▶
                 </button>
-                <span style={{ color: "#888", flexShrink: 0 }}>{idx + 1}.</span>
-                <span style={{ wordBreak: "break-all", flex: 1 }}>
+                <span className="playlist-item-index">{idx + 1}.</span>
+                <span className="playlist-item-name">
                   {getFileName(item.value)}
                 </span>
                 {item.selected && (
-                  <span style={{ color: "#4caf50", flexShrink: 0 }}>🔊</span>
+                  <span className="playlist-item-playing-icon">🔊</span>
                 )}
               </li>
             ))}
@@ -333,76 +277,25 @@ const MediaControlPanel = ({
   // 判断播放状态用于按钮显示
   const isPlaying = mediaState === "OBS_MEDIA_STATE_PLAYING";
 
-  // 按钮通用样式
-  const btnStyle: React.CSSProperties = {
-    padding: "4px 8px",
-    backgroundColor: "#505050",
-    color: "white",
-    border: "1px solid #666",
-    borderRadius: "3px",
-    cursor: "pointer",
-    fontSize: "14px",
-    minWidth: "30px",
-  };
-
   return (
-    <div
-      style={{
-        marginTop: "6px",
-        padding: "8px",
-        backgroundColor: "#1e1e1e",
-        borderRadius: "4px",
-        border: "1px solid #3a3a3a",
-      }}
-    >
+    <div className="media-control-panel">
       {/* 媒体文件名（过长时滚动显示） */}
       {mediaFileName && (
-        <div
-          style={{
-            fontSize: "0.8em",
-            color: "#aaa",
-            marginBottom: "6px",
-            overflow: "hidden",
-            whiteSpace: "nowrap",
-            position: "relative",
-          }}
-          title={mediaFileName}
-        >
+        <div className="media-filename-wrapper" title={mediaFileName}>
           <div
-            style={{
-              display: "inline-block",
-              animation:
-                mediaFileName.length > 30
-                  ? "marquee 10s linear infinite"
-                  : "none",
-              paddingLeft: mediaFileName.length > 30 ? "100%" : "0",
-            }}
+            className={`media-filename-scroll${mediaFileName.length > 30 ? " media-filename-scroll--marquee" : ""}`}
           >
             🎵 {mediaFileName}
           </div>
-          <style>{`
-            @keyframes marquee {
-              0% { transform: translateX(0); }
-              100% { transform: translateX(-100%); }
-            }
-          `}</style>
         </div>
       )}
 
       {/* 控制按钮 */}
-      <div
-        style={{
-          display: "flex",
-          gap: "4px",
-          marginBottom: "6px",
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
+      <div className="media-buttons-row">
         {/* 上一曲（仅VLC显示） */}
         {isVlcSource(inputKind) && (
           <button
-            style={btnStyle}
+            className="media-btn"
             onClick={() =>
               triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PREVIOUS")
             }
@@ -414,7 +307,7 @@ const MediaControlPanel = ({
 
         {/* 播放/暂停 */}
         <button
-          style={btnStyle}
+          className="media-btn"
           onClick={() =>
             triggerAction(
               isPlaying
@@ -429,7 +322,7 @@ const MediaControlPanel = ({
 
         {/* 停止 */}
         <button
-          style={btnStyle}
+          className="media-btn"
           onClick={() => triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP")}
           title="Stop"
         >
@@ -438,7 +331,7 @@ const MediaControlPanel = ({
 
         {/* 重置 */}
         <button
-          style={btnStyle}
+          className="media-btn"
           onClick={() =>
             triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
           }
@@ -450,7 +343,7 @@ const MediaControlPanel = ({
         {/* 下一曲（仅VLC显示） */}
         {isVlcSource(inputKind) && (
           <button
-            style={btnStyle}
+            className="media-btn"
             onClick={() =>
               triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_NEXT")
             }
@@ -463,12 +356,7 @@ const MediaControlPanel = ({
         {/* VLC播放列表按钮 */}
         {isVlcSource(inputKind) && (
           <button
-            style={{
-              ...btnStyle,
-              marginLeft: "auto",
-              fontSize: "0.75em",
-              padding: "3px 6px",
-            }}
+            className="media-btn media-playlist-btn"
             onClick={handleShowPlaylist}
             title="View Playlist"
           >
@@ -478,9 +366,11 @@ const MediaControlPanel = ({
       </div>
 
       {/* 进度条 */}
-      <div style={{ marginBottom: "4px" }}>
+      <div className="media-progress-wrapper">
         <input
           type="range"
+          title="Media progress"
+          className="media-progress-input"
           min={0}
           max={mediaDuration || 100}
           value={isDragging ? dragValue : mediaCursor || 0}
@@ -494,29 +384,17 @@ const MediaControlPanel = ({
           onTouchEnd={(e) =>
             handleSeek(Number((e.target as HTMLInputElement).value))
           }
-          style={{
-            width: "100%",
-            height: "6px",
-            cursor: "pointer",
-            accentColor: "#4caf50",
-          }}
         />
       </div>
 
       {/* 时间显示 */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "0.75em",
-          color: "#999",
-        }}
-      >
+      <div className="media-time-row">
         {/* 当前播放时间（可点击编辑） */}
         <span>
           {editingTime ? (
             <input
               type="text"
+              className="media-time-input"
               value={timeInput}
               onChange={(e) => setTimeInput(e.target.value)}
               onKeyDown={(e) => {
@@ -526,15 +404,7 @@ const MediaControlPanel = ({
               onBlur={handleTimeSubmit}
               autoFocus
               placeholder="00:00:00"
-              style={{
-                width: "70px",
-                padding: "1px 3px",
-                backgroundColor: "#333",
-                color: "#fff",
-                border: "1px solid #666",
-                borderRadius: "2px",
-                fontSize: "inherit",
-              }}
+              title="Timestamp (HH:MM:SS)"
             />
           ) : (
             <span
@@ -542,7 +412,7 @@ const MediaControlPanel = ({
                 setEditingTime(true);
                 setTimeInput(formatTime(mediaCursor));
               }}
-              style={{ cursor: "pointer", borderBottom: "1px dashed #666" }}
+              className="media-time-clickable"
               title="Click to input timestamp (HH:MM:SS)"
             >
               {formatTime(mediaCursor)}
@@ -640,76 +510,27 @@ const SourceItem = ({
       onDragStart={() => onDragStart(index)}
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={() => onDrop(index)}
+      className="source-item"
       style={{
-        padding: "6px 8px",
-        backgroundColor: "#383838",
-        marginBottom: "2px",
-        borderRadius: "3px",
-        cursor: "grab",
         borderLeft: `3px solid ${item.sceneItemEnabled ? "#4caf50" : "#666"}`,
       }}
     >
       {/* Source基本信息行 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="source-item-row">
         {/* 拖拽手柄 + 红点 + 源名称 */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          <span style={{ color: "#666", cursor: "grab", fontSize: "12px" }}>
-            ☰
-          </span>
+        <div className="source-item-left">
+          <span className="source-drag-handle">☰</span>
           {/* 播放中红点指示 */}
-          {isPlaying && (
-            <span
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                backgroundColor: "#f44336",
-                boxShadow: "0 0 4px rgba(244,67,54,0.6)",
-                flexShrink: 0,
-                animation: "pulse 1.5s ease-in-out infinite",
-              }}
-              title="Playing"
-            />
-          )}
+          {isPlaying && <span className="source-playing-dot" title="Playing" />}
           <span
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontSize: "0.85em",
-            }}
+            className="source-name"
             title={`${item.sourceName} (${item.inputKind || item.sourceType})`}
           >
             {item.sourceName}
           </span>
           {/* 类型标签 */}
           {item.inputKind && (
-            <span
-              style={{
-                fontSize: "0.65em",
-                color: "#888",
-                backgroundColor: "#2a2a2a",
-                padding: "1px 4px",
-                borderRadius: "2px",
-                flexShrink: 0,
-              }}
-            >
-              {item.inputKind}
-            </span>
+            <span className="source-kind-badge">{item.inputKind}</span>
           )}
         </div>
 
@@ -719,20 +540,11 @@ const SourceItem = ({
             e.stopPropagation();
             onToggleEnabled(item.sceneItemId, !item.sceneItemEnabled);
           }}
-          style={{
-            backgroundColor: item.sceneItemEnabled ? "#2e7d32" : "#616161",
-            border: `2px solid ${item.sceneItemEnabled ? "#4caf50" : "#999"}`,
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: "14px",
-            padding: "3px 8px",
-            color: "white",
-            flexShrink: 0,
-            transition: "all 0.15s ease",
-            boxShadow: item.sceneItemEnabled
-              ? "0 0 6px rgba(76,175,80,0.4)"
-              : "0 1px 2px rgba(0,0,0,0.3)",
-          }}
+          className={`source-visibility-btn ${
+            item.sceneItemEnabled
+              ? "source-visibility-btn--on"
+              : "source-visibility-btn--off"
+          }`}
           title={item.sceneItemEnabled ? "Click to hide" : "Click to show"}
         >
           {item.sceneItemEnabled ? "👁 ON" : "👁 OFF"}
@@ -914,7 +726,7 @@ const SingleObsControl = ({
     const items = sceneItems[sceneName] || [];
     if (dragIndex < 0 || dragIndex >= items.length) return;
 
-    // 本地重排列表
+    // 本地重排列表（UI顺序，已经是反转后的顺序）
     const newItems = [...items];
     const [draggedItem] = newItems.splice(dragIndex, 1);
     newItems.splice(dropIndex, 0, draggedItem);
@@ -922,14 +734,17 @@ const SingleObsControl = ({
     // 更新本地状态
     setSceneItems((prev) => ({ ...prev, [sceneName]: newItems }));
 
-    // 发送到后端（使用目标位置的sceneItemIndex）
-    const targetItem = items[dropIndex];
+    // UI显示是反转的（index 0 = 最高层），OBS API期望底层优先的index
+    // 换算：obsIndex = (len - 1) - uiIndex
+    const len = items.length;
+    const obsDropIndex = len - 1 - dropIndex;
+
     nodecg
       .sendMessageToBundle("setSceneItemIndex", "obs-control", {
         id,
         sceneName,
         sceneItemId: draggedItem.sceneItemId,
-        newIndex: dropIndex,
+        newIndex: obsDropIndex,
       })
       .then(() => {
         // 重排后刷新完整列表
@@ -977,15 +792,7 @@ const SingleObsControl = ({
 
   if (!connected) {
     return (
-      <div
-        style={{
-          padding: "10px",
-          margin: "10px 0",
-          border: "1px dashed #555",
-          borderRadius: "5px",
-          color: "#aaa",
-        }}
-      >
+      <div className="obs-disconnected">
         <strong>{name}</strong>: Disconnected
       </div>
     );
@@ -993,47 +800,26 @@ const SingleObsControl = ({
 
   return (
     <div
-      style={{
-        marginBottom: "20px",
-        border: isStreaming ? "2px solid #f44336" : "1px solid #444",
-        borderRadius: "5px",
-        padding: "10px",
-        backgroundColor: "#2b2b2b",
-        boxShadow: isStreaming ? "0 0 10px rgba(244,67,54,0.3)" : "none",
-        transition: "border 0.3s ease, box-shadow 0.3s ease",
-      }}
+      className={`obs-control-card ${
+        isStreaming ? "obs-control-card--streaming" : "obs-control-card--idle"
+      }`}
     >
-      <h3
-        style={{
-          marginTop: 0,
-          borderBottom: "1px solid #444",
-          paddingBottom: "5px",
-        }}
-      >
-        {name}
-      </h3>
+      <h3 className="obs-card-title">{name}</h3>
 
-      <div style={{ marginBottom: "15px" }}>
+      <div className="obs-current-scene">
         <p>
           Current Scene: <strong>{currentScene}</strong>
         </p>
       </div>
 
       {/* Transitions */}
-      <div style={{ marginBottom: "15px" }}>
-        <label style={{ display: "block", marginBottom: "5px" }}>
-          Transition:
-        </label>
+      <div className="obs-transition-group">
+        <label className="obs-label-block">Transition:</label>
         <select
+          title="Select transition"
           value={currentTransition || ""}
           onChange={handleTransitionChange}
-          style={{
-            width: "100%",
-            padding: "5px",
-            backgroundColor: "#424242",
-            color: "white",
-            border: "1px solid #555",
-          }}
+          className="obs-select-full"
         >
           {(transitions || []).map((t: string) => (
             <option key={t} value={t}>
@@ -1044,58 +830,41 @@ const SingleObsControl = ({
       </div>
 
       {/* Stream Control */}
-      <div
-        style={{
-          marginBottom: "15px",
-          padding: "10px",
-          backgroundColor: "#333",
-          borderRadius: "5px",
-        }}
-      >
-        <h4 style={{ marginTop: 0 }}>Destination</h4>
-        <div style={{ marginBottom: "5px" }}>
-          <label style={{ display: "block" }}>Server</label>
+      <div className="obs-stream-settings">
+        <h4 className="obs-stream-settings-title">Destination</h4>
+        <div className="obs-field-group">
+          <label className="obs-field-label">Server</label>
           <input
             type="text"
+            title="Stream server URL"
+            placeholder="rtmp://..."
             value={localSettings.server}
             onChange={(e) => handleLocalSettingChange("server", e.target.value)}
             disabled={isStreaming}
-            style={{
-              width: "100%",
-              padding: "5px",
-              backgroundColor: "#222",
-              color: "#fff",
-              border: "1px solid #444",
-              opacity: isStreaming ? 0.5 : 1,
-            }}
+            className="obs-text-input"
           />
         </div>
-        <div style={{ marginBottom: "5px", position: "relative" }}>
-          <label style={{ display: "block" }}>Stream Key</label>
-          <div style={{ display: "flex" }}>
+        <div className="obs-field-group obs-field-row--gap">
+          <label className="obs-field-label">Stream Key</label>
+          <div className="obs-field-row">
             <input
               type={showKey ? "text" : "password"}
+              title="Stream key"
+              placeholder="Stream key"
               value={localSettings.key}
               onChange={(e) => handleLocalSettingChange("key", e.target.value)}
               disabled={isStreaming}
-              style={{
-                flex: 1,
-                padding: "5px",
-                backgroundColor: "#222",
-                color: "#fff",
-                border: "1px solid #444",
-                opacity: isStreaming ? 0.5 : 1,
-              }}
+              className="obs-text-input--flex"
             />
             <button
               onClick={() => setShowKey(!showKey)}
-              style={{ marginLeft: "5px" }}
+              className="obs-show-hide-btn"
             >
               {showKey ? "Hide" : "Show"}
             </button>
           </div>
         </div>
-        <div style={{ marginBottom: "5px" }}>
+        <div className="obs-field-group">
           <label>
             <input
               type="checkbox"
@@ -1110,47 +879,37 @@ const SingleObsControl = ({
         </div>
         {localSettings.useAuth && (
           <>
-            <div style={{ marginBottom: "5px" }}>
-              <label style={{ display: "block" }}>Username</label>
+            <div className="obs-field-group">
+              <label className="obs-field-label">Username</label>
               <input
                 type="text"
+                title="Username"
+                placeholder="Username"
                 value={localSettings.username}
                 onChange={(e) =>
                   handleLocalSettingChange("username", e.target.value)
                 }
                 disabled={isStreaming}
-                style={{
-                  width: "100%",
-                  padding: "5px",
-                  backgroundColor: "#222",
-                  color: "#fff",
-                  border: "1px solid #444",
-                  opacity: isStreaming ? 0.5 : 1,
-                }}
+                className="obs-text-input"
               />
             </div>
-            <div style={{ marginBottom: "5px" }}>
-              <label style={{ display: "block" }}>Password</label>
-              <div style={{ display: "flex" }}>
+            <div className="obs-field-group">
+              <label className="obs-field-label">Password</label>
+              <div className="obs-field-row">
                 <input
                   type={showPass ? "text" : "password"}
+                  title="Password"
+                  placeholder="Password"
                   value={localSettings.password}
                   onChange={(e) =>
                     handleLocalSettingChange("password", e.target.value)
                   }
                   disabled={isStreaming}
-                  style={{
-                    flex: 1,
-                    padding: "5px",
-                    backgroundColor: "#222",
-                    color: "#fff",
-                    border: "1px solid #444",
-                    opacity: isStreaming ? 0.5 : 1,
-                  }}
+                  className="obs-text-input--flex"
                 />
                 <button
                   onClick={() => setShowPass(!showPass)}
-                  style={{ marginLeft: "5px" }}
+                  className="obs-show-hide-btn"
                 >
                   {showPass ? "Hide" : "Show"}
                 </button>
@@ -1158,29 +917,17 @@ const SingleObsControl = ({
             </div>
           </>
         )}
-        <div
-          style={{
-            marginTop: "15px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
+        <div className="obs-stream-actions">
           <button
             onClick={toggleStreaming}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: isStreaming ? "#d32f2f" : "#388e3c",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
+            className={`obs-stream-btn ${
+              isStreaming ? "obs-stream-btn--stop" : "obs-stream-btn--start"
+            }`}
           >
             {isStreaming ? "Stop Streaming" : "Start Streaming"}
           </button>
           {isStreaming && streamStats && (
-            <div style={{ textAlign: "right", fontSize: "0.9em" }}>
+            <div className="obs-stream-stats">
               <div>Time: {streamStats.outputTimecode || "00:00:00"}</div>
               {streamStats.kbitsPerSec > 0 && (
                 <div>Bitrate: {streamStats.kbitsPerSec} kbps</div>
@@ -1191,39 +938,17 @@ const SingleObsControl = ({
       </div>
 
       {/* Scenes - 可点击展开Source列表 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          marginBottom: "8px",
-        }}
-      >
-        <h4 style={{ margin: 0 }}>Scenes</h4>
+      <div className="obs-scenes-header">
+        <h4 className="obs-scenes-title">Scenes</h4>
         <button
           onClick={handleRefreshScenes}
-          style={{
-            background: "#505050",
-            border: "1px solid #666",
-            borderRadius: "3px",
-            color: "white",
-            cursor: "pointer",
-            padding: "2px 8px",
-            fontSize: "12px",
-          }}
+          className="obs-refresh-btn"
           title="Refresh Scene and Source List"
         >
           🔄 Refresh
         </button>
       </div>
-      {/* 红点脉冲动画CSS */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
-      <ul style={{ listStyle: "none", padding: 0 }}>
+      <ul className="obs-scenes-list">
         {(scenes || []).map((scene: OBSScene) => {
           const isExpanded = expandedScene === scene.name;
           const isActive = currentScene === scene.name; // 当前PGM活动Scene
@@ -1239,42 +964,26 @@ const SingleObsControl = ({
           }
 
           return (
-            <li key={scene.name} style={{ marginBottom: "4px" }}>
+            <li key={scene.name} className="obs-scene-item">
               {/* Scene按钮 */}
               <div
                 onClick={() => handleSceneClick(scene.name)}
-                style={{
-                  padding: "8px",
-                  backgroundColor: sceneBgColor,
-                  borderRadius: isExpanded ? "4px 4px 0 0" : "4px",
-                  cursor: "pointer",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  transition: "background-color 0.2s ease",
-                }}
+                className={`obs-scene-btn ${
+                  isExpanded ? "obs-scene-btn--expanded" : ""
+                }`}
+                style={{ backgroundColor: sceneBgColor }}
               >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
-                >
+                <div className="obs-scene-btn-left">
                   <span
-                    style={{ color: isActive || isSelected ? "#fff" : "#ddd" }}
+                    className={
+                      isActive || isSelected
+                        ? "obs-scene-name--active"
+                        : "obs-scene-name--normal"
+                    }
                   >
                     {scene.name}
                   </span>
-                  {isActive && (
-                    <span
-                      style={{
-                        fontSize: "0.65em",
-                        backgroundColor: "rgba(0,0,0,0.3)",
-                        padding: "1px 5px",
-                        borderRadius: "3px",
-                        color: "#fff",
-                      }}
-                    >
-                      PGM
-                    </span>
-                  )}
+                  {isActive && <span className="obs-pgm-badge">PGM</span>}
                   {/* Switch按钮 - 仅在预览选中（非活动）时显示 */}
                   {isSelected && !isActive && (
                     <button
@@ -1282,16 +991,7 @@ const SingleObsControl = ({
                         e.stopPropagation();
                         handleSwitchScene(scene.name);
                       }}
-                      style={{
-                        backgroundColor: "#d32f2f",
-                        border: "1px solid #ef5350",
-                        borderRadius: "3px",
-                        color: "white",
-                        cursor: "pointer",
-                        padding: "2px 10px",
-                        fontSize: "0.75em",
-                        fontWeight: "bold",
-                      }}
+                      className="obs-switch-btn"
                       title="切换此Scene到PGM"
                     >
                       SWITCH
@@ -1299,12 +999,11 @@ const SingleObsControl = ({
                   )}
                 </div>
                 <span
-                  style={{
-                    fontSize: "0.7em",
-                    color: isActive || isSelected ? "#fff" : "#aaa",
-                    transition: "transform 0.2s",
-                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                  }}
+                  className={`obs-scene-arrow ${
+                    isActive || isSelected
+                      ? "obs-scene-arrow--active"
+                      : "obs-scene-arrow--normal"
+                  } ${isExpanded ? "obs-scene-arrow--expanded" : ""}`}
                 >
                   ▼
                 </span>
@@ -1312,26 +1011,9 @@ const SingleObsControl = ({
 
               {/* 展开的Source列表 */}
               {isExpanded && (
-                <div
-                  style={{
-                    backgroundColor: "#2a2a2a",
-                    border: "1px solid #444",
-                    borderTop: "none",
-                    borderRadius: "0 0 4px 4px",
-                    padding: "6px",
-                  }}
-                >
+                <div className="obs-source-list-container">
                   {items.length === 0 ? (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        color: "#666",
-                        padding: "8px",
-                        fontSize: "0.85em",
-                      }}
-                    >
-                      Loading...
-                    </div>
+                    <div className="obs-source-list-loading">Loading...</div>
                   ) : (
                     items.map((item, idx) => (
                       <SourceItem
@@ -1405,7 +1087,7 @@ const ObsControlPanel = () => {
   };
 
   return (
-    <div style={{ padding: "10px" }}>
+    <div className="obs-panel-root">
       <h2>OBS Controls</h2>
       {connections.length === 0 && <p>No OBS connections configured.</p>}
 
