@@ -54,3 +54,29 @@ bundles/*/graphics/
 bundles/*/shared/
 bundles/*/extension/index.js
 bundles/*/extension/index.js.map
+
+# --- Added Standard and Project Ignored Files ---
+
+# Environment Variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# OS Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# TypeScript & Caches
+*.tsbuildinfo
+.eslintcache
+.npm/
+
+# Vite / Build specifics
+dist-ssr/
+
+# Temporary Agent Files
+git_status.txt
+untracked.txt
