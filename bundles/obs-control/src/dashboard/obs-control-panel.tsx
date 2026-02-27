@@ -105,7 +105,7 @@ const PlaylistDialog = ({
             paddingBottom: "8px",
           }}
         >
-          <h4 style={{ margin: 0 }}>📋 播放列表</h4>
+          <h4 style={{ margin: 0 }}>📋 Playlist</h4>
           <button
             onClick={onClose}
             style={{
@@ -120,7 +120,7 @@ const PlaylistDialog = ({
           </button>
         </div>
         {playlist.length === 0 ? (
-          <p style={{ color: "#888" }}>播放列表为空</p>
+          <p style={{ color: "#888" }}>Playlist is empty</p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {playlist.map((item, idx) => (
@@ -151,7 +151,7 @@ const PlaylistDialog = ({
                     fontSize: "12px",
                     flexShrink: 0,
                   }}
-                  title={`播放: ${getFileName(item.value)}`}
+                  title={`Play: ${getFileName(item.value)}`}
                 >
                   ▶
                 </button>
@@ -275,7 +275,7 @@ const MediaControlPanel = ({
           fetchFileName();
         }, 300);
       })
-      .catch((err: any) => console.error("媒体操作失败:", err));
+      .catch((err: any) => console.error("Media action failed:", err));
   };
 
   // 进度条拖拽完成
@@ -286,7 +286,7 @@ const MediaControlPanel = ({
         inputName: sourceName,
         cursor: value,
       })
-      .catch((err: any) => console.error("跳转进度失败:", err));
+      .catch((err: any) => console.error("Seek failed:", err));
     setMediaCursor(value);
     setIsDragging(false);
   };
@@ -321,7 +321,7 @@ const MediaControlPanel = ({
         }
         setShowPlaylist(true);
       })
-      .catch((err: any) => console.error("获取播放列表失败:", err));
+      .catch((err: any) => console.error("Failed to get playlist:", err));
   };
 
   // 当前进度百分比
@@ -406,7 +406,7 @@ const MediaControlPanel = ({
             onClick={() =>
               triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PREVIOUS")
             }
-            title="上一曲"
+            title="Previous"
           >
             ⏮
           </button>
@@ -422,7 +422,7 @@ const MediaControlPanel = ({
                 : "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PLAY",
             )
           }
-          title={isPlaying ? "暂停" : "播放"}
+          title={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? "⏸" : "▶"}
         </button>
@@ -431,7 +431,7 @@ const MediaControlPanel = ({
         <button
           style={btnStyle}
           onClick={() => triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP")}
-          title="停止"
+          title="Stop"
         >
           ⏹
         </button>
@@ -442,7 +442,7 @@ const MediaControlPanel = ({
           onClick={() =>
             triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
           }
-          title="重置"
+          title="Restart"
         >
           🔄
         </button>
@@ -454,7 +454,7 @@ const MediaControlPanel = ({
             onClick={() =>
               triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_NEXT")
             }
-            title="下一曲"
+            title="Next"
           >
             ⏭
           </button>
@@ -470,9 +470,9 @@ const MediaControlPanel = ({
               padding: "3px 6px",
             }}
             onClick={handleShowPlaylist}
-            title="查看播放列表"
+            title="View Playlist"
           >
-            📋 列表
+            📋 Playlist
           </button>
         )}
       </div>
@@ -543,7 +543,7 @@ const MediaControlPanel = ({
                 setTimeInput(formatTime(mediaCursor));
               }}
               style={{ cursor: "pointer", borderBottom: "1px dashed #666" }}
-              title="点击输入时间戳 (HH:MM:SS)"
+              title="Click to input timestamp (HH:MM:SS)"
             >
               {formatTime(mediaCursor)}
             </span>
@@ -596,9 +596,13 @@ const MediaControlPanel = ({
                     // 刷新文件名
                     fetchFileName();
                   })
-                  .catch((err: any) => console.error("设置播放项失败:", err));
+                  .catch((err: any) =>
+                    console.error("Failed to set playlist item:", err),
+                  );
               })
-              .catch((err: any) => console.error("获取输入设置失败:", err));
+              .catch((err: any) =>
+                console.error("Failed to get input settings:", err),
+              );
           }}
         />
       )}
@@ -678,7 +682,7 @@ const SourceItem = ({
                 flexShrink: 0,
                 animation: "pulse 1.5s ease-in-out infinite",
               }}
-              title="正在播放"
+              title="Playing"
             />
           )}
           <span
@@ -729,7 +733,7 @@ const SourceItem = ({
               ? "0 0 6px rgba(76,175,80,0.4)"
               : "0 1px 2px rgba(0,0,0,0.3)",
           }}
-          title={item.sceneItemEnabled ? "点击隐藏" : "点击显示"}
+          title={item.sceneItemEnabled ? "Click to hide" : "Click to show"}
         >
           {item.sceneItemEnabled ? "👁 ON" : "👁 OFF"}
         </button>
@@ -860,7 +864,7 @@ const SingleObsControl = ({
         }));
       })
       .catch((err: any) => {
-        console.error("获取场景源列表失败:", err);
+        console.error("Failed to get scene item list:", err);
       });
   };
 
@@ -891,7 +895,7 @@ const SingleObsControl = ({
           };
         });
       })
-      .catch((err: any) => console.error("切换可见性失败:", err));
+      .catch((err: any) => console.error("Failed to toggle visibility:", err));
   };
 
   // 拖拽排序处理
@@ -932,7 +936,7 @@ const SingleObsControl = ({
         fetchSceneItems(sceneName);
       })
       .catch((err: any) => {
-        console.error("调整层级失败:", err);
+        console.error("Failed to adjust order:", err);
         // 失败回滚
         fetchSceneItems(sceneName);
       });
@@ -1207,9 +1211,9 @@ const SingleObsControl = ({
             padding: "2px 8px",
             fontSize: "12px",
           }}
-          title="刷新Scene和Source列表"
+          title="Refresh Scene and Source List"
         >
-          🔄 刷新
+          🔄 Refresh
         </button>
       </div>
       {/* 红点脉冲动画CSS */}
@@ -1326,7 +1330,7 @@ const SingleObsControl = ({
                         fontSize: "0.85em",
                       }}
                     >
-                      加载中...
+                      Loading...
                     </div>
                   ) : (
                     items.map((item, idx) => (

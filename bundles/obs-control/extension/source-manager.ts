@@ -44,11 +44,13 @@ export class SourceManager {
       );
 
       this.logger.info(
-        `获取场景 "${sceneName}" 的源列表成功，共 ${items.length} 项`,
+        `Successfully got scene item list for "${sceneName}", total ${items.length} items`,
       );
       return items;
     } catch (error: any) {
-      this.logger.error(`获取场景 "${sceneName}" 源列表失败: ${error.message}`);
+      this.logger.error(
+        `Failed to get scene item list for "${sceneName}": ${error.message}`,
+      );
       throw error;
     }
   }
@@ -73,10 +75,10 @@ export class SourceManager {
         sceneItemEnabled: enabled,
       });
       this.logger.info(
-        `场景 "${sceneName}" 源 #${sceneItemId} 可见性设置为 ${enabled}`,
+        `Visibility of source #${sceneItemId} in scene "${sceneName}" set to ${enabled}`,
       );
     } catch (error: any) {
-      this.logger.error(`设置源可见性失败: ${error.message}`);
+      this.logger.error(`Failed to set source visibility: ${error.message}`);
       throw error;
     }
   }
@@ -101,10 +103,10 @@ export class SourceManager {
         sceneItemIndex: newIndex,
       });
       this.logger.info(
-        `场景 "${sceneName}" 源 #${sceneItemId} 层级设置为 ${newIndex}`,
+        `Index of source #${sceneItemId} in scene "${sceneName}" set to ${newIndex}`,
       );
     } catch (error: any) {
-      this.logger.error(`设置源层级失败: ${error.message}`);
+      this.logger.error(`Failed to set source index: ${error.message}`);
       throw error;
     }
   }
@@ -133,7 +135,9 @@ export class SourceManager {
         mediaDuration: response.mediaDuration as number | null,
       };
     } catch (error: any) {
-      this.logger.error(`获取媒体状态失败 "${inputName}": ${error.message}`);
+      this.logger.error(
+        `Failed to get media status for "${inputName}": ${error.message}`,
+      );
       throw error;
     }
   }
@@ -154,10 +158,10 @@ export class SourceManager {
         inputName,
         mediaAction: action,
       });
-      this.logger.info(`媒体操作 "${action}" 已发送给 "${inputName}"`);
+      this.logger.info(`Media action "${action}" sent to "${inputName}"`);
     } catch (error: any) {
       this.logger.error(
-        `触发媒体操作失败 "${inputName}" / "${action}": ${error.message}`,
+        `Failed to trigger media action for "${inputName}" / "${action}": ${error.message}`,
       );
       throw error;
     }
@@ -179,10 +183,10 @@ export class SourceManager {
         inputName,
         mediaCursor: cursor,
       });
-      this.logger.info(`媒体 "${inputName}" 播放位置已设置为 ${cursor}ms`);
+      this.logger.info(`Media cursor of "${inputName}" set to ${cursor}ms`);
     } catch (error: any) {
       this.logger.error(
-        `设置媒体播放位置失败 "${inputName}": ${error.message}`,
+        `Failed to set media cursor for "${inputName}": ${error.message}`,
       );
       throw error;
     }
@@ -199,10 +203,12 @@ export class SourceManager {
       const response = await obs.call("GetInputSettings", {
         inputName,
       });
-      this.logger.info(`获取输入设置成功 "${inputName}"`);
+      this.logger.info(`Successfully got input settings for "${inputName}"`);
       return response.inputSettings;
     } catch (error: any) {
-      this.logger.error(`获取输入设置失败 "${inputName}": ${error.message}`);
+      this.logger.error(
+        `Failed to get input settings for "${inputName}": ${error.message}`,
+      );
       throw error;
     }
   }
@@ -223,9 +229,11 @@ export class SourceManager {
         inputName,
         inputSettings: settings,
       });
-      this.logger.info(`设置输入配置成功 "${inputName}"`);
+      this.logger.info(`Successfully set input settings for "${inputName}"`);
     } catch (error: any) {
-      this.logger.error(`设置输入配置失败 "${inputName}": ${error.message}`);
+      this.logger.error(
+        `Failed to set input settings for "${inputName}": ${error.message}`,
+      );
       throw error;
     }
   }
