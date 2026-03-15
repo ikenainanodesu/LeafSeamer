@@ -55,6 +55,12 @@ bundles/*/shared/
 bundles/*/extension/index.js
 bundles/*/extension/index.js.map
 
+# NodeCG Configuration and Data (Privacy)
+cfg/
+db/
+assets/
+bundles/*/cfg/
+
 # --- Added Standard and Project Ignored Files ---
 
 # Environment Variables

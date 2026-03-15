@@ -52,8 +52,17 @@ async function buildBundles() {
         });
       }
 
-      // 构建dashboard/graphics (使用Vite)
+      // 清理旧的dashboard/graphics/shared输出目录以防止遗留
       if (hasDashboard || hasGraphics) {
+        console.log(`  Cleaning old dashboard/graphics/shared files...`);
+        const dirsToClean = ["dashboard", "graphics", "shared"];
+        for (const dir of dirsToClean) {
+          const dirPath = path.join(bundlePath, dir);
+          if (fs.existsSync(dirPath)) {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+          }
+        }
+
         console.log(`  Building dashboard/graphics...`);
         await execAsync("npm run build:dashboard", {
           cwd: bundlePath,
