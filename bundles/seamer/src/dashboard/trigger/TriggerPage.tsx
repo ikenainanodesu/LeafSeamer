@@ -36,7 +36,7 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
 
   useEffect(() => {
     const rep = nodecg.Replicant<SeamerTrigger[]>("seamerTriggers");
-    rep.on("change", (newVal) => {
+    rep.on("change", (newVal: SeamerTrigger[] | undefined) => {
       setTriggers(newVal || []);
     });
   }, []);

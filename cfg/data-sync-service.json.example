@@ -1,0 +1,6 @@
+{
+  "googleSheets": {
+    "credentialsPath": "./credentials.json",
+    "spreadsheetId": "your-spreadsheet-id"
+  }
+}

@@ -436,7 +436,7 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
                     cursor: "pointer",
                   }}
                 >
-                  {name}
+                  {String(name)}
                 </button>
               ))}
               {Object.keys(state.macros).length === 0 && (

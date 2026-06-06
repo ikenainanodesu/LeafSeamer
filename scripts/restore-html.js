@@ -2,7 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const { glob } = require("glob");
 
-const htmlFiles = glob.sync("bundles/**/{dashboard,graphics}/*.html");
+const htmlFiles = glob.sync("bundles/**/{dashboard,graphics}/*.html", {
+  ignore: ["**/node_modules/**"],
+});
 
 htmlFiles.forEach((file) => {
   const dir = path.dirname(file);

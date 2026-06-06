@@ -152,19 +152,26 @@ LeafSeamer/
 │   ├── utils/                    # Utility Functions
 │   └── constants/                # Constant Definitions
 ├── scripts/                      # Build and Tool Scripts
+│   ├── build-bundles.ts          # Build all NodeCG bundles
+│   ├── fix-html-paths.ts         # Fix generated HTML asset paths
+│   ├── restore-html.js           # Restore generated HTML wrappers
 │   └── kill-nodecg.ps1           # NodeCG Process Kill Script
 ├── cfg/                          # NodeCG Configuration Files
-│   ├── nodecg.json               # NodeCG Core Config
-│   └── leafseamer.json           # LeafSeamer Custom Config
+│   ├── README.md                 # Configuration notes
+│   ├── nodecg.json.example       # NodeCG Core Config template
+│   └── data-sync-service.json.example # Google Sheets Config template
 ├── db/                           # Database Files (Replicants Persistence)
 ├── logs/                         # Log Files
 ├── backups/                      # Backup Files
-├── assets/                       # Static Assets
+├── assets/                       # Local NodeCG Assets
+├── DEVELOPMENT_MEMO.md           # Development requirements, changes, progress, notes
 ├── vite.config.dashboard.ts      # Vite Dashboard Config
 ├── vite.config.extension.ts      # Vite Extension Config
 ├── tsconfig.json                 # TypeScript Config
 └── package.json                  # Project Config
 ```
+
+`db/`, `logs/`, `backups/`, `assets/`, generated bundle output, and real `cfg/*.json` files are local runtime/deployment data and are intentionally ignored by Git.
 
 ## Dashboard Workspaces
 
@@ -191,18 +198,39 @@ For detailed installation and usage instructions, please refer to:
 # Install dependencies
 npm install
 
+# Build all bundles
+npm run build
+
 # Start NodeCG Service
 npm start
 
 # Development Mode
 npm run dev
 
-# Build all bundles
-npm run build
-
 # Type Check
 npm run typecheck
 ```
+
+On Windows PowerShell, if script execution policy blocks `npm`, use `npm.cmd` for the same commands, for example `npm.cmd run build`.
+
+### Source Deployment Flow
+
+```bash
+# 1. Create local config files from templates
+cp cfg/nodecg.json.example cfg/nodecg.json
+
+# Optional: only when using Google Sheets sync
+cp cfg/data-sync-service.json.example cfg/data-sync-service.json
+
+# 2. Install dependencies and build generated bundle files
+npm install
+npm run build
+
+# 3. Start NodeCG
+npm start
+```
+
+Generated bundle files are created under each bundle, such as `dashboard/`, `graphics/`, `shared/`, and `extension/index.js`. They are required at runtime after `npm run build`, but are not committed to source control.
 
 ### Access Addresses
 
@@ -213,18 +241,26 @@ After startup visit:
 
 ## Configuration
 
-- NodeCG Core Config: `cfg/nodecg.json`
+- NodeCG Core Config: copy `cfg/nodecg.json.example` to `cfg/nodecg.json`
 - Business Module Config: Generally configured dynamically via Dashboard interface (Persisted in `db/`)
-- Google Sheets Config: `cfg/data-sync-service.json` (Optional)
+- Google Sheets Config: copy `cfg/data-sync-service.json.example` to `cfg/data-sync-service.json` (Optional)
 - Bundle configs are defined in their respective `package.json`
 - TypeScript Config: `tsconfig.json`
 - Vite Build Config: `vite.config.dashboard.ts` and `vite.config.extension.ts`
+
+Real configuration files may contain local IP addresses or credentials, so `cfg/*.json` is ignored. Keep only `.example` templates in Git.
+
+## Repository Hygiene
+
+- Do commit: source code, manuals, `package.json`, lockfiles, `cfg/*.example`, and `DEVELOPMENT_MEMO.md`.
+- Do not commit: `node_modules/`, generated bundle output, logs, databases, backups, local assets, real config files, credentials, or temporary diagnostics.
+- Development status and release-readiness notes are tracked in `DEVELOPMENT_MEMO.md`.
 
 ## Version Information
 
 **Current Version**: 1.1.3
 **Release Date**: 2026-02-21
-**Last Update**: 2026-02-21
+**Last Update**: 2026-06-06
 
 ## License
 

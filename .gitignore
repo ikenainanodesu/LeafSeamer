@@ -1,95 +1,78 @@
+# Dependencies
 node_modules/
-db/
-logs/
-backups/
-.env
-.DS_Store
+bundles/*/node_modules/
+.npm/
 
-# 日志和错误文件
-*.log
-*.txt
-server_error.*
-
-# 保留重要文档
-!README.md
-!README.txt
-!TROUBLESHOOTING.md
-
-# 构建产物
+# Build and test output
 dist/
-
-# Temporary and Debug files
-bootstrap_debug.js
-bootstrap_source.txt
-test-require.js
-debug_log_full.md
-debug_log_full.txt
-debug_output.txt
-error_log_copy.txt
-server_error.log
-server_error.txt
-server_error_debug.md
-start_error.log
-startup.log
-
-# Editor directories
-.vscode/
-.idea/
-
-# Common temp files
-*.tmp
-*.bak
-npm-debug.log
-yarn-error.log
+dist-ssr/
 coverage/
-
-# Project specifics
-.agent/
-.agent\rules/
-project-documents/
-
-# NodeCG Bundle Build Artifacts
+*.tsbuildinfo
+.eslintcache
 bundles/*/dashboard/
 bundles/*/graphics/
 bundles/*/shared/
 bundles/*/extension/index.js
 bundles/*/extension/index.js.map
 
-# NodeCG Configuration and Data (Privacy)
-cfg/
+# NodeCG runtime data
 db/
+logs/
+backups/
 assets/
+bundles/*/logs/
 bundles/*/cfg/
 
-# --- Added Standard and Project Ignored Files ---
-
-# Environment Variables
+# Local configuration and secrets
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 !.env.example
+cfg/*
+!cfg/
+!cfg/*.example.json
+!cfg/*.json.example
+!cfg/README.md
+credentials*.json
+service-account*.json
+*.key
+*.pem
 
-# OS Files
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# TypeScript & Caches
-*.tsbuildinfo
-.eslintcache
-.npm/
-
-# Vite / Build specifics
-dist-ssr/
-
-# Temporary Agent Files
+# Logs and temporary diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+server_error.*
+startup.log
+start_error.log
+debug_*.txt
+debug_*.md
+error_log_copy.txt
+bootstrap_debug.js
+bootstrap_source.txt
+test-require.js
 git_status.txt
 untracked.txt
 
-# AI Agent and Skills
-.adal/
+# Editor, OS, and cache files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.tmp
+*.bak
+*.off
+
+# Local project notes and agent/tool state
+.agent/
 .agents/
+.adal/
 .augment/
 .claude/
 .codebuddy/
@@ -117,5 +100,6 @@ untracked.txt
 .vibe/
 .windsurf/
 .zencoder/
+project-documents/
 skills/
 skills-lock.json
