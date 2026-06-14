@@ -1,0 +1,22 @@
+{
+  "name": "seamer-adapter-atem",
+  "version": "1.0.0",
+  "nodecg": {
+    "compatibleRange": "^2.0.0",
+    "bundleDependencies": {
+      "seamer": "^1.0.0",
+      "atem-control": "^1.1.0"
+    }
+  },
+  "scripts": {
+    "build:extension": "vite build --config vite.config.mjs --mode extension",
+    "build": "npm run build:extension",
+    "watch": "vite build --config vite.config.mjs --mode extension --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "nodecg": "^2.6.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
+  }
+}

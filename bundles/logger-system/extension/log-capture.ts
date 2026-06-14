@@ -10,7 +10,8 @@ type LogListener = (
 ) => void;
 
 interface CaptureState {
-  listener: LogListener;
+  listener?: LogListener;
+  buffer: Array<[LogLevel, string, string, string]>;
 }
 
 type CapturedLoggerPrototype = NodeCG.LoggerInterface & {
@@ -45,13 +46,15 @@ export const installLogCapture = (
   const prototype = LoggerConstructor.prototype as CapturedLoggerPrototype;
   const existingState = prototype[CAPTURE_STATE];
 
-  // 热重载时替换监听器，避免重复包装同一个 Logger 原型。
+  // 接管业务 bundle 预先安装的采集桥，并补录其有界缓冲。
   if (existingState) {
     existingState.listener = listener;
+    existingState.buffer.forEach((entry) => listener(...entry));
+    existingState.buffer = [];
     return;
   }
 
-  const state: CaptureState = { listener };
+  const state: CaptureState = { listener, buffer: [] };
   Object.defineProperty(prototype, CAPTURE_STATE, {
     configurable: false,
     enumerable: false,
@@ -68,7 +71,7 @@ export const installLogCapture = (
       try {
         const formattedMessage = format(args[0], ...args.slice(1));
         const parsed = splitCategory(formattedMessage);
-        state.listener(
+        state.listener?.(
           level,
           this.name || "unknown",
           parsed.category,

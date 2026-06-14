@@ -1,17 +1,12 @@
-/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState, useCallback } from "react";
-import { SeamerCard, Preset, AtemControlAction } from "../types/seamer.types";
+import {
+  SeamerCard,
+  SeamerIntegrations,
+} from "../types/seamer.types";
 import { v4 as uuidv4 } from "uuid";
 import Card from "./components/Card";
 import EditCardModal from "./components/EditCardModal";
-import { MixerState } from "../../../../shared/types/mixer.types";
-import {
-  OBSConnectionSettings,
-  OBSState,
-} from "../../../../shared/types/obs.types";
 import TriggerPage from "./trigger/TriggerPage";
-import { AtemSwitcherInfo } from "../../../../shared/types/atem.types";
-import { DeviceInfo } from "../../../vb-matrix-control/src/types";
 
 const App = () => {
   const [activeTab, setActiveTab] = useState<"workspace" | "triggers">(
@@ -21,17 +16,7 @@ const App = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentCard, setCurrentCard] = useState<SeamerCard | null>(null);
 
-  // External Data for Selectors
-  const [mixerState, setMixerState] = useState<MixerState | null>(null);
-  const [presets, setPresets] = useState<Preset[]>([]);
-  const [obsConnections, setObsConnections] = useState<OBSConnectionSettings[]>(
-    []
-  );
-  const [obsStates, setObsStates] = useState<Record<string, OBSState>>({});
-
-  // New Data for Triggers
-  const [atemSwitchers, setAtemSwitchers] = useState<AtemSwitcherInfo[]>([]);
-  const [vbDevices, setVbDevices] = useState<DeviceInfo[]>([]);
+  const [integrations, setIntegrations] = useState<SeamerIntegrations>({});
 
   useEffect(() => {
     // Seamer Cards Replicant
@@ -42,56 +27,20 @@ const App = () => {
       setCards(newVal || []);
     });
 
-    // Mixer State
-    const mixerRep = nodecg.Replicant<MixerState>(
-      "mixerState",
-      "mixer-control"
-    );
-    mixerRep.on("change", (newVal: MixerState) =>
-      setMixerState(newVal || null)
-    );
-
-    // VB Matrix Presets
-    const presetsRep = nodecg.Replicant<Preset[]>(
-      "presets",
-      "vb-matrix-control"
-    );
-    presetsRep.on("change", (newVal: Preset[]) => setPresets(newVal || []));
-
-    // VB Available Devices
-    const vbDevRep = nodecg.Replicant<DeviceInfo[]>(
-      "availableDevices",
-      "vb-matrix-control"
-    );
-    vbDevRep.on("change", (newVal: DeviceInfo[]) => setVbDevices(newVal || []));
-
-    // OBS Connections
-    const obsConRep = nodecg.Replicant<OBSConnectionSettings[]>(
-      "obsConnections",
-      "obs-control"
-    );
-    obsConRep.on("change", (newVal: OBSConnectionSettings[]) =>
-      setObsConnections(newVal || [])
-    );
-
-    // OBS States
-    const obsStateRep = nodecg.Replicant<Record<string, OBSState>>(
-      "obsStates",
-      "obs-control"
-    );
-    obsStateRep.on("change", (newVal: Record<string, OBSState>) =>
-      setObsStates(newVal || {})
-    );
-
-    // ATEM Switchers
-    const atemSwRep = nodecg.Replicant<AtemSwitcherInfo[]>(
-      "atem:switchers",
-      "atem-control"
-    );
-    atemSwRep.on("change", (newVal: AtemSwitcherInfo[]) =>
-      setAtemSwitchers(newVal || [])
-    );
+    const integrationsRep =
+      nodecg.Replicant<SeamerIntegrations>("seamerIntegrations");
+    integrationsRep.on("change", (newValue: SeamerIntegrations) => {
+      setIntegrations(newValue || {});
+    });
   }, []);
+
+  const mixerState = integrations.mixer?.state.mixerState || null;
+  const presets = integrations.vb?.state.presets || [];
+  const vbDevices = integrations.vb?.state.devices || [];
+  const obsConnections = integrations.obs?.state.connections || [];
+  const obsStates = integrations.obs?.state.states || {};
+  const atemSwitchers = integrations.atem?.state.switchers || [];
+  const atemStates = integrations.atem?.state.states || {};
 
   const saveCard = (card: SeamerCard) => {
     // Update or Add
@@ -109,170 +58,7 @@ const App = () => {
   };
 
   const runCard = (card: SeamerCard) => {
-    console.log("Running Card:", card.title);
-    card.actions.forEach((action) => {
-      switch (action.type) {
-        case "mixer-fader":
-          // Need to cast or check subFunction
-          // We know it is MixerControlAction locally, but type is strictly string "mixer-fader"
-          const mixerAction = action as any; // Quick cast to access new fields
-          const subFunc = mixerAction.subFunction || "fader";
-
-          if (subFunc === "fader") {
-            nodecg.sendMessageToBundle("setMixerFader", "mixer-control", {
-              channelId: action.channelId,
-              level: action.level,
-            });
-          } else if (subFunc === "send") {
-            if (
-              mixerAction.sendInputId !== undefined &&
-              mixerAction.sendOutputId !== undefined
-            ) {
-              const basePayload = {
-                inputId: mixerAction.sendInputId,
-                outputId: mixerAction.sendOutputId,
-              };
-
-              // Send Level
-              if (mixerAction.sendLevel !== undefined) {
-                nodecg.sendMessageToBundle(
-                  "setMixerInputSendLevel",
-                  "mixer-control",
-                  {
-                    ...basePayload,
-                    level: mixerAction.sendLevel,
-                  }
-                );
-              }
-
-              // Send On/Off
-              if (mixerAction.sendOn !== undefined) {
-                nodecg.sendMessageToBundle(
-                  "setMixerInputSendActive",
-                  "mixer-control",
-                  {
-                    ...basePayload,
-                    active: mixerAction.sendOn,
-                  }
-                );
-              }
-
-              // Send Pre/Post
-              if (mixerAction.sendPre !== undefined) {
-                nodecg.sendMessageToBundle(
-                  "setMixerInputSendPre",
-                  "mixer-control",
-                  {
-                    ...basePayload,
-                    pre: mixerAction.sendPre,
-                  }
-                );
-              }
-
-              // Send Pan
-              if (mixerAction.sendPan !== undefined) {
-                nodecg.sendMessageToBundle(
-                  "setMixerInputSendPan",
-                  "mixer-control",
-                  {
-                    ...basePayload,
-                    pan: mixerAction.sendPan,
-                  }
-                );
-              }
-            }
-          }
-          break;
-        case "vb-preset":
-          nodecg.sendMessageToBundle(
-            "loadPreset",
-            "vb-matrix-control",
-            action.presetId
-          );
-          break;
-        case "obs-action":
-          if (action.connectionId) {
-            // If transition is specified, set it first
-            if (action.transitionName) {
-              nodecg.sendMessageToBundle("setOBSTransition", "obs-control", {
-                id: action.connectionId,
-                transition: action.transitionName,
-              });
-            }
-            // If scene is specified, set it next (after small delay or immediately?)
-            // Immediate should be fine as they are separate calls.
-            if (action.sceneName) {
-              nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
-                id: action.connectionId,
-                scene: action.sceneName,
-              });
-            }
-          }
-          break;
-        case "atem-action":
-          const atemAction = action as AtemControlAction;
-          if (!atemAction.switcherIp) return;
-
-          if (atemAction.functionType === "macro") {
-            if (atemAction.macroIndex !== undefined) {
-              nodecg.sendMessageToBundle("atem:runMacro", "atem-control", {
-                ip: atemAction.switcherIp,
-                macroIndex: atemAction.macroIndex,
-              });
-            }
-          } else if (atemAction.functionType === "source") {
-            const ip = atemAction.switcherIp;
-            const target = atemAction.target || "preview";
-            const source = atemAction.sourceId;
-
-            if (source === undefined) return;
-
-            if (target === "output") {
-              // Aux 0
-              nodecg.sendMessageToBundle("atem:setAuxSource", "atem-control", {
-                ip,
-                auxId: 0,
-                source,
-              });
-            } else if (target === "webcam") {
-              // Aux 1
-              nodecg.sendMessageToBundle("atem:setAuxSource", "atem-control", {
-                ip,
-                auxId: 1,
-                source,
-              });
-            } else if (target === "preview") {
-              nodecg.sendMessageToBundle("atem:setSource", "atem-control", {
-                ip,
-                type: "preview",
-                source,
-              });
-            } else if (target === "program") {
-              const transition = atemAction.transition || "cut";
-              if (transition === "cut") {
-                nodecg.sendMessageToBundle("atem:setSource", "atem-control", {
-                  ip,
-                  type: "program",
-                  source,
-                });
-              } else {
-                // Auto: Set PVW then Auto
-                nodecg.sendMessageToBundle("atem:setSource", "atem-control", {
-                  ip,
-                  type: "preview",
-                  source,
-                });
-                setTimeout(() => {
-                  nodecg.sendMessageToBundle("atem:auto", "atem-control", {
-                    ip,
-                  });
-                }, 100);
-              }
-            }
-          }
-          break;
-      }
-    });
+    nodecg.sendMessage("runSeamerCard", card);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -419,6 +205,7 @@ const App = () => {
           obsStates={obsStates}
           vbDevices={vbDevices}
           atemSwitchers={atemSwitchers}
+          integrations={integrations}
         />
       )}
 
@@ -434,6 +221,9 @@ const App = () => {
           presets={presets}
           obsConnections={obsConnections}
           obsStates={obsStates}
+          atemSwitchers={atemSwitchers}
+          atemStates={atemStates}
+          integrations={integrations}
         />
       )}
     </div>

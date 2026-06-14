@@ -2,8 +2,8 @@ import { OBSWebSocket } from "obs-websocket-js";
 import NodeCG from "nodecg/types";
 import { SceneManager } from "./scene-manager";
 import { SourceManager } from "./source-manager";
-import { createLogger } from "../../../shared/utils/logger";
-import { OBSConnectionSettings } from "../../../shared/types/obs.types";
+import { createLogger } from "./logger";
+import { OBSConnectionSettings } from "../src/types/obs.types";
 
 export class ConnectionManager {
   private nodecg: NodeCG.ServerAPI;

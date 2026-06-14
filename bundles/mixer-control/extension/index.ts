@@ -1,10 +1,12 @@
 import NodeCG from "nodecg/types";
 import { ConnectionManager } from "./connection";
 import { StateManager } from "./state-manager";
-import { createLogger } from "../../../shared/utils/logger";
-import { MixerConnectionSettings } from "../../../shared/types/mixer.types";
+import { createLogger } from "./logger";
+import { MixerConnectionSettings } from "../src/types/mixer.types";
+import { ensureOptionalLogCapture } from "./optional-log-capture";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
+  ensureOptionalLogCapture(nodecg.Logger);
   const logger = createLogger("MixerControl");
   logger.setNodeCG(nodecg);
   logger.info("Starting Mixer Control Bundle");

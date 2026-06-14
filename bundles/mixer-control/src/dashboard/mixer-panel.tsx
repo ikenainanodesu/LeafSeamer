@@ -1,4 +1,3 @@
-/// <reference path="../../../../shared/types/global.d.ts" />
 import React from "react";
 import { createRoot } from "react-dom/client";
 import MixerControlPanel from "./mixer-control-panel";

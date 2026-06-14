@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import type {
   AtemSwitcherInfo,
   DiscoveredSwitcher,
-} from "@shared/types/atem.types";
+} from "../types/atem.types";
 
 // Declare NodeCG Types (global)
 declare const nodecg: any;

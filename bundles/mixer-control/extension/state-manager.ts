@@ -4,8 +4,8 @@ import {
   MixerState,
   MixerChannel,
   MixerOutput,
-} from "../../../shared/types/mixer.types";
-import { getCurrentTimestamp } from "../../../shared/utils/timestamp";
+} from "../src/types/mixer.types";
+import { getCurrentTimestamp } from "./timestamp";
 
 export class StateManager {
   private nodecg: NodeCG.ServerAPI;

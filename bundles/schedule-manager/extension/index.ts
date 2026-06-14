@@ -1,8 +1,10 @@
 import NodeCG from "nodecg/types";
-import { ScheduleLoader } from "./schedule-loader";
+import { ScheduleManagerApi, ScheduleService } from "./schedule-service";
+import { ensureOptionalLogCapture } from "./optional-log-capture";
 
-module.exports = function (nodecg: NodeCG.ServerAPI) {
+module.exports = function (nodecg: NodeCG.ServerAPI): ScheduleManagerApi {
+  ensureOptionalLogCapture(nodecg.Logger);
   nodecg.log.info("Starting Schedule Manager Bundle");
 
-  const scheduleLoader = new ScheduleLoader(nodecg);
+  return new ScheduleService(nodecg);
 };

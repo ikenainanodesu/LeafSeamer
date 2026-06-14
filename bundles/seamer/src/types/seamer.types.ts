@@ -169,3 +169,150 @@ export interface SeamerTrigger {
   delay: number; // ms
   enabled: boolean;
 }
+
+// 以下 DTO 由可选适配器填充，Seamer 核心不直接依赖任何设备 bundle。
+export interface MixerChannel {
+  id: number;
+  name: string;
+  userLabel?: string;
+  faderLevel: number;
+  isMuted: boolean;
+}
+
+export interface MixerOutput {
+  id: number;
+  name: string;
+  faderLevel: number;
+  isMuted: boolean;
+}
+
+export interface MixerState {
+  connected: boolean;
+  channels: MixerChannel[];
+  outputs: MixerOutput[];
+  lastUpdate: number;
+}
+
+export interface OBSScene {
+  name: string;
+  index: number;
+}
+
+export interface OBSState {
+  connected: boolean;
+  status: "connected" | "disconnected" | "connecting" | "error";
+  currentScene: string;
+  isStreaming: boolean;
+  isRecording: boolean;
+  scenes: OBSScene[];
+  transitions: string[];
+  currentTransition: string;
+}
+
+export interface OBSConnectionSettings {
+  id: string;
+  name?: string;
+  host: string;
+  port: string;
+  password?: string;
+}
+
+export interface AtemSwitcherInfo {
+  ip: string;
+  alias?: string;
+  model?: string;
+  connected: boolean;
+}
+
+export interface AtemState {
+  programInput: number;
+  previewInput: number;
+  inTransition: boolean;
+  transitionPosition: number;
+  transitionRate: number;
+  aux: Record<number, number>;
+  sources: Record<number, string>;
+  macros: Record<number, string>;
+}
+
+export interface DeviceInfo {
+  connectionId: string;
+  suid: string;
+  name: string;
+  inputs: number;
+  outputs: number;
+}
+
+export interface CurrentPatchStatus {
+  id: string;
+  connectionId: string;
+  inputDevice: string;
+  inputChannel: number;
+  outputDevice: string;
+  outputChannel: number;
+  gain: number;
+  mute: boolean;
+  exists?: boolean;
+}
+
+export interface MixerIntegrationState {
+  mixerState: MixerState | null;
+}
+
+export interface OBSIntegrationState {
+  connections: OBSConnectionSettings[];
+  states: Record<string, OBSState>;
+}
+
+export interface AtemIntegrationState {
+  switchers: AtemSwitcherInfo[];
+  states: Record<string, AtemState>;
+}
+
+export interface VBIntegrationState {
+  presets: Preset[];
+  devices: DeviceInfo[];
+  activePatches: CurrentPatchStatus[];
+}
+
+export interface SeamerIntegrationStateMap {
+  mixer: MixerIntegrationState;
+  atem: AtemIntegrationState;
+  obs: OBSIntegrationState;
+  vb: VBIntegrationState;
+}
+
+export interface SeamerIntegrationSnapshot<
+  T extends TriggerModule = TriggerModule,
+> {
+  id: T;
+  label: string;
+  available: boolean;
+  state: SeamerIntegrationStateMap[T];
+}
+
+export type SeamerIntegrations = Partial<{
+  [K in TriggerModule]: SeamerIntegrationSnapshot<K>;
+}>;
+
+export type SeamerExecutionKind = "card" | "trigger";
+
+export interface SeamerIntegrationProvider<T extends TriggerModule> {
+  id: T;
+  label: string;
+  initialState: SeamerIntegrationStateMap[T];
+  execute: (
+    payload: SeamerAction | TriggerResultAction,
+    kind: SeamerExecutionKind
+  ) => void | Promise<void>;
+}
+
+export interface SeamerExtensionApi {
+  registerIntegration: <T extends TriggerModule>(
+    provider: SeamerIntegrationProvider<T>
+  ) => () => void;
+  updateIntegrationState: <T extends TriggerModule>(
+    id: T,
+    state: SeamerIntegrationStateMap[T]
+  ) => void;
+}

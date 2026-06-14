@@ -1,7 +1,9 @@
 import NodeCG from "nodecg/types";
 import { BackupManager } from "./backup-manager";
+import { ensureOptionalLogCapture } from "./optional-log-capture";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
+  ensureOptionalLogCapture(nodecg.Logger);
   nodecg.log.info("Starting Backup System Bundle");
 
   const backupManager = new BackupManager(nodecg);

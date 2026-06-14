@@ -4,17 +4,13 @@ import {
   TriggerCondition,
   TriggerResultAction,
   TriggerModule,
-} from "../../types/seamer.types";
-import { MixerState } from "../../../../../shared/types/mixer.types";
-import {
+  AtemSwitcherInfo,
+  DeviceInfo,
+  MixerState,
   OBSConnectionSettings,
   OBSState,
-} from "../../../../../shared/types/obs.types";
-import {
-  AtemSwitcherInfo,
-  AtemState,
-} from "../../../../../shared/types/atem.types";
-import { DeviceInfo } from "../../../../vb-matrix-control/src/types";
+  SeamerIntegrations,
+} from "../../types/seamer.types";
 
 interface EditTriggerModalProps {
   initialTrigger: SeamerTrigger;
@@ -25,6 +21,7 @@ interface EditTriggerModalProps {
   obsStates: Record<string, OBSState>;
   vbDevices: DeviceInfo[];
   atemSwitchers: AtemSwitcherInfo[];
+  integrations: SeamerIntegrations;
 }
 
 const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
@@ -36,6 +33,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
   obsStates,
   vbDevices,
   atemSwitchers,
+  integrations,
 }) => {
   const [name, setName] = useState(initialTrigger.name || "");
   const [delay, setDelay] = useState(initialTrigger.delay);
@@ -60,10 +58,18 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         onChange={(e) => onChange(e.target.value as TriggerModule)}
         style={{ padding: 5 }}
       >
-        <option value="mixer">Mixer Control</option>
-        <option value="atem">ATEM Control</option>
-        <option value="obs">OBS Control</option>
-        <option value="vb">VB Control</option>
+        <option value="mixer">
+          Mixer Control{integrations.mixer ? "" : " (Unavailable)"}
+        </option>
+        <option value="atem">
+          ATEM Control{integrations.atem ? "" : " (Unavailable)"}
+        </option>
+        <option value="obs">
+          OBS Control{integrations.obs ? "" : " (Unavailable)"}
+        </option>
+        <option value="vb">
+          VB Control{integrations.vb ? "" : " (Unavailable)"}
+        </option>
       </select>
     </div>
   );

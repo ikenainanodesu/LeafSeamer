@@ -8,7 +8,9 @@ A broadcast production control system based on NodeCG, integrating unified contr
 
 ## Project Overview
 
-LeafSeamer is a modern broadcast production control system providing centralized device control and state management for video streaming and program production. The project adopts a modular architecture, where each function is an independent NodeCG bundle, facilitating maintenance and extension.
+LeafSeamer is a modern broadcast production control system providing centralized device control and state management for video streaming and program production. Each core feature is an independently installable NodeCG bundle. Optional adapter bundles connect otherwise independent cores without making them mandatory dependencies.
+
+All dashboard and graphic UI text is maintained in English.
 
 ## Core Features
 
@@ -21,6 +23,13 @@ LeafSeamer is a modern broadcast production control system providing centralized
   - Mixer Control: Fader, Send, Mute, etc.
   - OBS Control: Scene Switch, Transition Effect
   - ~~Delay (Delay Action): Precise timing control~~
+
+Seamer itself stores cards and triggers without importing device bundles. Install only the adapters needed by a NodeCG instance:
+
+- `seamer-adapter-mixer`
+- `seamer-adapter-atem`
+- `seamer-adapter-obs`
+- `seamer-adapter-vb`
 
 ### 🎚️ Device Control Modules
 
@@ -80,8 +89,10 @@ LeafSeamer is a modern broadcast production control system providing centralized
 #### Schedule Manager
 
 - Program schedule management
+- Standalone schedule editing in the dashboard
 - Schedule display graphic output
 - Dashboard control panel
+- Optional Google Sheets import through `schedule-adapter-google-sheets`
 
 ### 🛠️ System Service Modules
 
@@ -91,6 +102,7 @@ LeafSeamer is a modern broadcast production control system providing centralized
 - Live Log Viewer
 - Asynchronous log processing
 - Unified width Dashboard panels
+- Optional buffered collection from other LeafSeamer bundles without becoming a hard dependency
 
 #### Backup System
 
@@ -144,13 +156,11 @@ LeafSeamer/
 │   ├── vb-matrix-control/        # VB-Audio Matrix Control
 │   ├── graphics-package/         # Graphics Package (GSAP Animation)
 │   ├── schedule-manager/         # Schedule Manager
+│   ├── schedule-adapter-google-sheets/ # Optional Sheets integration
 │   ├── logger-system/            # Logger System
 │   ├── backup-system/            # Backup System
-│   └── data-sync-service/        # Data Sync Service
-├── shared/                       # Shared Resources
-│   ├── types/                    # TypeScript Type Definitions
-│   ├── utils/                    # Utility Functions
-│   └── constants/                # Constant Definitions
+│   ├── data-sync-service/        # Data Sync Service
+│   └── seamer-adapter-*/         # Optional Seamer device integrations
 ├── scripts/                      # Build and Tool Scripts
 │   ├── build-bundles.ts          # Build all NodeCG bundles
 │   ├── fix-html-paths.ts         # Fix generated HTML asset paths
@@ -165,8 +175,8 @@ LeafSeamer/
 ├── backups/                      # Backup Files
 ├── assets/                       # Local NodeCG Assets
 ├── DEVELOPMENT_MEMO.md           # Development requirements, changes, progress, notes
-├── vite.config.dashboard.ts      # Vite Dashboard Config
-├── vite.config.extension.ts      # Vite Extension Config
+├── vite.config.dashboard.ts      # Legacy root Vite Dashboard Config
+├── vite.config.extension.ts      # Legacy root Vite Extension Config
 ├── tsconfig.json                 # TypeScript Config
 └── package.json                  # Project Config
 ```
@@ -231,6 +241,28 @@ npm start
 ```
 
 Generated bundle files are created under each bundle, such as `dashboard/`, `graphics/`, `shared/`, and `extension/index.js`. They are required at runtime after `npm run build`, but are not committed to source control.
+
+### Independent Bundle Deployment
+
+Every core bundle includes its own dependencies, TypeScript config, and Vite config:
+
+```bash
+cd bundles/seamer
+npm install
+npm run build
+```
+
+The same flow applies to `logger-system`, `schedule-manager`, and every device or service core bundle. Copy the built bundle directory into any NodeCG `bundles/` directory.
+
+Adapters are intentionally installed as a set with their declared dependencies. For example, Mixer card control requires:
+
+```text
+seamer
+mixer-control
+seamer-adapter-mixer
+```
+
+Without the adapter, both `seamer` and `mixer-control` still load and work independently. Google Sheets schedule import follows the same pattern with `schedule-manager`, `data-sync-service`, and `schedule-adapter-google-sheets`.
 
 ### Access Addresses
 

@@ -177,3 +177,53 @@ decisions, or release-readiness status changes.
 - 无法解析时间戳的旧格式日志行会被保留，防止自动清理误删兼容数据。
 - 非法清理周期会自动恢复为关闭状态。
 - UI 已通过系统 Edge 的 Playwright 回退路径验证 560px 和 280px 面板布局。
+
+## 2026-06-14 Bundle 独立化重构
+
+### 需求变化
+
+- 放弃 i18n 方案，今后所有 Dashboard 与 Graphic UI 统一使用英文。
+- 核心 bundle 必须能够独立安装、构建并插入任意 NodeCG 实例。
+- Logger、Seamer、Schedule Manager 在保持原功能的同时不得成为其他核心 bundle 的硬依赖。
+
+### 代码变动
+
+- 移除 10 个核心 bundle 对 `logger-system` 的 `bundleDependencies`。
+- 为各核心 bundle 增加本地依赖、`tsconfig.json`、`vite.config.mjs`、类型与工具文件。
+- 新增 Seamer 通用集成注册表及 Mixer、ATEM、OBS、VB 四个适配器 bundle。
+- 新增 `schedule-adapter-google-sheets`，将 Sheets 同步从 Schedule Manager 核心移出。
+- Schedule Manager 新增英文手动编辑、添加、启用和删除排期项功能。
+- Logger 采集改为可选全局桥，支持 logger-system 延迟加载后补录有界缓冲。
+- 删除过期的 bundle 级 `package-lock.json`，统一由根工作区锁文件管理。
+
+### 功能增减
+
+- Seamer 无设备适配器时仍可独立加载、编辑和保存卡片与触发器。
+- 安装对应适配器后恢复原有跨设备卡片动作和触发器动作。
+- Schedule Manager 无 Data Sync Service 时仍可独立维护排期。
+- Logger System 缺失时不再阻止任何核心 bundle 加载。
+- 不再引入中日英切换或其他 i18n 运行时。
+
+### 功能实现路径
+
+- 核心 bundle 只暴露自身 Replicant、消息和扩展 API。
+- 可选适配器通过明确的 `bundleDependencies` 连接两个核心，并发布纯数据快照。
+- Seamer 注册表在写入 `seamerIntegrations` 前深拷贝 Replicant Proxy，避免 NodeCG 所有权冲突。
+- 每个核心 bundle 使用本地 Vite 配置分别构建 extension 和 dashboard/graphics。
+- 独立构建验收在隔离目录逐个执行 `npm install` 与 `npm run build`。
+
+### 已知 Bug
+
+- Vite 在 Dashboard 根目录与输出目录存在父子关系时会输出警告，但当前构建产物路径正确。
+- NodeCG `NODECG_TEST` 模式会分配随机监听端口，但日志中的 `baseURL` 仍显示配置端口。
+
+### 预期解决方法
+
+- 后续可将前端源码移入独立子目录或使用临时输出目录，消除 Vite 目录关系警告。
+- NodeCG 测试端口显示问题属于上游框架行为，升级 NodeCG 后重新验证。
+
+### 已解决 Bug 以及解决方法
+
+- 修复适配器将一个 Replicant Proxy 直接写入另一个 Replicant 导致无法挂载的问题；注册表现在发布深拷贝后的纯数据快照。
+- 修复 OBS Dashboard 中遗留的中文可见文本，统一改为英文。
+- 修复核心 bundle 依赖根 `shared/`、根 Vite 配置和依赖提升才能构建的问题。

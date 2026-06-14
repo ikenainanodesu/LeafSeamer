@@ -1,7 +1,7 @@
 import { OBSWebSocket } from "obs-websocket-js";
 import NodeCG from "nodecg/types";
-import { createLogger } from "../../../shared/utils/logger";
-import { OBSSceneItem } from "../../../shared/types/obs.types";
+import { createLogger } from "./logger";
+import { OBSSceneItem } from "../src/types/obs.types";
 
 /**
  * SourceManager - 管理OBS场景源（Source）的获取、可见性切换、层级排序，

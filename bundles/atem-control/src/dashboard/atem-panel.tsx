@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { AtemSwitcherInfo, AtemState } from "@shared/types/atem.types";
+import type { AtemSwitcherInfo, AtemState } from "../types/atem.types";
 
 declare const nodecg: any;
 

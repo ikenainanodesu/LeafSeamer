@@ -1,11 +1,10 @@
 import NodeCG from "nodecg/types";
 import { DataFetcher } from "./data-fetcher";
-import { createLogger } from "../../../shared/utils/logger";
+import { ensureOptionalLogCapture } from "./optional-log-capture";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const logger = createLogger("GraphicsPackage");
-  logger.setNodeCG(nodecg);
-  logger.info("Starting Graphics Package Bundle");
+  ensureOptionalLogCapture(nodecg.Logger);
+  nodecg.log.info("[GraphicsPackage] Starting Graphics Package Bundle");
 
   // Initialize Replicants
   nodecg.Replicant("graphicsData", {

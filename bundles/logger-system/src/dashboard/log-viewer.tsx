@@ -1,9 +1,8 @@
-/// <reference path="../../../../shared/types/global.d.ts" />
 import {
   LOG_CLEANUP_PERIODS,
   LogCleanupPeriodMs,
   isLogCleanupPeriodMs,
-} from "@shared/types/logger.types";
+} from "../types/logger.types";
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./log-viewer.css";

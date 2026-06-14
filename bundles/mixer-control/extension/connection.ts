@@ -2,8 +2,8 @@ import { Client, Server } from "node-osc";
 import * as net from "net";
 import NodeCG from "nodecg/types";
 import { StateManager } from "./state-manager";
-import { createLogger } from "../../../shared/utils/logger";
-import { MixerConnectionSettings } from "../../../shared/types/mixer.types";
+import { createLogger } from "./logger";
+import { MixerConnectionSettings } from "../src/types/mixer.types";
 
 export class ConnectionManager {
   private nodecg: NodeCG.ServerAPI;

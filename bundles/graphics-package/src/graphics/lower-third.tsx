@@ -1,13 +1,12 @@
-/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { LowerThirdData } from "../../../../shared/types/graphics.types";
+import { LowerThirdData } from "../types/graphics.types";
 import {
   createLowerThirdEntranceAnimation,
   createLowerThirdExitAnimation,
-} from "../../../../shared/utils/gsap-animations";
+} from "../utils/lower-third-animations";
 import "./lower-third.css";
 
 const LowerThird = () => {

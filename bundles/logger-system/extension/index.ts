@@ -4,7 +4,7 @@ import {
   isLogCleanupPeriodMs,
   LOG_CLEANUP_CHECK_INTERVAL_MS,
   LogCleanupPeriodMs,
-} from "../../../shared/types/logger.types";
+} from "../src/types/logger.types";
 import { installLogCapture } from "./log-capture";
 import { Logger, LogLevel } from "./logger";
 import { Storage } from "./storage";

@@ -2,6 +2,9 @@
 node_modules/
 bundles/*/node_modules/
 .npm/
+.npm-cache-standalone/
+.standalone-check/
+.ui-check/
 
 # Build and test output
 dist/
@@ -68,6 +71,7 @@ Desktop.ini
 *.tmp
 *.bak
 *.off
+.nodecg-runtime-test.pid
 
 # Local project notes and agent/tool state
 .agent/

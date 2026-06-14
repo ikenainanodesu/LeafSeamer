@@ -1,9 +1,17 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "./extension",
-    "rootDir": "../../",
-    "baseUrl": "../../"
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM"],
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "Node",
+    "jsx": "react-jsx",
+    "types": ["node"]
   },
-  "include": ["extension/**/*", "../../shared/**/*"]
+  "include": ["extension/**/*", "src/**/*"]
 }

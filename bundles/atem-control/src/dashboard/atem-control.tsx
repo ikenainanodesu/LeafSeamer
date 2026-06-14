@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import type { AtemSwitcherInfo } from "@shared/types/atem.types";
+import type { AtemSwitcherInfo } from "../types/atem.types";
 import AtemPanel from "./atem-panel";
 
 declare const nodecg: any;

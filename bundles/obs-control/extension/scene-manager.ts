@@ -4,7 +4,7 @@ import {
   OBSState,
   OBSScene,
   OBSConnectionStatus,
-} from "../../../shared/types/obs.types";
+} from "../src/types/obs.types";
 
 export class SceneManager {
   private nodecg: NodeCG.ServerAPI;

@@ -4,7 +4,8 @@ import {
   AtemSwitcherInfo,
   AtemState as SharedAtemState,
   DiscoveredSwitcher,
-} from "@shared/types/atem.types";
+} from "../src/types/atem.types";
+import { ensureOptionalLogCapture } from "./optional-log-capture";
 
 // TODO: Use a proper discovery library if needed. For now simulating or basic IP.
 // 'atem-connection' checks availability but doesn't do mdns discovery itself directly without helper?
@@ -19,6 +20,7 @@ interface AtemManager {
 }
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
+  ensureOptionalLogCapture(nodecg.Logger);
   const log = nodecg.log;
   log.info("ATEM Control extension starting...");
 

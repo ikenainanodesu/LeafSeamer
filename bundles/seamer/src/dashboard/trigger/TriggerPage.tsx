@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { SeamerTrigger } from "../../types/seamer.types";
-import { MixerState } from "../../../../../shared/types/mixer.types";
-import {
-  OBSConnectionSettings,
-  OBSState,
-} from "../../../../../shared/types/obs.types";
 import {
   AtemSwitcherInfo,
-  AtemState,
-} from "../../../../../shared/types/atem.types";
-import { DeviceInfo } from "../../../../vb-matrix-control/src/types"; // Adjust path if needed or use shared if moved
+  DeviceInfo,
+  MixerState,
+  OBSConnectionSettings,
+  OBSState,
+  SeamerIntegrations,
+  SeamerTrigger,
+} from "../../types/seamer.types";
 import EditTriggerModal from "./EditTriggerModal";
 import { v4 as uuidv4 } from "uuid";
 
@@ -19,6 +17,7 @@ interface TriggerPageProps {
   obsStates: Record<string, OBSState>;
   vbDevices: DeviceInfo[];
   atemSwitchers: AtemSwitcherInfo[];
+  integrations: SeamerIntegrations;
 }
 
 const TriggerPage: React.FC<TriggerPageProps> = ({
@@ -27,6 +26,7 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
   obsStates,
   vbDevices,
   atemSwitchers,
+  integrations,
 }) => {
   const [triggers, setTriggers] = useState<SeamerTrigger[]>([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -206,6 +206,7 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
           obsStates={obsStates}
           vbDevices={vbDevices}
           atemSwitchers={atemSwitchers}
+          integrations={integrations}
         />
       )}
     </div>

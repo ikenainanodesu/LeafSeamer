@@ -15,20 +15,25 @@
     ]
   },
   "scripts": {
-    "build:extension": "vite build --config ../../vite.config.extension.ts",
-    "build:dashboard": "vite build --config ../../vite.config.dashboard.ts",
+    "build:extension": "vite build --config vite.config.mjs --mode extension",
+    "build:dashboard": "vite build --config vite.config.mjs --mode dashboard",
     "build": "npm run build:extension && npm run build:dashboard",
-    "watch:extension": "vite build --config ../../vite.config.extension.ts --watch",
+    "watch:extension": "vite build --config vite.config.mjs --mode extension --watch",
     "watch": "npm run watch:extension"
   },
   "dependencies": {
-    "async": "^3.2.5"
+    "async": "^3.2.5",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@types/async": "^3.2.24",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
-    "typescript": "^5.7.2"
+    "@vitejs/plugin-react": "^4.3.4",
+    "nodecg": "^2.6.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
   }
 }

@@ -1,4 +1,3 @@
-/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -8,7 +7,7 @@ import {
   OBSSceneItem,
   OBSMediaState,
   OBSPlaylistItem,
-} from "../../../../shared/types/obs.types";
+} from "../types/obs.types";
 import "./obs-control-panel.css";
 
 // ===== 工具函数 =====
@@ -42,7 +41,7 @@ const parseTimestamp = (timestamp: string): number | null => {
  * 从文件路径中提取文件名
  */
 const getFileName = (filePath: string): string => {
-  if (!filePath) return "未知";
+  if (!filePath) return "Unknown";
   const parts = filePath.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1] || filePath;
 };
@@ -992,7 +991,7 @@ const SingleObsControl = ({
                         handleSwitchScene(scene.name);
                       }}
                       className="obs-switch-btn"
-                      title="切换此Scene到PGM"
+                      title="Switch this scene to program"
                     >
                       SWITCH
                     </button>

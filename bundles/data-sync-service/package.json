@@ -3,15 +3,12 @@
   "version": "1.0.0",
   "nodecg": {
     "compatibleRange": "^2.0.0",
-    "bundleDependencies": {
-      "logger-system": "^1.0.0"
-    },
     "dashboardPanels": []
   },
   "scripts": {
-    "build:extension": "vite build --config ../../vite.config.extension.ts",
+    "build:extension": "vite build --config vite.config.mjs --mode extension",
     "build": "npm run build:extension",
-    "watch:extension": "vite build --config ../../vite.config.extension.ts --watch",
+    "watch:extension": "vite build --config vite.config.mjs --mode extension --watch",
     "watch": "npm run watch:extension"
   },
   "dependencies": {
@@ -19,6 +16,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
-    "typescript": "^5.7.2"
+    "nodecg": "^2.6.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
   }
 }

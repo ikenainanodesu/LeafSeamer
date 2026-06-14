@@ -1,7 +1,6 @@
-/// <reference path="../../../../shared/types/global.d.ts" />
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { MixerState, MixerOutput } from "../../../../shared/types/mixer.types";
+import { MixerState, MixerOutput } from "../types/mixer.types";
 
 const OutputControlPanel = () => {
   const [connected, setConnected] = useState(false);

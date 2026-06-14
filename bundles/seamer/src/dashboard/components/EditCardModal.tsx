@@ -10,19 +10,14 @@ import {
   AtemControlAction,
   AtemFunctionType,
   AtemTargetType,
-} from "../../types/seamer.types";
-import { v4 as uuidv4 } from "uuid";
-import { MixerState } from "../../../../../shared/types/mixer.types";
-import {
+  AtemState,
+  AtemSwitcherInfo,
+  MixerState,
   OBSConnectionSettings,
   OBSState,
-} from "../../../../../shared/types/obs.types";
-import {
-  AtemSwitcherInfo,
-  AtemState,
-} from "../../../../../shared/types/atem.types";
-
-declare const nodecg: any;
+  SeamerIntegrations,
+} from "../../types/seamer.types";
+import { v4 as uuidv4 } from "uuid";
 
 interface EditCardModalProps {
   initialCard: SeamerCard;
@@ -32,6 +27,9 @@ interface EditCardModalProps {
   presets: Preset[];
   obsConnections: OBSConnectionSettings[];
   obsStates: Record<string, OBSState>;
+  atemSwitchers: AtemSwitcherInfo[];
+  atemStates: Record<string, AtemState>;
+  integrations: SeamerIntegrations;
 }
 
 const EditCardModal: React.FC<EditCardModalProps> = ({
@@ -42,42 +40,11 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
   presets,
   obsConnections,
   obsStates,
+  atemSwitchers,
+  atemStates,
+  integrations,
 }) => {
   const [localCard, setLocalCard] = useState<SeamerCard>(initialCard);
-  const [atemSwitchers, setAtemSwitchers] = useState<AtemSwitcherInfo[]>([]);
-  const [atemStates, setAtemStates] = useState<Record<string, AtemState>>({});
-
-  React.useEffect(() => {
-    // ATEM Switchers
-    const atemSwRep = nodecg.Replicant("atem:switchers", "atem-control");
-    atemSwRep.on("change", (newVal: AtemSwitcherInfo[]) => {
-      setAtemSwitchers(newVal || []);
-    });
-  }, []);
-
-  // Effect to load ATEM state when an IP is selected (or pre-existing)
-  React.useEffect(() => {
-    const ipsToWatch = new Set<string>();
-    localCard.actions.forEach((a) => {
-      if (a.type === "atem-action" && a.switcherIp) {
-        ipsToWatch.add(a.switcherIp);
-      }
-    });
-
-    ipsToWatch.forEach((ip) => {
-      if (!atemStates[ip]) {
-        nodecg.readReplicant(
-          `atem:state:${ip}`,
-          "atem-control",
-          (val: AtemState) => {
-            if (val) {
-              setAtemStates((prev) => ({ ...prev, [ip]: val }));
-            }
-          }
-        );
-      }
-    });
-  }, [localCard.actions]);
 
   const updateAction = (id: string, updates: Partial<SeamerAction>) => {
     setLocalCard((prev: SeamerCard) => ({
@@ -664,10 +631,18 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                   )
                 }
               >
-                <option value="mixer-fader">Mixer Control</option>
-                <option value="vb-preset">VB Matrix Preset</option>
-                <option value="obs-action">OBS Control</option>
-                <option value="atem-action">ATEM Control</option>
+                <option value="mixer-fader">
+                  Mixer Control{integrations.mixer ? "" : " (Unavailable)"}
+                </option>
+                <option value="vb-preset">
+                  VB Matrix Preset{integrations.vb ? "" : " (Unavailable)"}
+                </option>
+                <option value="obs-action">
+                  OBS Control{integrations.obs ? "" : " (Unavailable)"}
+                </option>
+                <option value="atem-action">
+                  ATEM Control{integrations.atem ? "" : " (Unavailable)"}
+                </option>
               </select>
 
               {renderActionDetails(action)}
