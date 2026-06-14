@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 
 const VBAN_HEADER_SIZE = 28;
 const VBAN_PROTOCOL_TEXT = 0x40;
-const VBAN_BPS_256000 = 18; // 256000 bps index per VBAN specification
+const VBAN_BPS_256000 = 18; // VBAN 规范中的 256000 bps 索引。
 
 export class VBANTransmitter extends EventEmitter {
   private socket: dgram.Socket;
@@ -11,26 +11,27 @@ export class VBANTransmitter extends EventEmitter {
   private port: number = 6980;
   private streamName: string = "Command1";
   private packetCounter: number = 0;
+  private onInfo?: (message: string) => void;
 
-  constructor() {
+  constructor(onInfo?: (message: string) => void) {
     super();
+    this.onInfo = onInfo;
     this.socket = dgram.createSocket("udp4");
     this.socket.setMaxListeners(50);
 
     this.socket.on("listening", () => {
       const address = this.socket.address();
-      console.log(
+      this.onInfo?.(
         `[VBAN] Socket listening on ${address.address}:${address.port}`
       );
     });
 
     this.socket.on("message", (msg, rinfo) => {
-      // Basic VBAN validation
+      // 校验基础 VBAN 头部。
       if (msg.length < VBAN_HEADER_SIZE) return;
       if (msg.toString("ascii", 0, 4) !== "VBAN") return;
 
-      // Parse header if needed, but for now we just care about payload
-      // In VBAN-Text, payload starts at byte 28
+      // VBAN-Text 的正文从第 28 字节开始。
       const payload = msg.toString("utf8", VBAN_HEADER_SIZE);
       this.emit("data", payload, rinfo);
     });
@@ -39,7 +40,7 @@ export class VBANTransmitter extends EventEmitter {
       this.emit("error", err);
     });
 
-    // Bind to a random port to receive responses
+    // 绑定随机端口以接收响应。
     this.socket.bind(0);
   }
 
@@ -54,30 +55,28 @@ export class VBANTransmitter extends EventEmitter {
 
     const buffer = Buffer.alloc(VBAN_HEADER_SIZE + Buffer.byteLength(text));
 
-    // Header 'VBAN'
+    // 写入 VBAN 固定头部。
     buffer.write("VBAN", 0);
 
-    // SR / Protocol: Bits 5-7 = sub-protocol (010 for TEXT = 0x40)
-    //                Bits 0-4 = BPS index (18 for 256000 bps)
-    // Per VBAN spec: TEXT protocol uses 256000 bps (index 18)
+    // SR / Protocol：高三位为 TEXT 子协议，低五位为采样率索引。
     buffer.writeUInt8(VBAN_PROTOCOL_TEXT | VBAN_BPS_256000, 4);
 
-    // Preamble / Service (0)
+    // Preamble / Service。
     buffer.writeUInt8(0, 5);
 
-    // Channels (0)
+    // Channels。
     buffer.writeUInt8(0, 6);
 
-    // Format (0)
+    // Format。
     buffer.writeUInt8(0, 7);
 
-    // Stream Name (16 bytes)
+    // Stream Name 固定占 16 字节。
     buffer.write(this.streamName, 8, 16);
 
-    // Frame Counter (4 bytes)
+    // Frame Counter 固定占 4 字节。
     buffer.writeUInt32LE(this.packetCounter++, 24);
 
-    // Payload
+    // 写入正文。
     buffer.write(text, 28);
 
     this.socket.send(buffer, this.port, this.ip, (err) => {

@@ -90,7 +90,9 @@ export class MatrixManager {
       let vban = this.connections.get(config.id);
       if (!vban) {
         // Create new connection
-        vban = new VBANTransmitter();
+        vban = new VBANTransmitter((message) =>
+          this.nodecg.log.info(message)
+        );
         this.setupConnectionListeners(vban, config.id);
         this.connections.set(config.id, vban);
         this.nodecg.log.info(

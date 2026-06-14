@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "nodecg": {
     "compatibleRange": "^2.0.0",
+    "bundleDependencies": {
+      "logger-system": "^1.0.0"
+    },
     "dashboardPanels": [
       {
         "name": "atem-connection",
