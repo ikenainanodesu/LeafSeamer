@@ -30,7 +30,7 @@
       {
         "name": "network-config",
         "title": "VB Network Config",
-        "width": 3,
+        "width": 4,
         "file": "network-config.html",
         "headerColor": "#525F78",
         "workspace": "VB Control"

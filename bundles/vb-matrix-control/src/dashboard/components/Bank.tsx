@@ -14,7 +14,7 @@ export const Bank: React.FC = () => {
 
   // Create 8 slots
   return (
-    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+    <div className="bank-grid">
       {[...Array(8)].map((_, i) => {
         const preset = presets.find((p) => p.id === `bank-${i}`);
         return <BankSlot key={i} id={`bank-${i}`} index={i} preset={preset} />;

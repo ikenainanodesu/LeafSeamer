@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { PresetDraggable } from "./PresetDraggable";
 
 interface PresetManagerProps {
@@ -11,25 +11,21 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
   setName,
 }) => {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "10px",
-      }}
-    >
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Preset Name"
-        style={{ width: "100%" }}
-      />
+    <div className="preset-manager">
+      <label className="field">
+        <span>Preset Name</span>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Preset Name"
+          className="vb-input"
+        />
+      </label>
       <PresetDraggable />
-      <div style={{ fontSize: "0.8em", color: "#c9c9c9ff" }}>
+      <p className="preset-help">
         Name and drag to Bank to save current state.
-      </div>
+      </p>
     </div>
   );
 };

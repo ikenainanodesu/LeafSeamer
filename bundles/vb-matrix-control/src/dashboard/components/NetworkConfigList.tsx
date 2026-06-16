@@ -52,47 +52,40 @@ const NetworkConfigList: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        padding: "10px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h3>Network Configuration</h3>
-        <div style={{ fontSize: "0.8em", color: "#888" }}>
-          Local IPs: {localIPs.join(", ")}
+    <div className="vb-shell vb-shell--compact">
+      <header className="vb-header">
+        <div className="config-title">
+          <span className="vb-kicker">VBAN Matrix</span>
+          <h2>Network Configuration</h2>
         </div>
+        <div className="local-ip-list" aria-label="Local IP addresses">
+          {localIPs.length > 0 ? (
+            localIPs.map((ip) => (
+              <span className="ip-pill" key={ip} title={ip}>
+                {ip}
+              </span>
+            ))
+          ) : (
+            <span className="ip-pill">No local IPs</span>
+          )}
+        </div>
+      </header>
+
+      <div className="config-list">
+        {configs.length === 0 && (
+          <div className="empty-panel">No network configurations.</div>
+        )}
+        {configs.map((config) => (
+          <NetworkConfigCard
+            key={config.id}
+            config={config}
+            onUpdate={(updates) => handleUpdate(config.id, updates)}
+            onRemove={() => handleRemove(config.id)}
+          />
+        ))}
       </div>
 
-      {configs.map((config) => (
-        <NetworkConfigCard
-          key={config.id}
-          config={config}
-          onUpdate={(updates) => handleUpdate(config.id, updates)}
-          onRemove={() => handleRemove(config.id)}
-        />
-      ))}
-
-      <button
-        onClick={handleAdd}
-        style={{
-          padding: "10px",
-          border: "2px dashed #ccc",
-          backgroundColor: "transparent",
-          cursor: "pointer",
-          borderRadius: "4px",
-          color: "#888",
-        }}
-      >
+      <button onClick={handleAdd} className="add-config-button">
         + Add Network Configuration
       </button>
     </div>
@@ -105,87 +98,62 @@ const NetworkConfigCard: React.FC<{
   onRemove: () => void;
 }> = ({ config, onUpdate, onRemove }) => {
   return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        padding: "10px",
-        borderRadius: "4px",
-        position: "relative",
-      }}
-    >
+    <article className="network-card">
       <button
         onClick={onRemove}
-        style={{
-          position: "absolute",
-          top: "5px",
-          right: "5px",
-          background: "none",
-          border: "none",
-          color: "red",
-          cursor: "pointer",
-          fontWeight: "bold",
-        }}
+        className="icon-button icon-button--danger network-remove"
+        title="Remove connection"
+        aria-label={`Remove connection ${config.name}`}
       >
         X
       </button>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-        <div style={{ marginBottom: "5px" }}>
+      <div>
+        <label className="field field--name">
+          <span>Connection Name</span>
           <input
             value={config.name}
             onChange={(e) => onUpdate({ name: e.target.value })}
-            style={{
-              fontWeight: "bold",
-              border: "none",
-              borderBottom: "1px solid #ccc",
-              width: "100%",
-            }}
+            className="vb-input"
             placeholder="Connection Name"
           />
-        </div>
+        </label>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <label>
-            IP:
+        <div className="network-fields">
+          <label className="field">
+            <span>IP</span>
             <input
               type="text"
               value={config.ip}
               onChange={(e) => onUpdate({ ip: e.target.value })}
-              style={{ marginLeft: "5px", width: "110px" }}
+              className="vb-input"
             />
           </label>
-          <label>
-            Port:
+          <label className="field">
+            <span>Port</span>
             <input
               type="number"
               value={config.port}
               onChange={(e) =>
                 onUpdate({ port: parseInt(e.target.value) || 0 })
               }
-              style={{ marginLeft: "5px", width: "60px" }}
+              className="vb-input"
             />
           </label>
-          <label>
-            Stream:
+          <label className="field">
+            <span>Stream</span>
             <input
               type="text"
               value={config.streamName}
               onChange={(e) => onUpdate({ streamName: e.target.value })}
-              style={{ marginLeft: "5px", width: "80px" }}
+              className="vb-input"
             />
           </label>
 
           <PingTestButton configId={config.id} />
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 
@@ -243,23 +211,13 @@ const PingTestButton: React.FC<{ configId: string }> = ({ configId }) => {
     setTesting(false);
   };
 
-  let bgColor = "#eee";
-  if (flashState === "success") bgColor = "#52c41a";
-  if (flashState === "error") bgColor = "#ff4d4f";
+  const buttonClass = `ping-button ping-button--${flashState}`;
 
   return (
     <button
       onClick={runPingTest}
       disabled={testing}
-      style={{
-        backgroundColor: bgColor,
-        color: flashState === "idle" ? "black" : "white",
-        border: "1px solid #ccc",
-        borderRadius: "4px",
-        padding: "2px 8px",
-        cursor: testing ? "default" : "pointer",
-        minWidth: "60px",
-      }}
+      className={buttonClass}
     >
       {testing
         ? flashState === "success"

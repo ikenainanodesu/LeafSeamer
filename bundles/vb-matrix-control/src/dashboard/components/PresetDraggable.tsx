@@ -18,16 +18,7 @@ export const PresetDraggable: React.FC = () => {
 
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-      <div
-        style={{
-          padding: "10px",
-          border: "1px dashed #666",
-          backgroundColor: "#eee",
-          color: "#333",
-          cursor: "grab",
-          textAlign: "center",
-        }}
-      >
+      <div className="drag-card">
         Drag Current State to Bank
       </div>
     </div>

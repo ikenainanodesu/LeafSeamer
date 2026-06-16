@@ -8,11 +8,14 @@ import {
   Preset,
   CurrentPatchStatus,
   DeviceInfo,
+  MatrixPointAddress,
+  MatrixPointStatus,
 } from "../src/types";
 
 export class MatrixManager {
   private nodecg: NodeCG.ServerAPI;
   private connections: Map<string, VBANTransmitter> = new Map();
+  private lastDiscoveryAt: Map<string, number> = new Map();
 
   // Replicants
   private netConfigsRep: any;
@@ -20,6 +23,7 @@ export class MatrixManager {
   private presetsRep: any;
   private hostInfoRep: any;
   private availableDevicesRep: any;
+  private matrixPointsRep: any;
 
   constructor(nodecg: NodeCG.ServerAPI) {
     this.nodecg = nodecg;
@@ -74,6 +78,13 @@ export class MatrixManager {
         defaultValue: [],
       }
     );
+    this.matrixPointsRep = this.nodecg.Replicant<MatrixPointStatus[]>(
+      "matrixPoints",
+      {
+        defaultValue: [],
+        persistent: false,
+      }
+    );
 
     // Handle config changes
     this.netConfigsRep.on("change", (newVal: NetworkConfig[]) => {
@@ -118,6 +129,10 @@ export class MatrixManager {
         const devices = this.availableDevicesRep.value || [];
         this.availableDevicesRep.value = devices.filter(
           (d: DeviceInfo) => d.connectionId !== id
+        );
+        const matrixPoints = this.matrixPointsRep.value || [];
+        this.matrixPointsRep.value = matrixPoints.filter(
+          (p: MatrixPointStatus) => p.connectionId !== id
         );
       }
     }
@@ -267,11 +282,30 @@ export class MatrixManager {
       if (patch.inputDevice && patch.outputDevice) {
         const inCh = patch.inputChannel || 1;
         const outCh = patch.outputChannel || 1;
+        const point: MatrixPointAddress = {
+          connectionId: patch.connectionId,
+          inputDevice: patch.inputDevice,
+          inputChannel: inCh,
+          outputDevice: patch.outputDevice,
+          outputChannel: outCh,
+        };
 
         // Handle "Unpatch" (Remove)
         if (patch.exists === false) {
           const removeCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Remove;`;
           vban.send(removeCmd);
+          this.upsertMatrixPoint(point, {
+            exists: false,
+            gain: -144,
+            mute: false,
+          });
+          this.upsertActivePatchFromMatrixPoint(
+            point,
+            { exists: false, gain: -144, mute: false },
+            false
+          );
+          patch.gain = -144;
+          patch.mute = false;
         } else {
           // Handle "Patch" / Update
 
@@ -302,6 +336,21 @@ export class MatrixManager {
             const muteCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ${patch.mute ? 1 : 0};`;
             vban.send(muteCmd);
           }
+
+          this.upsertMatrixPoint(point, {
+            exists: patch.exists !== false && (patch.gain ?? 0) > -144,
+            gain: typeof patch.gain === "number" ? patch.gain : 0,
+            mute: typeof patch.mute === "boolean" ? patch.mute : false,
+          });
+          this.upsertActivePatchFromMatrixPoint(
+            point,
+            {
+              exists: patch.exists !== false && (patch.gain ?? 0) > -144,
+              gain: typeof patch.gain === "number" ? patch.gain : 0,
+              mute: typeof patch.mute === "boolean" ? patch.mute : false,
+            },
+            true
+          );
         }
       }
 
@@ -316,59 +365,23 @@ export class MatrixManager {
       }
     });
 
-    this.nodecg.listenFor("refreshDevices", () => {
-      // Query ALL connections
-      const commonSlots = [
-        "ASIO1",
-        "ASIO2",
-        "ASIO128",
-        "VBAN1",
-        "VBAN2",
-        "VBAN3",
-        "VBAN4",
-        "VBAN5",
-        "VBAN6",
-        "VBAN7",
-        "VBAN8",
-        "VAIO1",
-        "VAIO2",
-        "VAIO3",
-        "VAIO4",
-        "VAIO5",
-        "VAIO6",
-        "VAIO7",
-        "VAIO8",
-        "VAIO9",
-        "VAIO10",
-        "VAIO11",
-        "VAIO12",
-        "VAIO13",
-        "VAIO14",
-        "VAIO15",
-        "VAIO16",
-        "WDM1",
-        "WDM2",
-        "MME1",
-        "MME2",
-        "KS1",
-        "KS2",
-      ];
+    this.nodecg.listenFor("refreshDevices", (connectionId?: string) => {
+      this.requestDeviceDiscovery(connectionId);
+    });
 
-      this.connections.forEach((vban) => {
-        commonSlots.forEach((suid) => {
-          vban.send(`Slot(${suid}).Device = ?;`);
-          vban.send(`Slot(${suid}).Info = ?;`);
-        });
-      });
+    this.nodecg.listenFor("refreshMatrix", (connectionId?: string) => {
+      this.requestDeviceDiscovery(connectionId, true);
+      this.refreshMatrix(connectionId);
+    });
+
+    this.nodecg.listenFor("toggleMatrixPoint", (point: MatrixPointAddress) => {
+      this.toggleMatrixPoint(point);
     });
 
     this.nodecg.listenFor(
       "savePresetToBank",
       (data: { slotId: string; name: string }) => {
-        // Deep clone active patches
-        const currentPatches = JSON.parse(
-          JSON.stringify(this.activePatchesRep.value || [])
-        );
+        const currentPatches = this.getCurrentPatchSnapshot();
         const netConfigs = JSON.parse(JSON.stringify(this.netConfigsRep.value));
 
         const newPreset: Preset = {
@@ -442,10 +455,57 @@ export class MatrixManager {
                 `Point(${p.inputDevice}.IN[${inCh}],${p.outputDevice}.OUT[${outCh}]).Mute = ${p.mute ? 1 : 0};`
               );
             }
+            this.upsertMatrixPoint(
+              {
+                connectionId: p.connectionId,
+                inputDevice: p.inputDevice,
+                inputChannel: inCh,
+                outputDevice: p.outputDevice,
+                outputChannel: outCh,
+              },
+              {
+                exists: !!p.exists && p.gain > -144,
+                gain: p.gain,
+                mute: p.mute,
+              }
+            );
           });
         }
       }
     });
+  }
+
+  private getCurrentPatchSnapshot(): CurrentPatchStatus[] {
+    const snapshot = new Map<string, CurrentPatchStatus>();
+    const activePatches: CurrentPatchStatus[] = this.activePatchesRep.value || [];
+    const matrixPoints: MatrixPointStatus[] = this.matrixPointsRep.value || [];
+
+    activePatches.forEach((patch) => {
+      if (!patch.inputDevice || !patch.outputDevice) return;
+      snapshot.set(this.getMatrixPointKey(patch), {
+        ...patch,
+        id: patch.id || this.getPatchIdForMatrixPoint(patch),
+      });
+    });
+
+    matrixPoints.forEach((point) => {
+      if (!point.exists || point.gain <= -144) return;
+      if (snapshot.has(point.key)) return;
+
+      snapshot.set(point.key, {
+        id: this.getPatchIdForMatrixPoint(point),
+        connectionId: point.connectionId,
+        inputDevice: point.inputDevice,
+        inputChannel: point.inputChannel,
+        outputDevice: point.outputDevice,
+        outputChannel: point.outputChannel,
+        gain: point.gain,
+        mute: point.mute,
+        exists: true,
+      });
+    });
+
+    return JSON.parse(JSON.stringify([...snapshot.values()]));
   }
 
   private savePresetsToFile(presets: Preset[]) {
@@ -480,6 +540,259 @@ export class MatrixManager {
       if (vban) vban.send(versionQuery);
     } else {
       this.connections.forEach((vban) => vban.send(versionQuery));
+    }
+  }
+
+  private buildDiscoverySlots(): string[] {
+    // VB-Audio Matrix uses fixed slot SUIDs. WDM/MME/KS are device
+    // interface selectors, not slot names.
+    const slots = new Set<string>([
+      "ASIO128",
+      "ASIO64A",
+      "ASIO64B",
+      "VBAN64",
+      "VASIO8",
+      "VASIO128",
+      "VASIO64A",
+      "VASIO64B",
+    ]);
+
+    const ranges: Array<[string, number, string?]> = [
+      ["WIN", 4, ".IN"],
+      ["WIN", 4, ".OUT"],
+      ["VAIO", 4],
+      ["VBAN", 4],
+    ];
+
+    ranges.forEach(([prefix, max, suffix = ""]) => {
+      for (let i = 1; i <= max; i++) {
+        slots.add(`${prefix}${i}${suffix}`);
+      }
+    });
+
+    return [...slots];
+  }
+
+  private requestDeviceDiscovery(connectionId?: string, force = false) {
+    const commonSlots = this.buildDiscoverySlots();
+
+    const targets = connectionId
+      ? [[connectionId, this.connections.get(connectionId)] as const]
+      : Array.from(this.connections.entries());
+
+    targets.forEach(([id, vban]) => {
+      if (!vban) return;
+      const now = Date.now();
+      const lastRun = this.lastDiscoveryAt.get(id) || 0;
+      if (!force && now - lastRun < 1500) return;
+
+      this.lastDiscoveryAt.set(id, now);
+      commonSlots.forEach((suid) => {
+        vban.send(`Slot(${suid}).Device = ?;`);
+        vban.send(`Slot(${suid}).Info = ?;`);
+      });
+      this.nodecg.log.info(
+        `[VBAN] Requested ${commonSlots.length} Matrix slot probes for ${id}.`
+      );
+    });
+  }
+
+  private getMatrixPointKey(point: MatrixPointAddress): string {
+    return [
+      point.connectionId,
+      point.inputDevice,
+      point.inputChannel,
+      point.outputDevice,
+      point.outputChannel,
+    ].join("|");
+  }
+
+  private getPointDeviceSuid(slotSuid: string): string {
+    return slotSuid.replace(/\.(IN|OUT)$/i, "");
+  }
+
+  private getPatchIdForMatrixPoint(point: MatrixPointAddress): string {
+    return `matrix-${this.getMatrixPointKey(point).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  }
+
+  private upsertMatrixPoint(
+    point: MatrixPointAddress,
+    updates: Partial<Omit<MatrixPointStatus, keyof MatrixPointAddress | "key">>
+  ): MatrixPointStatus {
+    const key = this.getMatrixPointKey(point);
+    const currentPoints = this.matrixPointsRep.value || [];
+    const existingIndex = currentPoints.findIndex(
+      (candidate: MatrixPointStatus) => candidate.key === key
+    );
+    const previous = currentPoints[existingIndex];
+    const nextPoint: MatrixPointStatus = {
+      key,
+      ...point,
+      gain: updates.gain ?? previous?.gain ?? -144,
+      mute: updates.mute ?? previous?.mute ?? false,
+      exists: updates.exists ?? previous?.exists ?? false,
+      updatedAt: Date.now(),
+    };
+
+    if (existingIndex >= 0) {
+      currentPoints[existingIndex] = nextPoint;
+      this.matrixPointsRep.value = [...currentPoints];
+    } else {
+      this.matrixPointsRep.value = [...currentPoints, nextPoint];
+    }
+
+    return nextPoint;
+  }
+
+  private upsertActivePatchFromMatrixPoint(
+    point: MatrixPointAddress,
+    updates: Partial<Pick<CurrentPatchStatus, "gain" | "mute" | "exists">>,
+    createIfMissing: boolean
+  ) {
+    const currentPatches = this.activePatchesRep.value || [];
+    const existingIndex = currentPatches.findIndex(
+      (patch: CurrentPatchStatus) =>
+        patch.connectionId === point.connectionId &&
+        patch.inputDevice === point.inputDevice &&
+        (patch.inputChannel || 1) === point.inputChannel &&
+        patch.outputDevice === point.outputDevice &&
+        (patch.outputChannel || 1) === point.outputChannel
+    );
+
+    if (existingIndex === -1 && !createIfMissing) {
+      return;
+    }
+
+    const previous = currentPatches[existingIndex];
+    const nextPatch: CurrentPatchStatus = {
+      id: previous?.id || this.getPatchIdForMatrixPoint(point),
+      ...point,
+      gain: updates.gain ?? previous?.gain ?? -144,
+      mute: updates.mute ?? previous?.mute ?? false,
+      exists: updates.exists ?? previous?.exists ?? false,
+    };
+
+    if (existingIndex >= 0) {
+      currentPatches[existingIndex] = nextPatch;
+      this.activePatchesRep.value = [...currentPatches];
+    } else {
+      this.activePatchesRep.value = [...currentPatches, nextPatch];
+    }
+  }
+
+  private refreshMatrix(connectionId?: string) {
+    const connectionIds = connectionId
+      ? [connectionId]
+      : Array.from(this.connections.keys());
+    const devices: DeviceInfo[] = this.availableDevicesRep.value || [];
+
+    connectionIds.forEach((id) => {
+      const vban = this.connections.get(id);
+      if (!vban) return;
+
+      const connectionDevices = devices.filter(
+        (device: DeviceInfo) => device.connectionId === id
+      );
+      const inputDevices = connectionDevices.filter(
+        (device: DeviceInfo) => device.inputs > 0
+      );
+      const outputDevices = connectionDevices.filter(
+        (device: DeviceInfo) => device.outputs > 0
+      );
+
+      if (inputDevices.length === 0 || outputDevices.length === 0) {
+        this.nodecg.log.warn(
+          `[refreshMatrix] No discovered Matrix devices for ${id}.`
+        );
+        return;
+      }
+
+      inputDevices.forEach((inputDevice: DeviceInfo) => {
+        const inputPointDevice = inputDevice.pointDevice || inputDevice.suid;
+        for (
+          let inputChannel = 1;
+          inputChannel <= inputDevice.inputs;
+          inputChannel++
+        ) {
+          outputDevices.forEach((outputDevice: DeviceInfo) => {
+            const outputPointDevice =
+              outputDevice.pointDevice || outputDevice.suid;
+            for (
+              let outputChannel = 1;
+              outputChannel <= outputDevice.outputs;
+              outputChannel++
+            ) {
+              vban.send(
+                `Point(${inputPointDevice}.IN[${inputChannel}],${outputPointDevice}.OUT[${outputChannel}]).dBGain = ?;`
+              );
+              vban.send(
+                `Point(${inputPointDevice}.IN[${inputChannel}],${outputPointDevice}.OUT[${outputChannel}]).Mute = ?;`
+              );
+            }
+          });
+        }
+      });
+    });
+  }
+
+  private toggleMatrixPoint(point: MatrixPointAddress) {
+    if (
+      !point?.connectionId ||
+      !point.inputDevice ||
+      !point.outputDevice ||
+      !point.inputChannel ||
+      !point.outputChannel
+    ) {
+      this.nodecg.log.warn("[toggleMatrixPoint] Invalid matrix point.");
+      return;
+    }
+
+    const vban = this.connections.get(point.connectionId);
+    if (!vban) {
+      this.nodecg.log.warn(
+        `[toggleMatrixPoint] Connection ${point.connectionId} not found.`
+      );
+      return;
+    }
+
+    const key = this.getMatrixPointKey(point);
+    const currentPoint = (this.matrixPointsRep.value || []).find(
+      (candidate: MatrixPointStatus) => candidate.key === key
+    );
+    const isPatched =
+      !!currentPoint && currentPoint.exists && currentPoint.gain > -144;
+
+    if (isPatched) {
+      vban.send(
+        `Point(${point.inputDevice}.IN[${point.inputChannel}],${point.outputDevice}.OUT[${point.outputChannel}]).Remove;`
+      );
+      this.upsertMatrixPoint(point, {
+        exists: false,
+        gain: -144,
+        mute: false,
+      });
+      this.upsertActivePatchFromMatrixPoint(
+        point,
+        { exists: false, gain: -144, mute: false },
+        false
+      );
+    } else {
+      vban.send(
+        `Point(${point.inputDevice}.IN[${point.inputChannel}],${point.outputDevice}.OUT[${point.outputChannel}]).dBGain = 0.0;`
+      );
+      vban.send(
+        `Point(${point.inputDevice}.IN[${point.inputChannel}],${point.outputDevice}.OUT[${point.outputChannel}]).Mute = 0;`
+      );
+      this.upsertMatrixPoint(point, {
+        exists: true,
+        gain: 0,
+        mute: false,
+      });
+      this.upsertActivePatchFromMatrixPoint(
+        point,
+        { exists: true, gain: 0, mute: false },
+        true
+      );
     }
   }
 
@@ -551,11 +864,11 @@ export class MatrixManager {
           value !== "Err"
         ) {
           const suid = match[1];
-          const infoMatch = value.match(/In:(\d+),\s*Out:(\d+)/i);
-          if (infoMatch) {
+          const info = this.parseSlotInfo(value);
+          if (info) {
             this.updateDeviceInfo(connectionId, suid, "info", {
-              inputs: parseInt(infoMatch[1]),
-              outputs: parseInt(infoMatch[2]),
+              inputs: info.inputs,
+              outputs: info.outputs,
             });
           }
         }
@@ -567,23 +880,49 @@ export class MatrixManager {
           /Point\(([^.]+)\.IN\[(\d+)\],\s*([^.]+)\.OUT\[(\d+)\]\)\.dBGain/
         );
 
-        if (match && value && value !== "Err") {
+        if (match && value) {
+          const point: MatrixPointAddress = {
+            connectionId,
+            inputDevice: match[1],
+            inputChannel: parseInt(match[2]),
+            outputDevice: match[3],
+            outputChannel: parseInt(match[4]),
+          };
+
+          if (value === "Err") {
+            this.upsertMatrixPoint(point, {
+              gain: -144,
+              exists: false,
+            });
+            this.upsertActivePatchFromMatrixPoint(
+              point,
+              { gain: -144, exists: false },
+              false
+            );
+            return;
+          }
+
           const gainValue = parseFloat(value);
           if (!isNaN(gainValue)) {
+            const exists = gainValue > -144;
+            this.upsertMatrixPoint(point, {
+              gain: gainValue,
+              exists,
+            });
             const currentPatches = this.activePatchesRep.value || [];
             let updated = false;
 
             const updatedPatches = currentPatches.map(
               (patch: CurrentPatchStatus) => {
                 if (
-                  patch.connectionId === connectionId && // Check connection
-                  patch.inputDevice === match[1] &&
-                  (patch.inputChannel || 1) === parseInt(match[2]) &&
-                  patch.outputDevice === match[3] &&
-                  (patch.outputChannel || 1) === parseInt(match[4])
+                  patch.connectionId === point.connectionId &&
+                  patch.inputDevice === point.inputDevice &&
+                  (patch.inputChannel || 1) === point.inputChannel &&
+                  patch.outputDevice === point.outputDevice &&
+                  (patch.outputChannel || 1) === point.outputChannel
                 ) {
                   updated = true;
-                  return { ...patch, gain: gainValue, exists: true };
+                  return { ...patch, gain: gainValue, exists };
                 }
                 return patch;
               }
@@ -602,23 +941,51 @@ export class MatrixManager {
           /Point\(([^.]+)\.IN\[(\d+)\],\s*([^.]+)\.OUT\[(\d+)\]\)\.Mute/
         );
 
-        if (match && value && value !== "Err") {
+        if (match && value) {
+          const point: MatrixPointAddress = {
+            connectionId,
+            inputDevice: match[1],
+            inputChannel: parseInt(match[2]),
+            outputDevice: match[3],
+            outputChannel: parseInt(match[4]),
+          };
+
+          if (value === "Err") {
+            this.upsertMatrixPoint(point, {
+              mute: false,
+              exists: false,
+            });
+            this.upsertActivePatchFromMatrixPoint(
+              point,
+              { mute: false, exists: false },
+              false
+            );
+            return;
+          }
+
           const muteValue = parseInt(value);
           if (!isNaN(muteValue)) {
+            this.upsertMatrixPoint(point, {
+              mute: muteValue === 1,
+            });
             const currentPatches = this.activePatchesRep.value || [];
             let updated = false;
 
             const updatedPatches = currentPatches.map(
               (patch: CurrentPatchStatus) => {
                 if (
-                  patch.connectionId === connectionId && // Check connection
-                  patch.inputDevice === match[1] &&
-                  (patch.inputChannel || 1) === parseInt(match[2]) &&
-                  patch.outputDevice === match[3] &&
-                  (patch.outputChannel || 1) === parseInt(match[4])
+                  patch.connectionId === point.connectionId &&
+                  patch.inputDevice === point.inputDevice &&
+                  (patch.inputChannel || 1) === point.inputChannel &&
+                  patch.outputDevice === point.outputDevice &&
+                  (patch.outputChannel || 1) === point.outputChannel
                 ) {
                   updated = true;
-                  return { ...patch, mute: muteValue === 1, exists: true };
+                  return {
+                    ...patch,
+                    mute: muteValue === 1,
+                    exists: patch.exists ?? true,
+                  };
                 }
                 return patch;
               }
@@ -635,6 +1002,30 @@ export class MatrixManager {
 
   private deviceCache: Map<string, DeviceInfo> = new Map(); // Key: "connectionId:suid"
 
+  private parseSlotInfo(value: string): { inputs: number; outputs: number } | null {
+    const normalized = value.replace(/["“”]/g, "").trim();
+    const directMatch = normalized.match(
+      /\bin\s*:?\s*(\d+)\s*[,;/ ]+\s*out\s*:?\s*(\d+)/i
+    );
+    if (directMatch) {
+      return {
+        inputs: parseInt(directMatch[1], 10),
+        outputs: parseInt(directMatch[2], 10),
+      };
+    }
+
+    const inputMatch = normalized.match(/\bin(?:put)?s?\s*:?\s*(\d+)/i);
+    const outputMatch = normalized.match(/\bout(?:put)?s?\s*:?\s*(\d+)/i);
+    if (inputMatch || outputMatch) {
+      return {
+        inputs: inputMatch ? parseInt(inputMatch[1], 10) : 0,
+        outputs: outputMatch ? parseInt(outputMatch[1], 10) : 0,
+      };
+    }
+
+    return null;
+  }
+
   private updateDeviceInfo(
     connectionId: string,
     suid: string,
@@ -645,6 +1036,7 @@ export class MatrixManager {
     let device = this.deviceCache.get(key) || {
       connectionId,
       suid,
+      pointDevice: this.getPointDeviceSuid(suid),
       name: suid,
       inputs: 0,
       outputs: 0,

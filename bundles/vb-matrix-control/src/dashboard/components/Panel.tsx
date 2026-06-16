@@ -4,7 +4,13 @@ import { PatchSelector } from "./PatchSelector";
 import { PatchStatus } from "./PatchStatus";
 import { PresetManager } from "./PresetManager";
 import { Bank } from "./Bank";
-import { NetworkConfig } from "../../types";
+import { MatrixView } from "./MatrixView";
+import {
+  CurrentPatchStatus,
+  DeviceInfo,
+  MatrixPointStatus,
+  NetworkConfig,
+} from "../../types";
 
 export const Panel: React.FC = () => {
   const [presetName, setPresetName] = React.useState("New Preset");
@@ -13,30 +19,54 @@ export const Panel: React.FC = () => {
   const [networkConfigs, setNetworkConfigs] = React.useState<NetworkConfig[]>(
     []
   );
-  // patches state
-  const [patches, setPatches] = React.useState<any[]>([]);
+  const [patches, setPatches] = React.useState<CurrentPatchStatus[]>([]);
+  const [devices, setDevices] = React.useState<DeviceInfo[]>([]);
+  const [matrixPoints, setMatrixPoints] = React.useState<MatrixPointStatus[]>(
+    []
+  );
 
   useEffect(() => {
     const netRep = nodecg.Replicant<NetworkConfig[]>("networkConfigs");
-    netRep.on("change", (val: NetworkConfig[]) => {
-      if (val) {
-        setNetworkConfigs(val);
-        // Default to first connection if none selected or current one removed
-        if (
-          val.length > 0 &&
-          (!activeConnectionId ||
-            !val.find((c: NetworkConfig) => c.id === activeConnectionId))
-        ) {
-          setActiveConnectionId(val[0].id);
+    const handleNetworkChange = (val: NetworkConfig[] = []) => {
+      setNetworkConfigs(val);
+      setActiveConnectionId((currentId) => {
+        if (val.length === 0) return "";
+        if (!currentId || !val.find((c) => c.id === currentId)) {
+          return val[0].id;
         }
-      }
-    });
+        return currentId;
+      });
+    };
+    netRep.on("change", handleNetworkChange);
 
-    const activePatchesRep = nodecg.Replicant<any[]>("activePatches");
-    activePatchesRep.on("change", (val: any[]) => {
-      if (val) setPatches(val);
-    });
-  }, [activeConnectionId]); // Add dependency if we need to react to ID change, but logic is inside handle
+    const activePatchesRep =
+      nodecg.Replicant<CurrentPatchStatus[]>("activePatches");
+    const handlePatchesChange = (val: CurrentPatchStatus[] = []) => {
+      setPatches(val);
+    };
+    activePatchesRep.on("change", handlePatchesChange);
+
+    const availableDevicesRep =
+      nodecg.Replicant<DeviceInfo[]>("availableDevices");
+    const handleDevicesChange = (val: DeviceInfo[] = []) => {
+      setDevices(val);
+    };
+    availableDevicesRep.on("change", handleDevicesChange);
+
+    const matrixPointsRep =
+      nodecg.Replicant<MatrixPointStatus[]>("matrixPoints");
+    const handleMatrixPointsChange = (val: MatrixPointStatus[] = []) => {
+      setMatrixPoints(val);
+    };
+    matrixPointsRep.on("change", handleMatrixPointsChange);
+
+    return () => {
+      netRep.removeListener("change", handleNetworkChange);
+      activePatchesRep.removeListener("change", handlePatchesChange);
+      availableDevicesRep.removeListener("change", handleDevicesChange);
+      matrixPointsRep.removeListener("change", handleMatrixPointsChange);
+    };
+  }, []);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { over } = event;
@@ -59,148 +89,138 @@ export const Panel: React.FC = () => {
     nodecg.sendMessage("removePatch", id);
   };
 
+  const handleRefreshMatrix = React.useCallback(() => {
+    if (!activeConnectionId) return;
+    nodecg.sendMessage("refreshMatrix", activeConnectionId);
+  }, [activeConnectionId]);
+
   const filteredPatches = patches.filter(
     (p) => p.connectionId === activeConnectionId
+  );
+  const activeConnection = networkConfigs.find(
+    (c) => c.id === activeConnectionId
   );
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
-      <div
-        style={{
-          padding: "10px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "15px",
-        }}
-      >
-        <h2>VB Matrix Control</h2>
+      <div className="vb-shell">
+        <header className="vb-header">
+          <div className="vb-title-group">
+            <span className="vb-kicker">VBAN Matrix</span>
+            <h2>VB Matrix Control</h2>
+          </div>
+          <div className="header-meta" title={activeConnection?.ip || ""}>
+            <strong>{activeConnection?.name || "No Matrix"}</strong>
+            {activeConnection?.ip || "Not configured"}
+          </div>
+        </header>
 
-        <div style={{ marginBottom: "10px" }}>
-          <label style={{ fontWeight: "bold", marginRight: "10px" }}>
-            Select Matrix:
+        <div className="matrix-toolbar">
+          <label className="field">
+            <span>Matrix</span>
+            <select
+              value={activeConnectionId}
+              onChange={(e) => setActiveConnectionId(e.target.value)}
+              className="vb-select"
+            >
+              {networkConfigs.length === 0 && (
+                <option value="">No Configurations</option>
+              )}
+              {networkConfigs.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.ip})
+                </option>
+              ))}
+            </select>
           </label>
-          <select
-            value={activeConnectionId}
-            onChange={(e) => setActiveConnectionId(e.target.value)}
-            style={{ padding: "5px", fontSize: "1em" }}
-          >
-            {networkConfigs.length === 0 && (
-              <option value="">No Configurations</option>
-            )}
-            {networkConfigs.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.ip})
-              </option>
-            ))}
-          </select>
+          <div className="config-count">{networkConfigs.length} Configs</div>
         </div>
 
         {activeConnectionId ? (
-          <div
-            style={{
-              border: "1px solid #ccc",
-              padding: "10px",
-              borderRadius: "4px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Patch Control</h3>
-              <button
-                onClick={handleAddPatch}
-                style={{ fontSize: "1.2em", padding: "0 10px" }}
-              >
-                +
-              </button>
-            </div>
+          <>
+            <MatrixView
+              connectionId={activeConnectionId}
+              devices={devices}
+              points={matrixPoints}
+              patches={patches}
+              onRefresh={handleRefreshMatrix}
+            />
 
-            {filteredPatches.length === 0 && (
-              <div style={{ color: "#888", fontStyle: "italic" }}>
-                No patches for this matrix.
+            <section className="section-panel">
+              <div className="section-heading">
+                <div className="section-title">
+                  <span className="section-kicker">Routing</span>
+                  <h3>Patch Control</h3>
+                  <p className="section-note">
+                    {filteredPatches.length} active row
+                    {filteredPatches.length === 1 ? "" : "s"} for{" "}
+                    {activeConnection?.name || "selected matrix"}
+                  </p>
+                </div>
+                <button
+                  onClick={handleAddPatch}
+                  className="icon-button icon-button--primary section-action"
+                  title="Add patch"
+                  aria-label="Add patch"
+                >
+                  +
+                </button>
               </div>
-            )}
 
-            {filteredPatches.map((patch, index) => (
-              <div
-                key={patch.id}
-                style={{
-                  borderTop: index > 0 ? "1px dashed #ccc" : "none",
-                  paddingTop: index > 0 ? "10px" : "0",
-                  position: "relative",
-                }}
-              >
-                {index > 0 && (
-                  <button
-                    onClick={() => handleRemovePatch(patch.id)}
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: index > 0 ? "10px" : 0,
-                      background: "none",
-                      border: "none",
-                      color: "red",
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    X
-                  </button>
-                )}
-                <PatchSelector
-                  patchId={patch.id}
-                  connectionId={activeConnectionId}
-                  status={patch}
-                  onSelectionChange={() => {}}
-                />
-                <PatchStatus status={patch} />
+              {filteredPatches.length === 0 && (
+                <div className="empty-state">No patches for this matrix.</div>
+              )}
+
+              <div className="patch-list">
+                {filteredPatches.map((patch, index) => (
+                  <article className="patch-row" key={patch.id}>
+                    <div className="patch-row-heading">
+                      <span className="patch-index">Patch {index + 1}</span>
+                      {index > 0 && (
+                        <button
+                          onClick={() => handleRemovePatch(patch.id)}
+                          className="icon-button icon-button--danger"
+                          title="Remove patch"
+                          aria-label={`Remove patch ${index + 1}`}
+                        >
+                          X
+                        </button>
+                      )}
+                    </div>
+                    <PatchSelector
+                      patchId={patch.id}
+                      connectionId={activeConnectionId}
+                      status={patch}
+                      onSelectionChange={() => {}}
+                    />
+                    <PatchStatus status={patch} />
+                  </article>
+                ))}
               </div>
-            ))}
-          </div>
+            </section>
+          </>
         ) : (
-          <div
-            style={{
-              padding: "20px",
-              textAlign: "center",
-              color: "#666",
-              border: "1px dashed #ccc",
-            }}
-          >
+          <div className="empty-panel">
             Please add a Network Configuration in the dedicated panel.
           </div>
         )}
 
-        <div style={{ display: "flex", gap: "20px" }}>
-          <div
-            style={{
-              border: "1px solid #ccc",
-              padding: "10px",
-              borderRadius: "4px",
-              flex: 1,
-            }}
-          >
-            <h3>Preset Manager</h3>
+        <div className="management-grid">
+          <section className="section-panel">
+            <div className="section-title">
+              <span className="section-kicker">Capture</span>
+              <h3>Preset Manager</h3>
+            </div>
             <PresetManager name={presetName} setName={setPresetName} />
-          </div>
+          </section>
 
-          <div
-            style={{
-              border: "1px solid #ccc",
-              padding: "10px",
-              borderRadius: "4px",
-              flex: 2,
-            }}
-          >
-            <h3>Preset Bank</h3>
+          <section className="section-panel">
+            <div className="section-title">
+              <span className="section-kicker">Recall</span>
+              <h3>Preset Bank</h3>
+            </div>
             <Bank />
-          </div>
+          </section>
         </div>
       </div>
     </DndContext>

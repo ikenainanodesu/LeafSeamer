@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { CurrentPatchStatus, DeviceInfo } from "../../types";
 
+const getPointDevice = (device: DeviceInfo) => device.pointDevice || device.suid;
+
 export const PatchSelector: React.FC<{
   patchId: string;
   connectionId: string;
@@ -86,40 +88,43 @@ export const PatchSelector: React.FC<{
   const connectionDevices = devices.filter(
     (d) => d.connectionId === connectionId
   );
+  const inputDevice = connectionDevices.find(
+    (d) => getPointDevice(d) === inputDev && d.inputs > 0
+  );
+  const outputDevice = connectionDevices.find(
+    (d) => getPointDevice(d) === outputDev && d.outputs > 0
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-      <div style={{ display: "flex", gap: "10px" }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Input Device</label>
+    <div className="patch-selector">
+      <div className="selector-row">
+        <label className="field">
+          <span>Input Device</span>
           <select
             onMouseDown={handleRefresh}
             value={inputDev}
             onChange={(e) => setInputDev(e.target.value)}
+            className="vb-select"
           >
             <option value="">Select Device</option>
             {connectionDevices
               .filter((d) => d.inputs > 0)
               .map((d) => (
-                <option key={d.suid} value={d.suid}>
+                <option key={d.suid} value={getPointDevice(d)}>
                   {d.name || d.suid}
                 </option>
               ))}
           </select>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Ch</label>
+        </label>
+        <label className="field">
+          <span>Ch</span>
           <select
             value={inputCh}
             onChange={(e) => setInputCh(parseInt(e.target.value))}
+            className="vb-select"
           >
-            {connectionDevices.find((d) => d.suid === inputDev) &&
-              [
-                ...Array(
-                  connectionDevices.find((d) => d.suid === inputDev)?.inputs ||
-                    8
-                ),
-              ].map((_, i) => (
+            {inputDevice &&
+              [...Array(inputDevice.inputs || 8)].map((_, i) => (
                 <option key={i + 1} value={i + 1}>
                   {i + 1}
                 </option>
@@ -131,40 +136,37 @@ export const PatchSelector: React.FC<{
                 </option>
               ))}
           </select>
-        </div>
+        </label>
       </div>
 
-      <div style={{ display: "flex", gap: "10px" }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Output Device</label>
+      <div className="selector-row">
+        <label className="field">
+          <span>Output Device</span>
           <select
             onMouseDown={handleRefresh}
             value={outputDev}
             onChange={(e) => setOutputDev(e.target.value)}
+            className="vb-select"
           >
             <option value="">Select Device</option>
             {connectionDevices
               .filter((d) => d.outputs > 0)
               .map((d) => (
-                <option key={d.suid} value={d.suid}>
+                <option key={d.suid} value={getPointDevice(d)}>
                   {d.name || d.suid}
                 </option>
               ))}
           </select>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Ch</label>
+        </label>
+        <label className="field">
+          <span>Ch</span>
           <select
             value={outputCh}
             onChange={(e) => setOutputCh(parseInt(e.target.value))}
+            className="vb-select"
           >
-            {connectionDevices.find((d) => d.suid === outputDev) &&
-              [
-                ...Array(
-                  connectionDevices.find((d) => d.suid === outputDev)
-                    ?.outputs || 8
-                ),
-              ].map((_, i) => (
+            {outputDevice &&
+              [...Array(outputDevice.outputs || 8)].map((_, i) => (
                 <option key={i + 1} value={i + 1}>
                   {i + 1}
                 </option>
@@ -176,7 +178,7 @@ export const PatchSelector: React.FC<{
                 </option>
               ))}
           </select>
-        </div>
+        </label>
       </div>
     </div>
   );

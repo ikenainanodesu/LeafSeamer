@@ -34,7 +34,7 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
 
   if (!status || !status.inputDevice || !status.outputDevice) {
     return (
-      <div style={{ marginTop: "10px", color: "#888", textAlign: "center" }}>
+      <div className="empty-inline">
         Please select device
       </div>
     );
@@ -43,40 +43,38 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
   const isPatched = status.exists && status.gain > -144;
 
   return (
-    <div style={{ marginTop: "10px" }}>
-      <div
+    <div className="patch-status">
+      <button
+        type="button"
         onClick={toggleConnection}
-        style={{
-          cursor: "pointer",
-          fontWeight: "bold",
-          marginBottom: "10px",
-          padding: "10px",
-          backgroundColor: isPatched ? "#e6f7ff" : "#fff1f0",
-          border: "1px solid #ccc",
-          borderRadius: "4px",
-          textAlign: "center",
-          userSelect: "none",
-        }}
+        className={`connection-toggle ${
+          isPatched ? "is-patched" : "is-unpatched"
+        } ${status.mute ? "is-muted" : ""}`}
       >
         {isPatched ? (
           <>
-            <div style={{ fontSize: "1.2em" }}>
+            <span className="toggle-value">
               {status.mute ? "MUTED" : `${status.gain.toFixed(1)} dB`}
-            </div>
-            <div style={{ fontSize: "0.8em", color: "#666" }}>
-              (Click to Unpatch)
-            </div>
+            </span>
+            <span className="toggle-hint">Click to unpatch</span>
           </>
         ) : (
-          <div style={{ color: "#d9363e" }}>UNPATCHED (Click to Patch)</div>
+          <>
+            <span className="toggle-value">UNPATCHED</span>
+            <span className="toggle-hint">Click to patch</span>
+          </>
         )}
-      </div>
+      </button>
 
       {isPatched && (
-        <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
-          <button onClick={() => updateGain(-1)}>-1 dB</button>
-          <button onClick={() => updateGain(1)}>+1 dB</button>
-          <button onClick={toggleMute}>
+        <div className="status-actions">
+          <button className="control-button" onClick={() => updateGain(-1)}>
+            -1 dB
+          </button>
+          <button className="control-button" onClick={() => updateGain(1)}>
+            +1 dB
+          </button>
+          <button className="control-button" onClick={toggleMute}>
             {status.mute ? "Unmute" : "Mute"}
           </button>
         </div>

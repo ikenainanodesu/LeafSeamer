@@ -13,61 +13,40 @@ export const BankSlot: React.FC<BankSlotProps> = ({ id, preset, index }) => {
     id: id,
   });
 
-  const style = {
-    width: "100px",
-    height: "100px",
-    border: "1px solid #ccc",
-    backgroundColor: isOver ? "#e0e0e0" : "#fff",
-    color: "#333",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    flexDirection: "column" as const,
-    padding: "5px",
-  };
+  const className = `bank-slot ${isOver ? "is-over" : ""} ${
+    preset ? "is-filled" : ""
+  }`;
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} className={className}>
       {preset ? (
         <>
-          <strong>{preset.name}</strong>
-          <span style={{ fontSize: "0.8em" }}>Bank {index + 1}</span>
-          <div style={{ display: "flex", gap: "5px", marginTop: "5px" }}>
+          <strong className="slot-name">{preset.name}</strong>
+          <span className="slot-label">Bank {index + 1}</span>
+          <div className="slot-actions">
             <button
               onClick={() => nodecg.sendMessage("loadPreset", preset.id)}
-              style={{ flex: 1 }}
+              className="control-button"
             >
               Load
             </button>
             <button
               onClick={(e) => {
                 e.preventDefault();
-                e.stopPropagation(); // Stop bubbling
-                console.log("Delete button clicked for:", preset.id);
-                // Temporarily removing confirm to verify click works
-                // if (confirm("Delete this preset?")) {
+                e.stopPropagation();
                 nodecg.sendMessage("deletePreset", preset.id);
-                // }
               }}
-              onPointerDown={(e) => e.stopPropagation()} // Prevent DnD interference
-              style={{
-                backgroundColor: "#ff4d4f",
-                color: "white",
-                border: "none",
-                borderRadius: "3px",
-                cursor: "pointer",
-                padding: "5px 10px",
-                zIndex: 10,
-                position: "relative",
-              }}
-              title="Delete"
+              onPointerDown={(e) => e.stopPropagation()}
+              className="icon-button icon-button--danger"
+              title="Delete preset"
+              aria-label={`Delete preset ${preset.name}`}
             >
               X
             </button>
           </div>
         </>
       ) : (
-        <span style={{ color: "#ccc" }}>Empty Slot {index + 1}</span>
+        <span className="slot-empty">Empty Slot {index + 1}</span>
       )}
     </div>
   );

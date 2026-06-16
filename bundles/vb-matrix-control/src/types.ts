@@ -39,6 +39,22 @@ export interface CurrentPatchStatus {
   exists?: boolean;
 }
 
+export interface MatrixPointAddress {
+  connectionId: string;
+  inputDevice: string;
+  inputChannel: number;
+  outputDevice: string;
+  outputChannel: number;
+}
+
+export interface MatrixPointStatus extends MatrixPointAddress {
+  key: string;
+  gain: number;
+  mute: boolean;
+  exists: boolean;
+  updatedAt: number;
+}
+
 export interface Preset {
   id: string; // Slot ID
   name: string;
@@ -49,6 +65,7 @@ export interface Preset {
 export interface DeviceInfo {
   connectionId: string;
   suid: string;
+  pointDevice?: string;
   name: string;
   inputs: number;
   outputs: number;
