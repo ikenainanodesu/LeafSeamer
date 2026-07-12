@@ -42,6 +42,22 @@ credentials*.json
 service-account*.json
 *.key
 *.pem
+cfg/secrets/
+bundles/*/secrets/
+*.secret.json
+*.encrypted-secret.json
+
+# Local audit databases and SQLite runtime files
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db-wal
+*.db-shm
+
+# Local backup selection and restore material
+*.backup-profile.local.json
+*.restore-key
 
 # Logs and temporary diagnostics
 *.log

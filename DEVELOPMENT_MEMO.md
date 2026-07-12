@@ -366,11 +366,17 @@ decisions, or release-readiness status changes.
 ### 代码变动
 
 - 新增报告重排设计说明 `docs/superpowers/specs/2026-07-12-project-status-report-restructure-design.md`。
-- 本阶段尚未修改 LeafSeamer 业务代码。
+- 新增实施计划 `docs/superpowers/plans/2026-07-12-project-status-report-restructure.md`。
+- 重写 `LeafSeamer_Project_Status_Report.html`，改为平台共享与各 Bundle 档案结构。
+- 新增 `scripts/validate-status-report.mjs`，静态检查 Bundle 覆盖、问题字段、内部锚点、重复 ID、筛选、响应式和打印约定。
+- 已将验证后的报告同步覆盖到 `D:\git-repo\PROFILE-MANAGER-1\nodecg\LeafSeamer_Project_Status_Report.html`。
+- 未修改 LeafSeamer 运行时业务代码。
 
 ### 功能增减
 
-- 计划为报告增加按 Bundle 导航、问题编号、风险筛选和打印样式。
+- 报告增加按 Bundle 导航、问题编号、P0/P1/P2 筛选、展开/折叠、窄屏布局和打印样式。
+- 20 个问题均在同一问题卡片内闭环说明证据、风险、影响、缓解、改善、实施路径、验收标准和关联问题。
+- 原始 199 文件审计清单保留为折叠附录。
 - 不涉及运行时功能增减。
 
 ### 功能实现路径
@@ -378,6 +384,7 @@ decisions, or release-readiness status changes.
 - 先压缩项目概览和 Bundle 总览，再将分散的风险与建议合并为 Bundle 问题卡片。
 - 使用平台共享章节承载跨 Bundle 问题，各 Bundle 仅通过链接引用。
 - 使用静态 HTML/CSS 和渐进增强脚本，保证禁用 JavaScript 时仍可阅读。
+- 使用无第三方依赖的 Node.js 检查器完成 RED/GREEN 验证：旧报告因缺少新结构失败，新报告通过 12 个 Bundle、20 个问题和 48 个内部锚点检查，重复 ID 为 0。
 
 ### 已知 Bug
 
@@ -389,4 +396,52 @@ decisions, or release-readiness status changes.
 
 ### 已解决 Bug 以及解决方法
 
-- 暂无。
+- 解决风险与改善建议分散、重复的问题：改为按 Bundle 分组，每个问题在单一卡片中闭环说明风险和整改方案。
+- 解决长报告定位困难的问题：增加固定 Bundle 目录、问题计数、优先级筛选和有效内部锚点。
+
+## 2026-07-12 模块化集成与安全治理方案
+
+### 需求变化
+
+- Seamer 需要在未来自动识别新 Adapter 提供的触发器、动作和配置界面，不再要求修改核心硬编码类型。
+- Schedule Manager 需要同步 Google Sheets 与 PostgreSQL 外部播单，并把到期事件或指定字段变化作为 Seamer 自动化触发器。
+- 暂不采用 Python sidecar；外部数据源使用可选 Node.js Adapter。
+- Backup 需要按 L0-L3 敏感度分级，并允许管理员选择备份级别；L3 Secret 必须独立加密。
+- Adapters 需要统一 Capability、Command、Event、Ack 和版本 API。
+- Graphics Package 暂缓完善，优先处理其他 Bundle。
+
+### 代码变动
+
+- 新增设计说明 `docs/superpowers/specs/2026-07-12-modular-integration-hardening-design.md`。
+- README 增加模块化 Integration Contract 与 Schedule 数据源方向。
+- `.gitignore` 增加模块 Secret、SQLite/WAL、恢复密钥和本机备份 profile 规则。
+- 本阶段先更新方案与报告；运行时代码按独立实施计划分阶段修改。
+
+### 功能增减
+
+- 计划新增动态 Capability Manifest、Schedule Source API、PostgreSQL Adapter、Seamer Schedule Adapter、Command Gateway Library、Secret Library、Backup 分级和 Audit Store。
+- 不新增 Python 运行时依赖。
+- Graphics UI 统一延期，不在本轮实现范围。
+
+### 功能实现路径
+
+- 使用可打包 TypeScript SDK 共享合同，避免核心 Bundle 强制依赖中央 NodeCG Bundle。
+- Seamer 通过 Adapter 注册的 Manifest 动态生成触发器和动作表单。
+- Schedule 只保存标准化播单；Google Sheets/PostgreSQL Adapter 负责来源转换；Seamer Schedule Adapter 负责自动化桥接。
+- Replicant 保存当前快照，Event Envelope 传递变化，Command Envelope 执行操作，SQLite + WAL 保存审计和历史。
+- Backup 按 L0-L3 分类，L3 默认排除且只能作为密钥分离的加密载荷导出。
+
+### 已知 Bug
+
+- 当前 Seamer 仍把 `mixer/atem/obs/vb` 写入封闭类型和 Trigger UI，新 Adapter 不能完全即插即用。
+- 当前 Schedule 仅支持简单列表替换，没有版本、冲突、回滚、PostgreSQL 或 Seamer 触发事件。
+- 当前 Backup 总是打包完整 `cfg` 和 `db`，没有敏感度选择、manifest 或加密。
+- 当前 Logger 没有统一 redaction 和独立 Audit Store。
+
+### 预期解决方法
+
+- 按 Integration/Schedule、安全与 Backup、Logger/Audit 三个独立计划依次实施和验证。
+
+### 已解决 Bug 以及解决方法
+
+- 暂无；本条目记录已确认设计与实施顺序。

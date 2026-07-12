@@ -264,6 +264,14 @@ seamer-adapter-mixer
 
 Without the adapter, both `seamer` and `mixer-control` still load and work independently. Google Sheets schedule import follows the same pattern with `schedule-manager`, `data-sync-service`, and `schedule-adapter-google-sheets`.
 
+### Planned Modular Integration Contract
+
+The current adapters register four fixed Seamer integrations: Mixer, ATEM, OBS, and VB Matrix. The active hardening plan replaces those fixed UI/type branches with a versioned capability manifest so future adapters can register trigger definitions, actions, parameter schemas, and UI hints without modifying Seamer core.
+
+Schedule Manager will remain source-independent. Google Sheets and PostgreSQL are planned as optional Node.js adapters that normalize external playlist rows into a shared schedule import contract. A separate optional Seamer schedule adapter will expose explicit `item due` and configured field-transition events as automation triggers. Python sidecars are not part of the current plan.
+
+Security services are designed as libraries bundled with each core rather than mandatory NodeCG bundles. This preserves standalone operation while providing shared command validation, secret storage, redaction, backup classification, and audit contracts.
+
 ### Access Addresses
 
 After startup visit:
@@ -284,15 +292,16 @@ Real configuration files may contain local IP addresses or credentials, so `cfg/
 
 ## Repository Hygiene
 
-- Do commit: source code, manuals, `package.json`, lockfiles, `cfg/*.example`, and `DEVELOPMENT_MEMO.md`.
+- Do commit: source code, manuals, `package.json`, lockfiles, `cfg/*.example`, `DEVELOPMENT_MEMO.md`, architecture plans, and `LeafSeamer_Project_Status_Report.html`.
 - Do not commit: `node_modules/`, generated bundle output, logs, databases, backups, local assets, real config files, credentials, or temporary diagnostics.
+- Local Secret files, SQLite audit databases/WAL files, restore keys, and machine-specific backup profiles are ignored by Git.
 - Development status and release-readiness notes are tracked in `DEVELOPMENT_MEMO.md`.
 
 ## Version Information
 
 **Current Version**: 1.1.3
 **Release Date**: 2026-02-21
-**Last Update**: 2026-06-06
+**Last Update**: 2026-07-12
 
 ## License
 

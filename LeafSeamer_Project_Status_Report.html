@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LeafSeamer 项目现状与风险报告</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #5f6b76;
+      --paper: #ffffff;
+      --canvas: #eef1f4;
+      --line: #d8dee5;
+      --line-strong: #b9c3cd;
+      --sidebar: #18222d;
+      --sidebar-soft: #24313e;
+      --sidebar-text: #f5f7f9;
+      --sidebar-muted: #aeb9c4;
+      --accent: #176b87;
+      --accent-soft: #e6f2f6;
+      --p0: #b42318;
+      --p0-soft: #fdf0ee;
+      --p1: #9a6700;
+      --p1-soft: #fff7df;
+      --p2: #365b7d;
+      --p2-soft: #edf3f8;
+      --ok: #26734d;
+      --ok-soft: #eaf6ef;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); }
+    a:hover { text-decoration-thickness: 2px; }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid #cddbe1;
+      border-radius: 4px;
+      background: #edf5f7;
+      color: #164e63;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+      overflow-wrap: anywhere;
+    }
+
+    h1, h2, h3, h4, p { margin-top: 0; }
+    h1, h2, h3, h4 { line-height: 1.25; letter-spacing: 0; }
+    h1 { margin-bottom: 8px; font-size: 34px; }
+    h2 { margin-bottom: 16px; font-size: 25px; }
+    h3 { margin-bottom: 8px; font-size: 19px; }
+    h4 { margin-bottom: 5px; font-size: 14px; }
+    p { margin-bottom: 12px; color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 26px 20px;
+      background: var(--sidebar);
+      color: var(--sidebar-text);
+    }
+
+    .brand {
+      padding-bottom: 18px;
+      border-bottom: 1px solid #3a4855;
+    }
+
+    .brand strong { display: block; font-size: 18px; }
+    .brand span { color: var(--sidebar-muted); font-size: 12px; }
+
+    .nav-group { margin-top: 22px; }
+    .nav-label {
+      margin-bottom: 7px;
+      color: var(--sidebar-muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .nav-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+    .nav-list a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 9px;
+      border-radius: 4px;
+      color: var(--sidebar-text);
+      text-decoration: none;
+    }
+    .nav-list a:hover, .nav-list a:focus-visible { background: var(--sidebar-soft); }
+    .nav-count {
+      min-width: 22px;
+      padding: 0 6px;
+      border: 1px solid #516170;
+      border-radius: 10px;
+      color: var(--sidebar-muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .content { min-width: 0; }
+    .report-header, .report-section { background: var(--paper); }
+
+    .report-header {
+      padding: 40px max(34px, calc((100vw - 280px - 1120px) / 2));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .header-inner, .section-inner { width: min(1120px, 100%); margin: 0 auto; }
+    .eyebrow { margin-bottom: 8px; color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .lede { max-width: 820px; margin-bottom: 22px; font-size: 16px; }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .meta-item { min-width: 0; padding: 13px 15px; background: #f8fafb; }
+    .meta-label { display: block; color: var(--muted); font-size: 11px; }
+    .meta-value { display: block; margin-top: 3px; font-weight: 700; overflow-wrap: anywhere; }
+
+    .report-section {
+      padding: 34px max(34px, calc((100vw - 280px - 1120px) / 2));
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 18px;
+    }
+    .report-section:nth-of-type(even) { background: #f8fafb; }
+
+    .section-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .section-heading p { max-width: 720px; margin-bottom: 0; }
+
+    .summary-grid, .profile-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      background: var(--line);
+      gap: 1px;
+    }
+    .summary-item, .profile-item { min-width: 0; padding: 15px; background: var(--paper); }
+    .summary-item strong, .profile-item strong { display: block; margin-bottom: 5px; }
+    .summary-item p, .profile-item p { margin: 0; font-size: 14px; }
+
+    .status, .priority {
+      display: inline-flex;
+      align-items: center;
+      min-height: 23px;
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .status.ok { background: var(--ok-soft); color: var(--ok); }
+    .status.adapter { background: var(--p1-soft); color: var(--p1); }
+    .priority.p0 { background: var(--p0-soft); color: var(--p0); }
+    .priority.p1 { background: var(--p1-soft); color: var(--p1); }
+    .priority.p2 { background: var(--p2-soft); color: var(--p2); }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; background: var(--paper); }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #eef2f5; color: #37434f; font-size: 12px; }
+    td { color: var(--muted); }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0 22px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      background: #f5f7f9;
+    }
+    .toolbar-label { align-self: center; margin-right: 3px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    button {
+      min-height: 32px;
+      padding: 5px 11px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      background: var(--paper);
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover, button:focus-visible { border-color: var(--accent); color: var(--accent); }
+    button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+    .issue-list { display: grid; gap: 16px; margin-top: 20px; }
+    .issue-card {
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-left-width: 5px;
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .issue-card[data-priority="p0"] { border-left-color: var(--p0); }
+    .issue-card[data-priority="p1"] { border-left-color: var(--p1); }
+    .issue-card[data-priority="p2"] { border-left-color: var(--p2); }
+    .issue-card[hidden] { display: none; }
+
+    .issue-header {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 12px;
+      padding: 15px 17px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafb;
+    }
+    .issue-id { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; font-weight: 700; }
+    .issue-title { margin: 0; font-size: 17px; }
+
+    .issue-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .issue-field { min-width: 0; padding: 13px 17px; border-bottom: 1px solid var(--line); }
+    .issue-field:nth-child(odd) { border-right: 1px solid var(--line); }
+    .issue-field:nth-last-child(-n + 2) { border-bottom: 0; }
+    .issue-field h4 { color: #455360; }
+    .issue-field p, .issue-field ol { margin: 0; color: var(--muted); }
+    .issue-field ol { padding-left: 19px; }
+    .issue-field li { margin: 2px 0; }
+
+    .profile-grid { margin-top: 16px; }
+    .profile-item { background: #fbfcfd; }
+    .related-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .related-links a { padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); font-size: 12px; text-decoration: none; }
+
+    .roadmap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .roadmap-column { border-top: 4px solid var(--line-strong); padding-top: 12px; }
+    .roadmap-column.p0 { border-color: var(--p0); }
+    .roadmap-column.p1 { border-color: var(--p1); }
+    .roadmap-column.p2 { border-color: var(--p2); }
+    .roadmap-column ol { margin: 0; padding-left: 20px; color: var(--muted); }
+
+    .note { padding: 13px 15px; border-left: 4px solid var(--accent); background: var(--accent-soft); color: #285364; }
+    .note p { margin: 0; color: inherit; }
+    details { margin-top: 14px; border: 1px solid var(--line); background: var(--paper); }
+    summary { padding: 11px 13px; cursor: pointer; font-weight: 700; }
+    details > div, details > pre { margin: 0; padding: 0 13px 13px; }
+    pre { overflow: auto; color: #41505e; font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .footer { padding: 25px 34px; background: var(--sidebar); color: var(--sidebar-muted); font-size: 12px; text-align: center; }
+
+    @media (max-width: 1100px) {
+      .meta-grid, .summary-grid, .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .issue-fields { grid-template-columns: 1fr; }
+      .issue-field, .issue-field:nth-child(odd), .issue-field:nth-last-child(-n + 2) { border-right: 0; border-bottom: 1px solid var(--line); }
+      .issue-field:last-child { border-bottom: 0; }
+    }
+
+    @media (max-width: 900px) {
+      .layout { display: block; }
+      .sidebar { position: relative; width: 100%; height: auto; max-height: none; padding: 18px; }
+      .brand { padding-bottom: 12px; }
+      .nav-group { margin-top: 14px; }
+      .nav-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .report-header, .report-section { padding: 28px 22px; }
+      h1 { font-size: 29px; }
+      .roadmap { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      body { font-size: 14px; }
+      .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .meta-grid, .summary-grid, .profile-grid { grid-template-columns: 1fr; }
+      .section-heading { display: block; }
+      .issue-header { grid-template-columns: 1fr auto; }
+      .issue-title { grid-column: 1 / -1; grid-row: 2; }
+      th, td { padding: 8px; }
+    }
+
+    @media print {
+      body { background: #fff; color: #000; font-size: 11pt; }
+      .layout { display: block; }
+      .sidebar, .toolbar, .footer, noscript { display: none !important; }
+      .report-header, .report-section { padding: 18px 0; background: #fff !important; break-inside: auto; }
+      .issue-card, .summary-grid, .profile-grid, table { break-inside: avoid; box-shadow: none; }
+      .issue-card[hidden] { display: block !important; }
+      details[open] > *, details:not([open]) > * { display: block; }
+      summary { display: none; }
+      a { color: #000; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Report navigation">
+      <div class="brand"><strong>LeafSeamer</strong><span>Project status / bundle risk register</span></div>
+      <nav>
+        <div class="nav-group">
+          <div class="nav-label">Report</div>
+          <ul class="nav-list">
+            <li><a href="#overview"><span>Overview</span></a></li>
+            <li><a href="#bundle-summary"><span>Bundle summary</span></a></li>
+            <li><a href="#target-architecture"><span>Target architecture</span></a></li>
+            <li><a href="#roadmap"><span>Roadmap</span></a></li>
+            <li><a href="#appendix"><span>Appendix</span></a></li>
+          </ul>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Bundles</div>
+          <ul class="nav-list">
+            <li><a href="#platform"><span>Platform</span><span class="nav-count">6</span></a></li>
+            <li><a href="#seamer"><span>Seamer</span><span class="nav-count">1</span></a></li>
+            <li><a href="#logger"><span>Logger</span><span class="nav-count">2</span></a></li>
+            <li><a href="#schedule"><span>Schedule</span><span class="nav-count">1</span></a></li>
+            <li><a href="#vb-matrix"><span>VB Matrix</span><span class="nav-count">2</span></a></li>
+            <li><a href="#obs"><span>OBS</span><span class="nav-count">2</span></a></li>
+            <li><a href="#atem"><span>ATEM</span><span class="nav-count">1</span></a></li>
+            <li><a href="#mixer"><span>Mixer</span><span class="nav-count">1</span></a></li>
+            <li><a href="#graphics"><span>Graphics</span><span class="nav-count">1</span></a></li>
+            <li><a href="#backup"><span>Backup</span><span class="nav-count">1</span></a></li>
+            <li><a href="#data-sync"><span>Data Sync</span><span class="nav-count">1</span></a></li>
+            <li><a href="#adapters"><span>Adapters</span><span class="nav-count">1</span></a></li>
+          </ul>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="report-header" id="top">
+        <div class="header-inner">
+          <p class="eyebrow">Static audit / Bundle-based register</p>
+          <h1>LeafSeamer 项目现状与风险报告</h1>
+          <p class="lede">报告按 Bundle 汇总功能、独立运行条件与问题。每个问题在同一处给出现状证据、风险、影响、缓解措施、长期改善、实施路径和验收标准。</p>
+          <div class="meta-grid">
+            <div class="meta-item"><span class="meta-label">报告日期</span><span class="meta-value">2026-07-12</span></div>
+            <div class="meta-item"><span class="meta-label">审计基线分支</span><span class="meta-value">independence_refiine</span></div>
+            <div class="meta-item"><span class="meta-label">审计基线提交</span><span class="meta-value">650aee1 feat: enhance vb matrix control</span></div>
+            <div class="meta-item"><span class="meta-label">审计源码</span><span class="meta-value">199 个非忽略文件</span></div>
+          </div>
+        </div>
+      </header>
+
+      <section class="report-section" id="overview">
+        <div class="section-inner">
+          <div class="section-heading"><div><p class="eyebrow">01 / Overview</p><h2>项目概览</h2></div><p>LeafSeamer 是 NodeCG 播控系统，使用可独立安装的 Bundle 组合连接节目流程、日志、排期、图文和外部音视频设备。</p></div>
+          <div class="summary-grid">
+            <div class="summary-item"><strong>核心功能</strong><p>Seamer 卡片与触发器、Logger、Schedule、OBS、ATEM、Mixer、VB Matrix、Graphics、Backup、Google Sheets 数据同步。</p></div>
+            <div class="summary-item"><strong>语言与前端</strong><p>TypeScript / TSX / CSS / HTML，React 19 与 Vite 6 构建 Dashboard 和 Graphic。</p></div>
+            <div class="summary-item"><strong>后端与通信</strong><p>Node.js、NodeCG extension、Replicant、<code>listenFor</code> 和跨 Bundle message。</p></div>
+            <div class="summary-item"><strong>架构</strong><p>核心 Bundle 独立运行，可选 Adapter 负责 Seamer、Schedule 与设备或数据源之间的桥接。</p></div>
+            <div class="summary-item"><strong>构建 Workflow</strong><p><code>npm install</code> → <code>npm run typecheck</code> → <code>npm run build</code> → <code>npm start</code>。</p></div>
+            <div class="summary-item"><strong>关键工具</strong><p>NodeCG 2.6.4、TypeScript 5.7、GSAP、obs-websocket-js、atem-connection、node-osc、googleapis、archiver。</p></div>
+          </div>
+          <div class="note" style="margin-top: 16px;"><p><strong>结论：</strong>核心 Bundle 已具备独立加载方向；当前主要缺口集中在安全边界、敏感数据、自动化独立性验证、设备能力探测和真实硬件验收。</p></div>
+        </div>
+      </section>
+
+      <section class="report-section" id="bundle-summary">
+        <div class="section-inner">
+          <div class="section-heading"><div><p class="eyebrow">02 / Inventory</p><h2>Bundle 状态总览</h2></div><p>“独立”表示核心功能不要求 Seamer 或其他设备 Bundle 同时安装；Adapter 本身是有意设计的组合组件。</p></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Bundle</th><th>主要功能</th><th>独立状态</th><th>必要 / 可选依赖</th><th>问题</th><th>最高级别</th></tr></thead>
+            <tbody>
+              <tr><td>Platform</td><td>NodeCG 运行、共享构建与治理</td><td>共享基础</td><td>Node.js / NodeCG</td><td>6</td><td><span class="priority p0">P0</span></td></tr>
+              <tr><td>Seamer</td><td>卡片、触发器、集成注册表</td><td><span class="status ok">Independent</span></td><td>设备 Adapter 可选</td><td>1</td><td><span class="priority p1">P1</span></td></tr>
+              <tr><td>Logger System</td><td>采集、查看、筛选和自动清理日志</td><td><span class="status ok">Independent</span></td><td>其他 Bundle 日志接入可选</td><td>2</td><td><span class="priority p1">P1</span></td></tr>
+              <tr><td>Schedule Manager</td><td>排期编辑与 Graphic</td><td><span class="status ok">Independent</span></td><td>Sheets Adapter 可选</td><td>1</td><td><span class="priority p1">P1</span></td></tr>
+              <tr><td>VB Matrix Control</td><td>设备发现、网络配置、patch 与 preset</td><td><span class="status ok">Independent</span></td><td>VB-Audio Matrix / VBAN</td><td>2</td><td><span class="priority p1">P1</span></td></tr>
+              <tr><td>OBS Control</td><td>连接、场景、source、媒体和推流</td><td><span class="status ok">Independent</span></td><td>OBS WebSocket</td><td>2</td><td><span class="priority p0">P0</span></td></tr>
+              <tr><td>ATEM Control</td><td>Program/Preview、Cut/Auto、Aux、Macro</td><td><span class="status ok">Independent</span></td><td>ATEM 设备</td><td>1</td><td><span class="priority p2">P2</span></td></tr>
+              <tr><td>Mixer Control</td><td>Yamaha RCP 通道、send、mute 和 routing</td><td><span class="status ok">Independent</span></td><td>兼容 Mixer</td><td>1</td><td><span class="priority p2">P2</span></td></tr>
+              <tr><td>Graphics Package</td><td>Lower third、Scoreboard、GSAP 动画</td><td><span class="status ok">Independent</span></td><td>浏览器 / NodeCG Graphic</td><td>1</td><td><span class="priority p2">P2</span></td></tr>
+              <tr><td>Backup System</td><td>打包 <code>cfg</code> 和 <code>db</code></td><td><span class="status ok">Independent</span></td><td>archiver</td><td>1</td><td><span class="priority p0">P0</span></td></tr>
+              <tr><td>Data Sync Service</td><td>Google Sheets readonly polling</td><td><span class="status ok">Independent</span></td><td>Google API 凭据</td><td>1</td><td><span class="priority p0">P0</span></td></tr>
+              <tr><td>Adapters</td><td>Seamer / Schedule 与目标 Bundle 的桥接</td><td><span class="status adapter">Optional bridge</span></td><td>必须同时存在两侧核心</td><td>1</td><td><span class="priority p1">P1</span></td></tr>
+            </tbody>
+          </table></div>
+          <div class="toolbar" aria-label="Issue priority filter">
+            <span class="toolbar-label">Filter issues</span>
+            <button type="button" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" data-filter="p0" aria-pressed="false">P0</button>
+            <button type="button" data-filter="p1" aria-pressed="false">P1</button>
+            <button type="button" data-filter="p2" aria-pressed="false">P2</button>
+            <button type="button" data-details="open">Expand details</button>
+            <button type="button" data-details="close">Collapse details</button>
+          </div>
+          <noscript><div class="note"><p>JavaScript 已禁用；筛选控件不可用，但全部报告内容保持可见。</p></div></noscript>
+        </div>
+      </section>
+
+      <section class="report-section" id="platform" data-bundle="platform">
+        <div class="section-inner">
+          <div class="section-heading"><div><p class="eyebrow">Platform / Shared concerns</p><h2>平台共享</h2></div><p>承载无法合理归属于单个业务 Bundle 的部署、安全、命令边界、构建和数据治理问题。</p></div>
+          <div class="profile-grid">
+            <div class="profile-item"><strong>职责</strong><p>NodeCG 运行入口、共享消息边界、构建编排和部署治理。</p></div>
+            <div class="profile-item"><strong>独立条件</strong><p>每个 NodeCG 实例都必须具备安全入口、最小网络权限和可重复构建。</p></div>
+            <div class="profile-item"><strong>关键入口</strong><p><code>cfg/nodecg.json</code>、根脚本、各 Bundle <code>listenFor</code> 与 Replicant。</p></div>
+          </div>
+          <div class="issue-list">
+            <article class="issue-card" data-issue="PLAT-01" data-priority="p0">
+              <header class="issue-header"><span class="issue-id">PLAT-01</span><h3 class="issue-title">NodeCG Dashboard 与硬件控制入口可能暴露</h3><span class="priority p0">P0</span></header>
+              <div class="issue-fields">
+                <div class="issue-field" data-field="evidence"><h4>现状证据</h4><p><code>cfg/nodecg.json.example</code> 使用 <code>host: 0.0.0.0</code>；系统可控制 OBS、ATEM、Mixer、VB Matrix 与备份。</p></div>
+                <div class="issue-field" data-field="risk"><h4>风险</h4><p>仅修改 <code>host</code> 只能限制 NodeCG 监听的网卡，不能限制可访问该网卡的来源客户端；任何可路由到目标地址的设备仍可能获得播控能力。</p></div>
+                <div class="issue-field" data-field="impact"><h4>影响范围</h4><p>所有 Dashboard、设备控制 Bundle、备份数据和现场播出。</p></div>
+                <div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>单机绑定 <code>127.0.0.1</code>；局域网绑定播控网卡 IP，并用 Windows 防火墙限制来源网段。生产环境禁止直接暴露公网。</p></div>
+                <div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>跨网访问时由 Nginx、Caddy 或 Traefik 对外监听 443、终止 TLS、完成 OIDC/Basic Auth/访问码身份组认证，再转发到仅监听本机的 NodeCG。</p></div>
+                <div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>在 README/安装手册写明监听地址、防火墙、TLS、认证、Secret、日志、备份和恢复的最低部署检查表。</li><li>由可管理交换机划分播控 VLAN，并在路由器或三层交换机配置 VLAN 间 ACL；只有 VLAN、没有 ACL 不构成完整隔离。</li><li>建立设备端口和来源网段 allowlist。</li><li>增加只读访问模式。</li></ol></div>
+                <div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>NodeCG 只监听预期网卡；非允许来源无法访问 Dashboard 或设备端口；跨网访问使用 HTTPS 和认证；只读身份不能执行命令。</p></div>
+                <div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#plat-03-anchor">PLAT-03</a>、<a href="#backup-01-anchor">BACKUP-01</a></p></div>
+              </div>
+            </article>
+
+            <article class="issue-card" data-issue="PLAT-02" data-priority="p0">
+              <header class="issue-header"><span class="issue-id">PLAT-02</span><h3 class="issue-title">敏感数据缺少统一 Secret 边界</h3><span class="priority p0">P0</span></header>
+              <div class="issue-fields">
+                <div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>OBS stream key/password、Google credentials 和未来设备 token 可能进入普通配置、Replicant、日志或备份。</p></div>
+                <div class="issue-field" data-field="risk"><h4>风险</h4><p>敏感数据会被 Dashboard 读取、持久化到 <code>db</code>，或随日志和 zip 被复制。</p></div>
+                <div class="issue-field" data-field="impact"><h4>影响范围</h4><p>OBS、Data Sync、Logger、Backup，以及未来带密码的设备 Bundle。</p></div>
+                <div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>禁止在日志中输出 secret；备份排除已知敏感路径；UI 只显示 <code>configured</code> 状态。</p></div>
+                <div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>实现可打包进每个 Bundle 的服务端 <code>SecretManager</code> Library。可逆 Secret 按模块 namespace 使用 AES-256-GCM 加密，master key 来自环境变量或系统 Secret Store；访问码只需验证，使用 Argon2id 或 bcrypt 单向哈希。</p></div>
+                <div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>建立 secret inventory 与模块 namespace。</li><li>从 Replicant 剥离明文，Dashboard 只接收 <code>configured</code> 和更新时间。</li><li>加入 AES-256-GCM、key version 与 rotation。</li><li>添加统一 redaction，并让 Backup 只能请求分类后的加密导出。</li></ol></div>
+                <div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>Replicant、普通配置、日志和备份中搜索不到明文；前端只得到脱敏状态。</p></div>
+                <div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#obs-01-anchor">OBS-01</a>、<a href="#backup-01-anchor">BACKUP-01</a>、<a href="#data-sync-01-anchor">DATA-01</a></p></div>
+              </div>
+            </article>
+
+            <article class="issue-card" id="plat-03-anchor" data-issue="PLAT-03" data-priority="p0">
+              <header class="issue-header"><span class="issue-id">PLAT-03</span><h3 class="issue-title">控制消息缺少统一授权与 Payload 合同</h3><span class="priority p0">P0</span></header>
+              <div class="issue-fields">
+                <div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>Dashboard 可使用 Replicant 和 <code>sendMessage</code>；各 Bundle 的 <code>listenFor</code> 尚无统一 schema、权限和目标 allowlist。</p></div>
+                <div class="issue-field" data-field="risk"><h4>风险</h4><p>错误类型、越界值、未知连接或低权限客户端可能触发硬件命令或污染权威状态。</p></div>
+                <div class="issue-field" data-field="impact"><h4>影响范围</h4><p>所有设备 Bundle、Seamer、Adapter、备份和敏感设置操作。</p></div>
+                <div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>优先为推流、Macro、VB patch、Backup 和 Secret 保存命令添加 validator 与目标检查。</p></div>
+                <div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立可打包的 <code>CommandGateway</code> 中间件：每个 Bundle 自己注册命令 handler，统一执行身份 → 权限 → payload schema → 目标 allowlist → 执行 → 脱敏审计；不引入必须安装的中央 NodeCG Bundle。</p></div>
+                <div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>生成 message registry。</li><li>定义带版本、身份上下文和 <code>correlationId</code> 的 Command Envelope/Ack。</li><li>优先迁移 OBS 推流、ATEM Macro、VB Patch、Backup 和 Secret 保存。</li><li>再迁移其余入口并加入权限矩阵。</li></ol></div>
+                <div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>非法、越界、未知目标和无权限消息全部被拒绝；合法消息返回统一 ack 并留下脱敏审计。</p></div>
+                <div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#adapters-01-anchor">ADAPTER-01</a></p></div>
+              </div>
+            </article>
+
+            <article class="issue-card" data-issue="PLAT-04" data-priority="p1">
+              <header class="issue-header"><span class="issue-id">PLAT-04</span><h3 class="issue-title">Bundle 独立性缺少自动化构建与安装验证</h3><span class="priority p1">P1</span></header>
+              <div class="issue-fields">
+                <div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>项目已有 npm workspaces 和单 Bundle build 入口，但报告基线没有 CI、依赖审计或独立安装矩阵结果。</p></div>
+                <div class="issue-field" data-field="risk"><h4>风险</h4><p>隐藏 import、共享路径或构建脚本回归可能让某个 Bundle 必须依赖完整仓库才能工作。</p></div>
+                <div class="issue-field" data-field="impact"><h4>影响范围</h4><p>所有核心 Bundle 和 Adapter 的独立部署承诺。</p></div>
+                <div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>在提交前运行根 typecheck、全量 build 和关键 Bundle 单独 build。</p></div>
+                <div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立 CI matrix：最小 NodeCG + 单核心 Bundle、核心 + 对应 Adapter、完整组合。</p></div>
+                <div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>列出支持组合。</li><li>定义 smoke test。</li><li>加入依赖审计。</li><li>保存构建产物检查。</li></ol></div>
+                <div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>每个核心 Bundle 在不安装 Seamer 和无关设备 Bundle 时可构建、加载并打开 Dashboard。</p></div>
+                <div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#seamer-01-anchor">SEAMER-01</a></p></div>
+              </div>
+            </article>
+
+            <article class="issue-card" data-issue="PLAT-05" data-priority="p1">
+              <header class="issue-header"><span class="issue-id">PLAT-05</span><h3 class="issue-title">Vite 源码目录与输出目录边界不清晰</h3><span class="priority p1">P1</span></header>
+              <div class="issue-fields">
+                <div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>独立 Bundle 的 Vite 配置以 <code>src</code> 为 root，却输出到 Bundle 运行目录，已出现 outDir/root 父子关系警告。</p></div>
+                <div class="issue-field" data-field="risk"><h4>风险</h4><p>清理产物时可能污染源码，构建结果与 NodeCG 运行目录职责混杂。</p></div>
+                <div class="issue-field" data-field="impact"><h4>影响范围</h4><p>使用 Vite 的 Dashboard 与 Graphic Bundle。</p></div>
+                <div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>构建前检查目标路径，不对父级目录执行宽泛清理。</p></div>
+                <div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>源码只放 <code>src</code>，先输出到临时目录，再由构建脚本复制到 NodeCG 运行目录。</p></div>
+                <div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>选择一个 Bundle 试点。</li><li>拆分临时输出。</li><li>更新 fix paths。</li><li>逐 Bundle 迁移。</li></ol></div>
+                <div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>全量构建无 outDir/root 警告；清理产物不会改动源码；NodeCG 仍能加载输出。</p></div>
+                <div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#graphics-01-anchor">GRAPHICS-01</a></p></div>
+              </div>
+            </article>
+
+            <article class="issue-card" data-issue="PLAT-06" data-priority="p2">
+              <header class="issue-header"><span class="issue-id">PLAT-06</span><h3 class="issue-title">实时状态、事件和历史数据缺少统一治理规则</h3><span class="priority p2">P2</span></header>
+              <div class="issue-fields">
+                <div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>当前主要依赖 Replicant 与 message；设备状态、审计、同步记录和高频指标的数据生命周期不同。</p></div>
+                <div class="issue-field" data-field="risk"><h4>风险</h4><p>高频数据无限写入 Replicant 会增加同步压力；审计和历史记录又可能随普通日志清理丢失。</p></div>
+                <div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Logger、OBS 统计、VB Matrix、未来 Mixer meter、Data Sync 和访问 session。</p></div>
+                <div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>Replicant 仅保留低频配置和当前快照；高频状态先节流成 summary。</p></div>
+                <div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立明确分工：Replicant 保存“当前是什么状态”并同步 UI；版本化 Event Envelope 传递“刚发生什么变化”；SQLite + WAL 保存“以前发生过什么”，用于审计、同步历史、查询和恢复。WAL 改善并发与崩溃恢复，但不提供加密。</p></div>
+                <div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>分类现有数据。</li><li>定义保留周期。</li><li>先迁移审计和同步历史。</li><li>按需要引入聚合。</li></ol></div>
+                <div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>每类数据都有 owner、通道、保留周期和恢复方式；SQL 不承担实时 UI 分发。</p></div>
+                <div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#logger-02-anchor">LOGGER-02</a>、<a href="#data-sync-01-anchor">DATA-01</a></p></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="seamer" data-bundle="seamer">
+        <div class="section-inner">
+          <div class="section-heading"><div><p class="eyebrow">Core bundle</p><h2>Seamer</h2></div><p>卡片、触发器与集成注册表。设备能力通过可选 Adapter 注入，核心可不安装任何设备 Bundle 独立加载。</p></div>
+          <div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>当前识别方式</strong><p>Adapter 取得 <code>nodecg.extension["seamer"]</code> 后调用 <code>registerIntegration()</code>，Registry 发布在线状态。</p></div><div class="profile-item"><strong>当前限制</strong><p><code>TriggerModule</code>、条件、动作和编辑 UI 仍只支持 ATEM、Mixer、OBS、VB Matrix 四种固定模块。</p></div></div>
+          <div class="related-links"><a href="#plat-03-anchor">关联 PLAT-03：命令网关</a><a href="#adapters-01-anchor">关联 ADAPTER-01：事件合同</a></div>
+          <div class="issue-list">
+            <article class="issue-card" id="seamer-01-anchor" data-issue="SEAMER-01" data-priority="p1">
+              <header class="issue-header"><span class="issue-id">SEAMER-01</span><h3 class="issue-title">固定四模块类型阻止新 Adapter 真正即插即用</h3><span class="priority p1">P1</span></header>
+              <div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>Integration Registry 能自动显示已注册 Provider，但 <code>TriggerModule</code>、Trigger Manager 的条件分支和 EditTriggerModal 仍硬编码 <code>mixer/atem/obs/vb</code>。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>未来新增 Schedule、NDI 或其他模块时仍需修改 Seamer 核心类型、判断逻辑和 UI，独立 Adapter 只能解决加载依赖，不能解决功能扩展。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Seamer、所有第三方 Adapter、触发器持久化兼容和独立部署。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>继续禁止 Seamer 直接 import 设备 Bundle；新能力只能通过 Adapter 注册，缺失 Adapter 时配置标记 unavailable。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>Adapter 注册版本化 Capability Manifest，声明 actions、triggers、参数 schema、UI hints、状态快照、条件比较器和执行器；Seamer 根据 Manifest 动态生成表单。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>建立 Integration SDK 与 Manifest schema。</li><li>让 Registry 接受任意命名空间 ID。</li><li>把固定条件检查迁到 Provider evaluator。</li><li>把 Trigger UI 改为 schema 驱动。</li><li>把“仅安装 Seamer”与动态测试 Adapter 加入 CI。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>测试 Adapter 无需修改 Seamer 核心即可出现触发器和动作；卸载后配置保留但不可执行；Seamer 单独安装仍可加载。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-04</a>、<a href="#adapters-01-anchor">ADAPTER-01</a></p></div></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="logger" data-bundle="logger">
+        <div class="section-inner">
+          <div class="section-heading"><div><p class="eyebrow">Service bundle</p><h2>Logger System</h2></div><p>集中接收 Bundle 日志，支持 Log Viewer、Bundle 筛选、磁盘持久化与用户可选自动清理周期。</p></div>
+          <div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>入口</strong><p>可选日志捕获、日志 Replicant、文件存储和清理任务。</p></div><div class="profile-item"><strong>依赖</strong><p>其他 Bundle 接入可选；缺失时 Logger 仍可工作。</p></div></div>
+          <div class="issue-list">
+            <article class="issue-card" data-issue="LOGGER-01" data-priority="p1"><header class="issue-header"><span class="issue-id">LOGGER-01</span><h3 class="issue-title">集中日志可能持久化敏感运行信息</h3><span class="priority p1">P1</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>Logger 会采集各 Bundle 服务端日志并写入磁盘；当前 <code>record()</code> 接收最终字符串，没有结构化敏感字段清洗。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>错误堆栈、设备地址、配置路径、Bearer Token 或凭据片段可能进入文件和 Viewer。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>所有接入日志捕获的 Bundle、Log Viewer 用户和日志目录备份。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>禁止主动记录 secret；降低生产 debug 级别；限制日志目录权限。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>写入前先按字段名清洗 <code>password/token/secret/key</code> 等结构化数据，再检测 Bearer Token、私钥和带凭据 URL 等字符串模式。当前没有日志导出功能，因此“导出前二次脱敏”只作为未来导出 API 的强制边界，不提前增加无调用功能。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>建立敏感字段词典。</li><li>新增 <code>sanitizeLogEntry</code> 并在 <code>record()</code> 前执行。</li><li>添加测试 secret 与误报测试。</li><li>未来新增导出时复用同一 sanitizer。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>测试 secret 不出现在 Replicant、日志文件或 Viewer；普通场景名和设备标签不被误清洗。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-02</a></p></div></div></article>
+            <article class="issue-card" id="logger-02-anchor" data-issue="LOGGER-02" data-priority="p1"><header class="issue-header"><span class="issue-id">LOGGER-02</span><h3 class="issue-title">普通日志清理策略不应承担安全审计生命周期</h3><span class="priority p1">P1</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>Log Viewer 已允许用户选择自动清理周期；未来命令授权方案需要不可被普通日志策略误删的审计记录。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>危险操作的身份组、目标和结果可能随普通运行日志一起删除，无法复盘。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Command Gateway、设备命令、Secret 修改、Backup 和访问管理。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>将关键操作写入独立文件，并使用固定最小保留期。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立独立 Audit Store：SQLite 保存可查询的追加记录，WAL 允许写入时继续读取并改善崩溃恢复；它不负责加密。字段包含时间、身份组、命令、目标、结果和 <code>correlationId</code>，参数必须先脱敏。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>定义 audit schema 和独立保留周期。</li><li>与普通 logger 分流。</li><li>由 Command Gateway 写入统一 Audit Event。</li><li>提供只读查询并限制访问。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>执行普通日志清理后审计记录仍在；危险命令可按时间和 correlationId 追踪到请求、设备调用和结果；库中无明文 secret。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-03</a>、<a href="#platform">PLAT-06</a></p></div></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-section" id="schedule" data-bundle="schedule">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Core bundle</p><h2>Schedule Manager</h2></div><p>目标职责调整为标准化外部播单、版本与状态机，并向 Seamer 发布显式自动化事件；Google Sheets 和 PostgreSQL 通过独立 Node.js Adapter 接入。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span> 无外部数据源时仍可本地编辑。</p></div><div class="profile-item"><strong>数据源</strong><p><code>schedule-adapter-google-sheets</code> 与计划新增的 <code>schedule-adapter-postgresql</code>。</p></div><div class="profile-item"><strong>自动化</strong><p><code>seamer-adapter-schedule</code> 只注册“到达计划时间”和“指定字段状态变化”两类触发器。</p></div></div><div class="issue-list">
+          <article class="issue-card" data-issue="SCHED-01" data-priority="p1"><header class="issue-header"><span class="issue-id">SCHED-01</span><h3 class="issue-title">Schedule 仍是简单列表，尚未具备多来源同步与 Seamer 自动化合同</h3><span class="priority p1">P1</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>当前 ScheduleItem 只有 id/time/title/description/active；Sheets Adapter 从固定 sheetData 直接替换完整列表，没有 PostgreSQL、版本、冲突、回滚或 Seamer 事件。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>列结构变化、本地编辑覆盖或任意数据变化都可能造成播单错乱；若直接把所有变化当触发器，还可能误触发播出。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Schedule Manager、Schedule Graphic、Google/PostgreSQL Adapter 和 Seamer 自动化。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>导入前校验必需列，并记录来源、版本、时间和行数；任意新增行或任意字段变化不默认触发动作。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>定义标准 PlaylistItem 与版本化 Import Batch，支持 dry-run、diff、冲突和回滚；数据源 Adapter 只负责转换，Schedule 负责提交；Seamer Schedule Adapter 只发布 <code>schedule.item_due</code> 和配置的 <code>schedule.field_changed</code>。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>定义 sourceId/externalId/revision/plannedAt/state/metadata/triggerMappings。</li><li>重构 Google Sheets Adapter。</li><li>新增 PostgreSQL Adapter。</li><li>新增 Seamer Schedule Adapter 与动态 Manifest。</li><li>保存同步版本和回滚点。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>Google Sheets 与 PostgreSQL 生成同一数据模型；缺列和冲突不会覆盖当前播单；只有显式到期或字段迁移规则触发 Seamer。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#data-sync-01-anchor">DATA-01</a>、<a href="#adapters-01-anchor">ADAPTER-01</a>、<a href="#seamer-01-anchor">SEAMER-01</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="vb-matrix" data-bundle="vb-matrix">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Device bundle</p><h2>VB Matrix Control</h2></div><p>通过 VBAN-TEXT 管理网络配置、Matrix slot 发现、交叉点 patch/de-patch 和 preset。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>入口</strong><p>Manager、VBAN client、Matrix View、Patch Control。</p></div><div class="profile-item"><strong>设备范围</strong><p>Windows、VAIO、VBAN、VASIO 等官方 Matrix slot。</p></div></div><div class="issue-list">
+          <article class="issue-card" data-issue="VB-01" data-priority="p1"><header class="issue-header"><span class="issue-id">VB-01</span><h3 class="issue-title">大矩阵刷新可能产生高密度 VBAN-TEXT 请求</h3><span class="priority p1">P1</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>扫描会对已发现 input/output 组合发送 <code>dBGain</code> 与 <code>Mute</code> 查询。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>通道数大或刷新频率高时形成请求 burst，增加设备超时、网络压力和 UI 延迟。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>VB-Audio Matrix、VBAN 网络、Matrix View 状态刷新。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>限制手动刷新频率，为每个连接建立并发 1 的发送队列。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>加入节流、分批、差分、请求去重、可见区域扫描和失败退避。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>测量当前请求数。</li><li>实现队列与限速。</li><li>缓存稳定 slot。</li><li>按变更差分刷新。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>规定规模矩阵的峰值请求率受控；连续刷新不阻塞 patch；超时 slot 自动退避。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-06</a></p></div></div></article>
+          <article class="issue-card" data-issue="VB-02" data-priority="p1"><header class="issue-header"><span class="issue-id">VB-02</span><h3 class="issue-title">官方 Slot 发现与节点控制仍缺少真实设备端到端验收</h3><span class="priority p1">P1</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>Windows/VAIO/VBAN/VASIO 发现路径与 Point SUID 已按官方资料修正，但开发日志明确尚未在真实 Matrix 实例完成全链路验证。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>不同版本的返回格式、slot 数量或命令行为可能让设备缺失、状态误判或 patch 失败。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>设备发现、Matrix View、Patch Control 和 preset 恢复。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>保留 Patch Control 作为已知路径，并在日志中记录原始设备响应。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立按 Matrix 版本和 slot 类型划分的真实设备验收记录与 parser fixture。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>采集 <code>Slot(SUID).Info</code> 返回。</li><li>验证发现矩阵。</li><li>逐类 patch/de-patch。</li><li>保存日志 fixture。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>所有目标 slot 可见；矩阵点点击与 Patch Control 结果一致；重启后状态可正确恢复。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p>无跨 Bundle 前置问题。</p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="obs" data-bundle="obs">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Device bundle</p><h2>OBS Control</h2></div><p>管理多 OBS 连接、场景、source、媒体、推流状态与 stream settings。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>入口</strong><p>Connection、Scene Manager、Source Manager、Dashboard。</p></div><div class="profile-item"><strong>协议</strong><p>obs-websocket-js / OBS WebSocket。</p></div></div><div class="issue-list">
+          <article class="issue-card" id="obs-01-anchor" data-issue="OBS-01" data-priority="p0"><header class="issue-header"><span class="issue-id">OBS-01</span><h3 class="issue-title">Stream key 与认证信息可能进入 Replicant</h3><span class="priority p0">P0</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p><code>obsStreamSettings</code> 包含 server、key、username、password，并通过读取和写入流程同步。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>敏感设置可被 Dashboard 读取或持久化到 <code>db</code>，再被 Backup 打包。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>直播平台账号、OBS 连接、Replicant 存储和备份文件。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>停止把 key/password 写入公开 Replicant；读取响应只返回掩码状态。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>将 OBS WebSocket password 和 stream credentials 迁入服务端 SecretManager。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>拆分 public settings。</li><li>迁移已有明文。</li><li>清理旧 Replicant。</li><li>加入 redaction。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>浏览器、Replicant JSON、日志和普通备份中不存在明文 key/password；推流设置仍可由授权后端更新。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-02</a>、<a href="#backup-01-anchor">BACKUP-01</a></p></div></div></article>
+          <article class="issue-card" data-issue="OBS-02" data-priority="p2"><header class="issue-header"><span class="issue-id">OBS-02</span><h3 class="issue-title">Source 与媒体行为缺少版本化真实环境验收</h3><span class="priority p2">P2</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>报告建议沉淀 OBS source/media 行为的真实设备验收记录；当前仅有静态实现阅读。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>OBS 版本、source 类型和媒体状态差异可能导致操作支持不一致。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Source Manager、媒体播放控制和 Seamer OBS Adapter。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>UI 仅展示后端确认支持的操作，并保留 OBS 错误详情。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立 OBS 版本与 source kind 能力矩阵，按能力启用按钮。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>选择支持版本。</li><li>准备 source fixture。</li><li>测试媒体状态机。</li><li>记录预期事件。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>支持矩阵中的每个操作有可复测记录；不支持操作在 UI 中禁用并给出后端原因。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#adapters-01-anchor">ADAPTER-01</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="atem" data-bundle="atem">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Device bundle</p><h2>ATEM Control</h2></div><p>通过 atem-connection 管理 Program/Preview、Cut/Auto、Aux、Macro 和连接状态。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>入口</strong><p>ATEM manager、状态 Replicant、Dashboard。</p></div><div class="profile-item"><strong>可选集成</strong><p>Seamer ATEM Adapter。</p></div></div><div class="issue-list">
+          <article class="issue-card" data-issue="ATEM-01" data-priority="p2"><header class="issue-header"><span class="issue-id">ATEM-01</span><h3 class="issue-title">设备型号能力差异尚未形成显式能力模型</h3><span class="priority p2">P2</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>报告指出 ATEM、Mixer 和 VB Matrix 中存在型号假设，并建议增加型号/功能探测层。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>不同 ATEM 型号的 Aux、Macro、输入数量和转场能力不同，固定 UI 可能发送不支持命令。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>ATEM Dashboard、Macro、Aux 和 Seamer Adapter。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>对设备返回状态之外的功能保持禁用，并记录命令失败。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立设备能力快照，由后端探测并驱动 UI 与 Adapter 能力注册。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>收集型号信息。</li><li>定义 capability schema。</li><li>映射现有命令。</li><li>按能力渲染。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>至少两类目标型号显示不同能力；不支持命令不会出现在可操作 UI 中。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#adapters-01-anchor">ADAPTER-01</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="mixer" data-bundle="mixer">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Device bundle</p><h2>Mixer Control</h2></div><p>通过 Yamaha RCP/TCP 查询和控制通道、send、mute 与 routing。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>入口</strong><p>Connection Manager、Channel/Output panels、OSC/RCP。</p></div><div class="profile-item"><strong>可选集成</strong><p>Seamer Mixer Adapter。</p></div></div><div class="issue-list">
+          <article class="issue-card" data-issue="MIXER-01" data-priority="p2"><header class="issue-header"><span class="issue-id">MIXER-01</span><h3 class="issue-title">RCP 地址与通道能力依赖设备型号假设</h3><span class="priority p2">P2</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>报告将 RCP 地址和设备能力列为需要真实设备验收与配置化的项目。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>不同 Mixer 型号的通道数量、路径和参数范围差异会造成查询失败或错误控制。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Channel、Send、Mute、Routing 与 Seamer Mixer Adapter。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>把型号与通道数写入显式配置，越界通道在后端拒绝。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>定义 Mixer capability profile，并为支持型号保存 RCP fixture 与验收清单。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>列出已支持型号。</li><li>提取地址模板。</li><li>增加范围校验。</li><li>真实设备复测。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>配置型号决定可见通道和参数范围；未知地址不会发送；支持型号有复测记录。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#plat-03-anchor">PLAT-03</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="graphics" data-bundle="graphics">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Graphic bundle</p><h2>Graphics Package</h2></div><p>提供 Lower Third、Scoreboard 和 GSAP 动画，核心可独立作为 NodeCG Graphic 运行。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>入口</strong><p>Dashboard controls、Graphic HTML/TSX、动画工具。</p></div><div class="profile-item"><strong>依赖</strong><p>React、GSAP、NodeCG Replicant。</p></div></div><div class="issue-list">
+          <article class="issue-card" id="graphics-01-anchor" data-issue="GRAPHICS-01" data-priority="p2"><header class="issue-header"><span class="issue-id">GRAPHICS-01</span><h3 class="issue-title">Dashboard 与部分 Graphic 控制界面仍偏原型</h3><span class="priority p2">P2 · Deferred</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>报告记录 Graphics、Schedule、Backup 等页面仍有内联样式和原型感，尚未统一到 Log Viewer / VB Control 风格。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>操作密度、状态反馈和组件行为不一致，现场切换页面时增加认知成本。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Graphics Dashboard 及后续 UI 维护；当前不阻塞核心控制与数据安全。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>保持现有功能，不继续扩大内联样式；新改动遵循英文 UI 与已有暗色操作台约定。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>待 Integration、Schedule、Backup 和安全治理完成后，再抽取 Dashboard tokens 与基础组件。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>本轮标记 Deferred。</li><li>后续盘点重复样式。</li><li>迁移一个 Graphic 控制面板。</li><li>完成响应式和可访问性检查。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>延期期间现有 Graphic 构建与运行不回归；恢复任务后再定义统一 UI 验收。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-05</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="backup" data-bundle="backup">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Service bundle</p><h2>Backup System</h2></div><p>目标能力为按 L0-L3 敏感度选择数据、生成 manifest，并将 L3 Secret 作为密钥分离的独立加密载荷备份。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>默认级别</strong><p>L0 Public 与 L1 Operational 默认包含；L2 Confidential 由管理员选择。</p></div><div class="profile-item"><strong>Secret 规则</strong><p>L3 默认排除；勾选时必须独立加密，恢复密钥不得写入同一归档。</p></div></div><div class="issue-list">
+          <article class="issue-card" id="backup-01-anchor" data-issue="BACKUP-01" data-priority="p0"><header class="issue-header"><span class="issue-id">BACKUP-01</span><h3 class="issue-title">备份默认打包真实配置与 Replicant 数据</h3><span class="priority p0">P0</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>当前 Backup 无参数地归档完整 <code>cfg</code> 与 <code>db</code>；Dashboard 只有一个 Create Backup 按钮，没有分类、选择、manifest 或加密。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>普通 zip 被复制、上传或长期保留时，Google credentials、OBS key、设备地址和生产状态会一起扩散。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>所有持久化 Replicant、真实配置、备份存储和灾备流程。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>默认排除 Secret 路径；限制备份目录权限；禁止把备份提交 Git 或普通网盘。普通复选框不得允许明文 L3 进入 zip。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>建立 L0 Public、L1 Operational、L2 Confidential、L3 Secret 四级分类。用户可选择备份级别；L3 仅管理员可选，必须生成独立加密载荷，并与恢复密钥分离。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>建立路径分类 registry。</li><li>Dashboard 提供级别复选框与风险提示。</li><li>生成包含路径、级别、大小、哈希、包含状态和加密状态的 manifest。</li><li>为 L3 使用独立加密输出。</li><li>增加恢复演练。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>默认备份不含测试 Secret；L2 选择正确改变文件集合；L3 归档无法在没有独立密钥时解密；manifest 可解释每个文件。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-02</a>、<a href="#obs-01-anchor">OBS-01</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="data-sync" data-bundle="data-sync">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Service bundle</p><h2>Data Sync Service</h2></div><p>当前使用 Google APIs 轮询 Sheets。目标方案不采用 Python sidecar，而是由轻量 Source API 配合可选 Node.js Google Sheets/PostgreSQL Adapter。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status ok">Independent</span></p></div><div class="profile-item"><strong>近期方案</strong><p>重构为统一 Import Batch；Google 与 PostgreSQL 连接器保持可选安装。</p></div><div class="profile-item"><strong>权衡</strong><p>Node 方案直接接入 Replicant、部署链短；复杂 ETL 的 Python sidecar 仅保留为未来可选扩展。</p></div></div><div class="issue-list">
+          <article class="issue-card" id="data-sync-01-anchor" data-issue="DATA-01" data-priority="p0"><header class="issue-header"><span class="issue-id">DATA-01</span><h3 class="issue-title">数据源与同步合同被 Google Sheets 具体实现绑死</h3><span class="priority p0">P0</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>当前 Bundle 直接构造 GoogleSheetsClient，固定轮询 60 秒和 <code>Sheet1!A1:E10</code>，并发布无版本的 <code>sheetData</code>；没有 PostgreSQL 或通用 Source API。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>凭据可能进入普通配置或备份；新数据源需要修改核心；同步失败和数据版本变化难以追踪。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Google Workspace/PostgreSQL 凭据、Schedule Adapter 和播单。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>Google 凭据保持在 gitignore，service account 仅授予 readonly 和指定表访问；PostgreSQL 使用只读账号。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>定义 Node.js Data Source API 和版本化 Import Batch。Google Sheets 与 PostgreSQL 作为独立 Adapter；凭据进入 SecretManager，同步任务保存来源版本、etag/LSN、结果和错误。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>抽出 Source Adapter 接口。</li><li>让 Google Adapter 输出标准 Batch。</li><li>新增 PostgreSQL Adapter 与只读查询配置。</li><li>记录 sync run 并发布脱敏状态。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>普通配置与备份无凭据明文；Google 和 PostgreSQL 输出相同 Batch；每次同步有来源、版本、结果和错误记录。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#platform">PLAT-02</a>、<a href="#schedule">SCHED-01</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="adapters" data-bundle="adapters">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Optional integration bundles</p><h2>Adapters</h2></div><p>Adapter 继续作为可选桥接层，并统一使用 Integration SDK；核心 Bundle 不反向依赖 Adapter，也不依赖中央业务 Bundle。</p></div><div class="profile-grid"><div class="profile-item"><strong>独立状态</strong><p><span class="status adapter">Optional bridge</span></p></div><div class="profile-item"><strong>统一 API</strong><p>Capability Manifest、Command/Event Envelope、Ack、Schema Version 与 <code>correlationId</code>。</p></div><div class="profile-item"><strong>依赖原则</strong><p>SDK 编译进 Adapter；运行时仅在两侧核心同时存在时注册，缺失时安全停用。</p></div></div><div class="issue-list">
+          <article class="issue-card" id="adapters-01-anchor" data-issue="ADAPTER-01" data-priority="p1"><header class="issue-header"><span class="issue-id">ADAPTER-01</span><h3 class="issue-title">跨 Bundle 事件、回调与能力合同尚未统一</h3><span class="priority p1">P1</span></header><div class="issue-fields"><div class="issue-field" data-field="evidence"><h4>现状证据</h4><p>现有 Adapter 已实现可选连接，但分别 import Seamer 具体类型并手写状态与执行分支，缺少统一 Manifest、event envelope、ack、correlationId 和错误格式。</p></div><div class="issue-field" data-field="risk"><h4>风险</h4><p>不同 Adapter 的能力描述、回调语义和错误处理分叉；新增模块仍需修改 Seamer 核心。</p></div><div class="issue-field" data-field="impact"><h4>影响范围</h4><p>Seamer-ATEM/Mixer/OBS/VB、Schedule-Sheets，以及计划新增的 Schedule-PostgreSQL 与 Seamer-Schedule Adapter。</p></div><div class="issue-field" data-field="mitigation"><h4>短期缓解</h4><p>为新 Adapter 明确输入、输出、API 版本、缺失依赖行为和错误回调。</p></div><div class="issue-field" data-field="improvement"><h4>长期改善</h4><p>创建统一 Integration SDK：Capability Manifest 描述可用功能；当前快照走 Replicant；变化走 Event Envelope；命令走 Command Envelope + Ack。外部 HTTP/WebSocket API 如有需要，必须放在 Command Gateway 和认证之后。</p></div><div class="issue-field" data-field="implementation"><h4>实施路径</h4><ol><li>建立 workspace SDK 包和版本规则。</li><li>先迁移 Seamer Registry 与测试 Adapter。</li><li>再迁移四个设备 Adapter。</li><li>为 Schedule Source 与 Seamer Schedule 复用同一 Envelope。</li></ol></div><div class="issue-field" data-field="acceptance"><h4>验收标准</h4><p>所有 Adapter 在依赖缺失时安全停用；新测试 Adapter 无需修改 Seamer；命令可按 correlationId 追踪；版本不兼容返回明确错误。</p></div><div class="issue-field" data-field="related"><h4>关联问题</h4><p><a href="#plat-03-anchor">PLAT-03</a>、<a href="#seamer-01-anchor">SEAMER-01</a></p></div></div></article>
+          </div></div>
+      </section>
+
+      <section class="report-section" id="target-architecture">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Approved direction</p><h2>推荐目标架构</h2></div><p>采用“模块化 SDK + 可选 Adapter”，不采用中央强依赖 Bundle，也暂不采用 Python sidecar。</p></div><div class="summary-grid"><div class="summary-item"><strong>1. Source Adapters</strong><p>Google Sheets 与 PostgreSQL Node Adapter 读取外部数据并输出版本化 Import Batch。</p></div><div class="summary-item"><strong>2. Schedule Core</strong><p>执行 schema 校验、dry-run、diff、冲突处理、提交和回滚，发布当前播单快照。</p></div><div class="summary-item"><strong>3. Event Envelope</strong><p>只发布 <code>schedule.item_due</code> 与配置的 <code>schedule.field_changed</code>，不把任意数据变化当播出命令。</p></div><div class="summary-item"><strong>4. Seamer Capability</strong><p>Seamer Schedule Adapter 注册 Manifest，Seamer 自动生成触发器配置并保持核心无 Schedule 依赖。</p></div><div class="summary-item"><strong>5. Command Gateway</strong><p>动作经过身份、权限、schema、allowlist、执行和脱敏审计。</p></div><div class="summary-item"><strong>6. Persistence</strong><p>Replicant 管当前状态，Event 管变化，SQLite + WAL 管审计、同步历史和查询。</p></div></div></div>
+      </section>
+
+      <section class="report-section" id="roadmap">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Remediation sequence</p><h2>分阶段整改路线</h2></div><p>路线只汇总顺序，问题正文仍以各 Bundle 章节为唯一事实来源。</p></div><div class="roadmap"><div class="roadmap-column p0"><h3>Phase 1 / Integration & Schedule</h3><ol><li>创建 Integration SDK 与动态 Capability Manifest。</li><li>迁移 Seamer Registry、Trigger evaluator 和 schema-driven UI。</li><li>定义 Schedule Import API。</li><li>重构 Google Adapter并新增 PostgreSQL Adapter。</li><li>新增 Seamer Schedule Adapter。</li></ol></div><div class="roadmap-column p1"><h3>Phase 2 / Security & Backup</h3><ol><li>实现 Secret Library 与脱敏状态。</li><li>实现 Command Gateway Library 并迁移高风险命令。</li><li>Backup 增加 L0-L3 分类选择和 manifest。</li><li>L3 使用密钥分离的加密载荷。</li><li>补部署安全基线。</li></ol></div><div class="roadmap-column p2"><h3>Phase 3 / Logger & Verification</h3><ol><li>Logger 写入前 redaction。</li><li>建立 SQLite + WAL Audit Store。</li><li>CI 验证单 Bundle 和组合安装。</li><li>处理 VB Matrix 请求降压与真实设备验收。</li><li>Graphics UI 保持 Deferred。</li></ol></div></div></div>
+      </section>
+
+      <section class="report-section" id="appendix">
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Audit notes</p><h2>范围与附录</h2></div><p>结论来自静态源码、配置模板、构建脚本和文档阅读，不替代联网依赖审计与真实硬件测试。</p></div>
+          <div class="table-wrap"><table><tbody><tr><th>纳入</th><td><code>rg --files</code> 返回的 199 个非忽略源码、配置、脚本、文档和静态资源。</td></tr><tr><th>识别但不逐行</th><td><code>node_modules</code>、<code>db</code>、<code>logs</code>、<code>backups</code>、<code>assets</code> 等忽略目录。</td></tr><tr><th>未执行</th><td><code>npm audit</code>、完整构建、类型检查和真实 OBS/ATEM/Mixer/VB Matrix 端到端验收。</td></tr><tr><th>事实边界</th><td>“建议验证”不等于已确认缺陷；风险等级依据控制能力、敏感数据与恢复难度评估。</td></tr></tbody></table></div>
+          <details><summary>展开原始 199 文件清单</summary><pre>
+AGENTS.MD
+bundles\atem-control\extension\index.ts
+bundles\atem-control\extension\optional-log-capture.ts
+bundles\atem-control\package.json
+bundles\atem-control\src\dashboard\atem-connection.html
+bundles\atem-control\src\dashboard\atem-connection.tsx
+bundles\atem-control\src\dashboard\atem-control.html
+bundles\atem-control\src\dashboard\atem-control.tsx
+bundles\atem-control\src\dashboard\atem-panel.tsx
+bundles\atem-control\src\global.d.ts
+bundles\atem-control\src\types\atem.types.ts
+bundles\atem-control\tsconfig.json
+bundles\atem-control\vite.config.mjs
+bundles\backup-system\extension\backup-manager.ts
+bundles\backup-system\extension\index.ts
+bundles\backup-system\extension\optional-log-capture.ts
+bundles\backup-system\package.json
+bundles\backup-system\src\dashboard\backup-control.html
+bundles\backup-system\src\dashboard\backup-control.tsx
+bundles\backup-system\src\global.d.ts
+bundles\backup-system\tsconfig.json
+bundles\backup-system\vite.config.mjs
+bundles\data-sync-service\extension\google-sheets-client.ts
+bundles\data-sync-service\extension\index.ts
+bundles\data-sync-service\extension\optional-log-capture.ts
+bundles\data-sync-service\package.json
+bundles\data-sync-service\tsconfig.json
+bundles\data-sync-service\vite.config.mjs
+bundles\graphics-package\extension\data-fetcher.ts
+bundles\graphics-package\extension\index.ts
+bundles\graphics-package\extension\optional-log-capture.ts
+bundles\graphics-package\package.json
+bundles\graphics-package\src\dashboard\graphics-control.html
+bundles\graphics-package\src\dashboard\graphics-control.tsx
+bundles\graphics-package\src\global.d.ts
+bundles\graphics-package\src\graphics\lower-third.css
+bundles\graphics-package\src\graphics\lower-third.html
+bundles\graphics-package\src\graphics\lower-third.tsx
+bundles\graphics-package\src\graphics\scoreboard.html
+bundles\graphics-package\src\graphics\scoreboard.tsx
+bundles\graphics-package\src\types\graphics.types.ts
+bundles\graphics-package\src\utils\lower-third-animations.ts
+bundles\graphics-package\tsconfig.json
+bundles\graphics-package\vite.config.mjs
+bundles\logger-system\extension\index.ts
+bundles\logger-system\extension\log-capture.ts
+bundles\logger-system\extension\logger.ts
+bundles\logger-system\extension\storage.ts
+bundles\logger-system\package.json
+bundles\logger-system\src\dashboard\log-viewer.css
+bundles\logger-system\src\dashboard\log-viewer.html
+bundles\logger-system\src\dashboard\log-viewer.tsx
+bundles\logger-system\src\global.d.ts
+bundles\logger-system\src\types\logger.types.ts
+bundles\logger-system\tsconfig.json
+bundles\logger-system\vite.config.mjs
+bundles\mixer-control\extension\connection.ts
+bundles\mixer-control\extension\index.ts
+bundles\mixer-control\extension\logger.ts
+bundles\mixer-control\extension\optional-log-capture.ts
+bundles\mixer-control\extension\state-manager.ts
+bundles\mixer-control\extension\timestamp.ts
+bundles\mixer-control\package.json
+bundles\mixer-control\src\dashboard\mixer-connection.html
+bundles\mixer-control\src\dashboard\mixer-connection.tsx
+bundles\mixer-control\src\dashboard\mixer-control-panel.tsx
+bundles\mixer-control\src\dashboard\mixer-panel.html
+bundles\mixer-control\src\dashboard\mixer-panel.tsx
+bundles\mixer-control\src\dashboard\output-control-panel.tsx
+bundles\mixer-control\src\global.d.ts
+bundles\mixer-control\src\types\mixer.types.ts
+bundles\mixer-control\tsconfig.json
+bundles\mixer-control\vite.config.mjs
+bundles\obs-control\extension\connection.ts
+bundles\obs-control\extension\index.ts
+bundles\obs-control\extension\logger.ts
+bundles\obs-control\extension\optional-log-capture.ts
+bundles\obs-control\extension\scene-manager.ts
+bundles\obs-control\extension\source-manager.ts
+bundles\obs-control\package.json
+bundles\obs-control\src\dashboard\css.d.ts
+bundles\obs-control\src\dashboard\obs-connection.css
+bundles\obs-control\src\dashboard\obs-connection.html
+bundles\obs-control\src\dashboard\obs-connection.tsx
+bundles\obs-control\src\dashboard\obs-control-panel.css
+bundles\obs-control\src\dashboard\obs-control-panel.html
+bundles\obs-control\src\dashboard\obs-control-panel.tsx
+bundles\obs-control\src\global.d.ts
+bundles\obs-control\src\types\obs.types.ts
+bundles\obs-control\tsconfig.json
+bundles\obs-control\vite.config.mjs
+bundles\schedule-adapter-google-sheets\extension\index.ts
+bundles\schedule-adapter-google-sheets\package.json
+bundles\schedule-adapter-google-sheets\tsconfig.json
+bundles\schedule-adapter-google-sheets\vite.config.mjs
+bundles\schedule-manager\extension\index.ts
+bundles\schedule-manager\extension\optional-log-capture.ts
+bundles\schedule-manager\extension\schedule-service.ts
+bundles\schedule-manager\package.json
+bundles\schedule-manager\src\dashboard\schedule-panel.html
+bundles\schedule-manager\src\dashboard\schedule-panel.tsx
+bundles\schedule-manager\src\global.d.ts
+bundles\schedule-manager\src\graphics\schedule-display.html
+bundles\schedule-manager\src\graphics\schedule-display.tsx
+bundles\schedule-manager\tsconfig.json
+bundles\schedule-manager\vite.config.mjs
+bundles\seamer\extension\index.ts
+bundles\seamer\extension\integration-registry.ts
+bundles\seamer\extension\optional-log-capture.ts
+bundles\seamer\extension\trigger-manager.ts
+bundles\seamer\package.json
+bundles\seamer\src\dashboard\App.tsx
+bundles\seamer\src\dashboard\components\Card.tsx
+bundles\seamer\src\dashboard\components\EditCardModal.tsx
+bundles\seamer\src\dashboard\main.tsx
+bundles\seamer\src\dashboard\seamer.html
+bundles\seamer\src\dashboard\trigger\EditTriggerModal.tsx
+bundles\seamer\src\dashboard\trigger\TriggerPage.tsx
+bundles\seamer\src\global.d.ts
+bundles\seamer\src\types\seamer.types.ts
+bundles\seamer\tsconfig.json
+bundles\seamer\vite.config.mjs
+bundles\seamer-adapter-atem\extension\index.ts
+bundles\seamer-adapter-atem\package.json
+bundles\seamer-adapter-atem\tsconfig.json
+bundles\seamer-adapter-atem\vite.config.mjs
+bundles\seamer-adapter-mixer\extension\index.ts
+bundles\seamer-adapter-mixer\package.json
+bundles\seamer-adapter-mixer\tsconfig.json
+bundles\seamer-adapter-mixer\vite.config.mjs
+bundles\seamer-adapter-obs\extension\index.ts
+bundles\seamer-adapter-obs\package.json
+bundles\seamer-adapter-obs\tsconfig.json
+bundles\seamer-adapter-obs\vite.config.mjs
+bundles\seamer-adapter-vb\extension\index.ts
+bundles\seamer-adapter-vb\package.json
+bundles\seamer-adapter-vb\tsconfig.json
+bundles\seamer-adapter-vb\vite.config.mjs
+bundles\vb-matrix-control\extension\index.ts
+bundles\vb-matrix-control\extension\manager.ts
+bundles\vb-matrix-control\extension\optional-log-capture.ts
+bundles\vb-matrix-control\extension\vban.ts
+bundles\vb-matrix-control\package.json
+bundles\vb-matrix-control\presets.json
+bundles\vb-matrix-control\src\dashboard\components\Bank.tsx
+bundles\vb-matrix-control\src\dashboard\components\BankSlot.tsx
+bundles\vb-matrix-control\src\dashboard\components\MatrixView.tsx
+bundles\vb-matrix-control\src\dashboard\components\NetworkConfigList.tsx
+bundles\vb-matrix-control\src\dashboard\components\Panel.tsx
+bundles\vb-matrix-control\src\dashboard\components\PatchSelector.tsx
+bundles\vb-matrix-control\src\dashboard\components\PatchStatus.tsx
+bundles\vb-matrix-control\src\dashboard\components\PresetDraggable.tsx
+bundles\vb-matrix-control\src\dashboard\components\PresetManager.tsx
+bundles\vb-matrix-control\src\dashboard\control-panel.html
+bundles\vb-matrix-control\src\dashboard\network-config.html
+bundles\vb-matrix-control\src\dashboard\network-config-panel.tsx
+bundles\vb-matrix-control\src\dashboard\panel.tsx
+bundles\vb-matrix-control\src\dashboard\vb-control.css
+bundles\vb-matrix-control\src\global.d.ts
+bundles\vb-matrix-control\src\types.ts
+bundles\vb-matrix-control\tsconfig.json
+bundles\vb-matrix-control\vite.config.mjs
+cfg\data-sync-service.json.example
+cfg\nodecg.json.example
+cfg\README.md
+DEVELOPMENT_MEMO.md
+LICENSE
+Manual\chs\INSTALLATION.md
+Manual\chs\README.md
+Manual\chs\USER_MANUAL.md
+Manual\eng\INSTALLATION.md
+Manual\eng\README.md
+Manual\eng\USER_MANUAL.md
+Manual\jpn\INSTALLATION.md
+Manual\jpn\README.md
+Manual\jpn\USER_MANUAL.md
+misc-resorce\seamer-logo-128x128.png
+package.json
+package-lock.json
+README.md
+scripts\build-bundles.ts
+scripts\fix-html-paths.ts
+scripts\kill-nodecg.ps1
+scripts\restore-html.js
+shared\constants\index.ts
+shared\types\animation.types.ts
+shared\types\atem.types.ts
+shared\types\common.types.ts
+shared\types\global.d.ts
+shared\types\graphics.types.ts
+shared\types\logger.types.ts
+shared\types\mixer.types.ts
+shared\types\obs.types.ts
+shared\utils\gsap-animations.ts
+shared\utils\logger.ts
+shared\utils\timestamp.ts
+tsconfig.json
+vite.config.dashboard.ts
+vite.config.extension.ts
+</pre></details>
+        </div>
+      </section>
+
+      <footer class="footer">LeafSeamer workspace: D:\git-repo\LeafSeamer · Report layout updated 2026-07-12</footer>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const filterButtons = Array.from(document.querySelectorAll('[data-filter]'));
+      const issueCards = Array.from(document.querySelectorAll('.issue-card'));
+
+      for (const button of filterButtons) {
+        button.addEventListener('click', () => {
+          const priority = button.dataset.filter;
+          for (const candidate of filterButtons) {
+            candidate.setAttribute('aria-pressed', String(candidate === button));
+          }
+          for (const card of issueCards) {
+            card.hidden = priority !== 'all' && card.dataset.priority !== priority;
+          }
+        });
+      }
+
+      for (const button of document.querySelectorAll('[data-details]')) {
+        button.addEventListener('click', () => {
+          const shouldOpen = button.dataset.details === 'open';
+          for (const detail of document.querySelectorAll('details')) {
+            detail.open = shouldOpen;
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
