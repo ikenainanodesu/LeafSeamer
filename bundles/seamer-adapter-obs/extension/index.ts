@@ -7,6 +7,7 @@ import type {
   OBSTriggerAction,
   SeamerExtensionApi,
 } from "../../seamer/src/types/seamer.types";
+import { obsManifest } from "./manifest";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const seamer = nodecg.extension["seamer"] as SeamerExtensionApi;
@@ -23,40 +24,72 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     states: statesRep.value || {},
   });
 
+  const setScene = (connectionId: string, scene: string) =>
+    nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
+      id: connectionId,
+      scene,
+    });
+  const setStreaming = (connectionId: string, isStreaming: boolean) =>
+    nodecg.sendMessageToBundle(
+      isStreaming ? "startStreaming" : "stopStreaming",
+      "obs-control",
+      { id: connectionId }
+    );
+
   seamer.registerIntegration({
-    id: "obs",
-    label: "OBS Control",
+    manifest: obsManifest,
     initialState: getState(),
-    execute: (payload, kind) => {
+    evaluateTrigger: (capabilityId, parameters, nextValue, previousValue) => {
+      const connectionId = String(parameters.connectionId);
+      const next = (nextValue as OBSIntegrationState).states[connectionId];
+      const previous = (previousValue as OBSIntegrationState).states[
+        connectionId
+      ];
+      if (!next || !previous) return false;
+
+      if (capabilityId === "scene.changed") {
+        return (
+          next.currentScene !== previous.currentScene &&
+          next.currentScene === parameters.scene
+        );
+      }
+      return (
+        next.isStreaming !== previous.isStreaming &&
+        next.isStreaming === Boolean(parameters.isStreaming)
+      );
+    },
+    executeAction: async (capabilityId, parameters) => {
+      if (capabilityId === "scene.set") {
+        await setScene(String(parameters.connectionId), String(parameters.scene));
+        return;
+      }
+      if (capabilityId === "streaming.set") {
+        await setStreaming(
+          String(parameters.connectionId),
+          Boolean(parameters.isStreaming)
+        );
+      }
+    },
+    executeLegacy: async (payload, kind) => {
       if (kind === "trigger") {
         const action = payload as OBSTriggerAction;
         if (action.actionType === "setScene") {
-          nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
-            id: action.connectionId,
-            scene: action.value,
-          });
+          await setScene(action.connectionId, String(action.value));
         } else {
-          nodecg.sendMessageToBundle(
-            action.value ? "startStreaming" : "stopStreaming",
-            "obs-control",
-            { id: action.connectionId }
-          );
+          await setStreaming(action.connectionId, Boolean(action.value));
         }
         return;
       }
 
       const action = payload as OBSAction;
       if (action.transitionName) {
-        nodecg.sendMessageToBundle("setOBSTransition", "obs-control", {
+        await nodecg.sendMessageToBundle("setOBSTransition", "obs-control", {
           id: action.connectionId,
           transition: action.transitionName,
         });
       }
       if (action.sceneName) {
-        nodecg.sendMessageToBundle("setOBSScene", "obs-control", {
-          id: action.connectionId,
-          scene: action.sceneName,
-        });
+        await setScene(action.connectionId, action.sceneName);
       }
     },
   });

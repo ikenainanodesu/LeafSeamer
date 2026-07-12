@@ -1,7 +1,18 @@
 import NodeCG from "nodecg/types";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import archiver from "archiver";
+import {
+  buildBackupManifest,
+  classifyBackupPath,
+  encryptSecretPayload,
+  normalizeBackupPath,
+  normalizeBackupRequest,
+} from "./backup-policy";
+import type {
+  BackupCandidate,
+  BackupRequest,
+} from "../src/types/backup.types";
 
 export interface BackupFile {
   filename: string;
@@ -10,87 +21,127 @@ export interface BackupFile {
 }
 
 export class BackupManager {
-  private nodecg: NodeCG.ServerAPI;
-  private backupDir: string;
-  private backupListRep: any;
+  private readonly backupDir: string;
+  private readonly backupListRep: NodeCG.ServerReplicant<BackupFile[]>;
 
-  constructor(nodecg: NodeCG.ServerAPI) {
-    this.nodecg = nodecg;
-    // Backups stored in root/backups
-    // Note: nodecg.bundlePath is inside bundles/backup-system
-    // We want to go up to root.
-    // Assuming standard structure: root/bundles/backup-system
-    // So root is ../../
-    // But safer to use process.cwd() if running from root, or resolve relative to bundlePath.
-    // Let's assume process.cwd() is the NodeCG root (usually true when running `nodecg start`).
+  constructor(private readonly nodecg: NodeCG.ServerAPI) {
     this.backupDir = path.join(process.cwd(), "backups");
-
-    if (!fs.existsSync(this.backupDir)) {
-      fs.mkdirSync(this.backupDir, { recursive: true });
-    }
-
+    fs.mkdirSync(this.backupDir, { recursive: true });
     this.backupListRep = nodecg.Replicant<BackupFile[]>("backupList", {
       defaultValue: [],
     });
     this.refreshBackupList();
   }
 
-  async createBackup(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const filename = `backup-${timestamp}.zip`;
-      const filePath = path.join(this.backupDir, filename);
-      const output = fs.createWriteStream(filePath);
-      const archive = archiver("zip", {
-        zlib: { level: 9 }, // Sets the compression level.
-      });
+  async createBackup(request?: Partial<BackupRequest>): Promise<string> {
+    const normalizedRequest = normalizeBackupRequest(request);
+    const candidates = await this.collectCandidates();
+    const selected = candidates.filter((candidate) =>
+      normalizedRequest.levels.includes(classifyBackupPath(candidate.path))
+    );
+    const manifest = buildBackupManifest(selected, normalizedRequest.levels);
+    const timestamp = manifest.createdAt.replace(/[:.]/g, "-");
+    const filename = `backup-${timestamp}.zip`;
+    const filePath = path.join(this.backupDir, filename);
+
+    await this.writeArchive(filePath, selected, manifest, normalizedRequest);
+    this.nodecg.log.info("Backup created: %s", filename);
+    this.refreshBackupList();
+    return filename;
+  }
+
+  private async collectCandidates(): Promise<BackupCandidate[]> {
+    const candidates: BackupCandidate[] = [];
+    for (const rootName of ["cfg", "db"]) {
+      const rootPath = path.join(process.cwd(), rootName);
+      if (fs.existsSync(rootPath)) {
+        await this.collectDirectory(rootPath, rootName, candidates);
+      }
+    }
+    return candidates;
+  }
+
+  private async collectDirectory(
+    directory: string,
+    relativeDirectory: string,
+    candidates: BackupCandidate[]
+  ): Promise<void> {
+    const entries = await fs.promises.readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolutePath = path.join(directory, entry.name);
+      const relativePath = normalizeBackupPath(
+        path.posix.join(relativeDirectory.replace(/\\/g, "/"), entry.name)
+      );
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        await this.collectDirectory(absolutePath, relativePath, candidates);
+      } else if (entry.isFile()) {
+        candidates.push({
+          path: relativePath,
+          content: await fs.promises.readFile(absolutePath),
+        });
+      }
+    }
+  }
+
+  private async writeArchive(
+    filePath: string,
+    candidates: BackupCandidate[],
+    manifest: ReturnType<typeof buildBackupManifest>,
+    request: BackupRequest
+  ): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(filePath, { flags: "wx" });
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        output.destroy();
+        void fs.promises.unlink(filePath).catch(() => undefined);
+        reject(error);
+      };
 
       output.on("close", () => {
-        this.nodecg.log.info(archive.pointer() + " total bytes");
-        this.nodecg.log.info("Backup created: " + filename);
-        this.refreshBackupList();
-        resolve(filename);
+        if (settled) return;
+        settled = true;
+        resolve();
       });
-
-      archive.on("error", (err: any) => {
-        reject(err);
-      });
-
+      output.on("error", fail);
+      archive.on("error", fail);
       archive.pipe(output);
 
-      // Append cfg directory
-      const cfgDir = path.join(process.cwd(), "cfg");
-      if (fs.existsSync(cfgDir)) {
-        archive.directory(cfgDir, "cfg");
+      for (const candidate of candidates) {
+        if (classifyBackupPath(candidate.path) !== "L3") {
+          archive.append(candidate.content, { name: candidate.path });
+        }
       }
 
-      // Append db directory
-      const dbDir = path.join(process.cwd(), "db");
-      if (fs.existsSync(dbDir)) {
-        archive.directory(dbDir, "db");
+      const secrets = candidates.filter(
+        (candidate) => classifyBackupPath(candidate.path) === "L3"
+      );
+      if (secrets.length > 0) {
+        archive.append(
+          encryptSecretPayload(secrets, request.secretPassphrase as string),
+          { name: "l3-secrets.encrypted.json" }
+        );
       }
-
-      archive.finalize();
+      archive.append(JSON.stringify(manifest, null, 2), {
+        name: "backup-manifest.json",
+      });
+      void archive.finalize().catch(fail);
     });
   }
 
-  private refreshBackupList() {
-    if (!fs.existsSync(this.backupDir)) return;
-
-    const files = fs
+  private refreshBackupList(): void {
+    const backups = fs
       .readdirSync(this.backupDir)
-      .filter((f) => f.endsWith(".zip"));
-    const backups: BackupFile[] = files
-      .map((f) => {
-        const stats = fs.statSync(path.join(this.backupDir, f));
-        return {
-          filename: f,
-          timestamp: stats.mtimeMs,
-          size: stats.size,
-        };
+      .filter((filename) => filename.endsWith(".zip"))
+      .map((filename) => {
+        const stats = fs.statSync(path.join(this.backupDir, filename));
+        return { filename, timestamp: stats.mtimeMs, size: stats.size };
       })
-      .sort((a, b) => b.timestamp - a.timestamp);
-
+      .sort((left, right) => right.timestamp - left.timestamp);
     this.backupListRep.value = backups;
   }
 }

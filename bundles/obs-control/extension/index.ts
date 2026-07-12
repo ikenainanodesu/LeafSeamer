@@ -5,6 +5,8 @@ import { SourceManager } from "./source-manager";
 import { createLogger } from "./logger";
 import { OBSConnectionSettings } from "../src/types/obs.types";
 import { ensureOptionalLogCapture } from "./optional-log-capture";
+import { CommandGateway } from "../../../shared/security/command-gateway";
+import { createOptionalAuditWriter } from "../../../shared/security/nodecg-command";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   ensureOptionalLogCapture(nodecg.Logger);
@@ -28,6 +30,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   const sceneManager = new SceneManager(nodecg);
   const sourceManager = new SourceManager(nodecg);
+  const commandGateway = new CommandGateway(createOptionalAuditWriter(nodecg));
 
   // Replicant is defined earlier
   const obsConnectionsRep =
@@ -37,6 +40,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     sceneManager,
     sourceManager,
     obsConnectionsRep,
+    commandGateway,
   );
   connectionManager.connectAll();
 

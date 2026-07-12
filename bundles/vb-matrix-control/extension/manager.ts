@@ -11,6 +11,8 @@ import {
   MatrixPointAddress,
   MatrixPointStatus,
 } from "../src/types";
+import { CommandGateway } from "../../../shared/security/command-gateway";
+import { createLegacyCommandEnvelope } from "../../../shared/security/nodecg-command";
 
 export class MatrixManager {
   private nodecg: NodeCG.ServerAPI;
@@ -25,10 +27,14 @@ export class MatrixManager {
   private availableDevicesRep: any;
   private matrixPointsRep: any;
 
-  constructor(nodecg: NodeCG.ServerAPI) {
+  constructor(
+    nodecg: NodeCG.ServerAPI,
+    private readonly commandGateway: CommandGateway
+  ) {
     this.nodecg = nodecg;
 
     this.initReplicants();
+    this.registerCommands();
     this.initListeners();
     this.loadPresetsFromFile();
   }
@@ -136,6 +142,69 @@ export class MatrixManager {
         );
       }
     }
+  }
+
+  private registerCommands(): void {
+    const validatePoint = (point: MatrixPointAddress): string[] => {
+      const errors: string[] = [];
+      const safeDevice = /^[A-Za-z0-9_.:{}-]+$/;
+      if (!point || typeof point.connectionId !== "string") {
+        errors.push("connectionId is required");
+      }
+      if (!safeDevice.test(point?.inputDevice ?? "")) {
+        errors.push("inputDevice contains unsupported characters");
+      }
+      if (!safeDevice.test(point?.outputDevice ?? "")) {
+        errors.push("outputDevice contains unsupported characters");
+      }
+      if (!Number.isInteger(point?.inputChannel) || point.inputChannel < 1) {
+        errors.push("inputChannel must be a positive integer");
+      }
+      if (!Number.isInteger(point?.outputChannel) || point.outputChannel < 1) {
+        errors.push("outputChannel must be a positive integer");
+      }
+      return errors;
+    };
+
+    this.commandGateway.register<MatrixPointAddress, void>({
+      command: "vb.toggleMatrixPoint",
+      roles: ["audio"],
+      validate: validatePoint,
+      resolveTarget: (point) => point.connectionId,
+      isTargetAllowed: (target) => this.connections.has(target),
+      handler: async (point) => {
+        this.toggleMatrixPoint(point);
+      },
+    });
+
+    this.commandGateway.register<CurrentPatchStatus, void>({
+      command: "vb.updatePatch",
+      roles: ["audio"],
+      validate: (patch) => {
+        const errors = validatePoint(patch);
+        if (!patch?.id || typeof patch.id !== "string") {
+          errors.push("id is required");
+        }
+        if (
+          typeof patch?.gain !== "undefined" &&
+          (!Number.isFinite(patch.gain) || patch.gain < -144 || patch.gain > 24)
+        ) {
+          errors.push("gain must be between -144 and 24 dB");
+        }
+        if (typeof patch?.mute !== "undefined" && typeof patch.mute !== "boolean") {
+          errors.push("mute must be a boolean");
+        }
+        if (typeof patch?.exists !== "undefined" && typeof patch.exists !== "boolean") {
+          errors.push("exists must be a boolean");
+        }
+        return errors;
+      },
+      resolveTarget: (patch) => patch.connectionId,
+      isTargetAllowed: (target) => this.connections.has(target),
+      handler: async (patch) => {
+        this.applyPatchUpdate(patch);
+      },
+    });
   }
 
   private setupConnectionListeners(
@@ -270,100 +339,21 @@ export class MatrixManager {
       }
     );
 
-    this.nodecg.listenFor("updatePatch", (patch: any) => {
-      // patch must have connectionId
-      if (!patch.connectionId) return;
-      const vban = this.connections.get(patch.connectionId);
-      if (!vban) return;
-
-      this.nodecg.log.info("Update Patch:", patch);
-
-      // Send VBAN commands to Matrix
-      if (patch.inputDevice && patch.outputDevice) {
-        const inCh = patch.inputChannel || 1;
-        const outCh = patch.outputChannel || 1;
-        const point: MatrixPointAddress = {
-          connectionId: patch.connectionId,
-          inputDevice: patch.inputDevice,
-          inputChannel: inCh,
-          outputDevice: patch.outputDevice,
-          outputChannel: outCh,
-        };
-
-        // Handle "Unpatch" (Remove)
-        if (patch.exists === false) {
-          const removeCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Remove;`;
-          vban.send(removeCmd);
-          this.upsertMatrixPoint(point, {
-            exists: false,
-            gain: -144,
-            mute: false,
-          });
-          this.upsertActivePatchFromMatrixPoint(
-            point,
-            { exists: false, gain: -144, mute: false },
-            false
-          );
-          patch.gain = -144;
-          patch.mute = false;
-        } else {
-          // Handle "Patch" / Update
-
-          // Set gain
-          if (typeof patch.gain === "number") {
-            const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = ${patch.gain.toFixed(1)};`;
-            vban.send(gainCmd);
-          } else if (
-            patch.exists === true &&
-            typeof patch.gain === "undefined"
-          ) {
-            // Check if we need to default to 0dB
-            const currentPatches = this.activePatchesRep.value || [];
-            const existing = currentPatches.find(
-              (p: CurrentPatchStatus) => p.id === patch.id
-            );
-
-            if (existing && !existing.exists) {
-              // Was unconnected, now connecting -> Default 0dB
-              const gainCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = 0.0;`;
-              vban.send(gainCmd);
-              patch.gain = 0;
-            }
-          }
-
-          // Set mute
-          if (typeof patch.mute === "boolean") {
-            const muteCmd = `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ${patch.mute ? 1 : 0};`;
-            vban.send(muteCmd);
-          }
-
-          this.upsertMatrixPoint(point, {
-            exists: patch.exists !== false && (patch.gain ?? 0) > -144,
-            gain: typeof patch.gain === "number" ? patch.gain : 0,
-            mute: typeof patch.mute === "boolean" ? patch.mute : false,
-          });
-          this.upsertActivePatchFromMatrixPoint(
-            point,
-            {
-              exists: patch.exists !== false && (patch.gain ?? 0) > -144,
-              gain: typeof patch.gain === "number" ? patch.gain : 0,
-              mute: typeof patch.mute === "boolean" ? patch.mute : false,
-            },
-            true
+    this.nodecg.listenFor(
+      "updatePatch",
+      async (patch: CurrentPatchStatus, ack: any) => {
+        const result = await this.commandGateway.execute(
+          createLegacyCommandEnvelope("vb.updatePatch", patch, ["audio"])
+        );
+        if (ack && !ack.handled) {
+          ack(
+            result.ok
+              ? null
+              : new Error(result.error?.message ?? "Patch update failed")
           );
         }
       }
-
-      // Update Replicant
-      const currentPatches = this.activePatchesRep.value || [];
-      const idx = currentPatches.findIndex(
-        (p: CurrentPatchStatus) => p.id === patch.id
-      );
-      if (idx !== -1) {
-        currentPatches[idx] = patch;
-        this.activePatchesRep.value = [...currentPatches];
-      }
-    });
+    );
 
     this.nodecg.listenFor("refreshDevices", (connectionId?: string) => {
       this.requestDeviceDiscovery(connectionId);
@@ -374,9 +364,21 @@ export class MatrixManager {
       this.refreshMatrix(connectionId);
     });
 
-    this.nodecg.listenFor("toggleMatrixPoint", (point: MatrixPointAddress) => {
-      this.toggleMatrixPoint(point);
-    });
+    this.nodecg.listenFor(
+      "toggleMatrixPoint",
+      async (point: MatrixPointAddress, ack: any) => {
+        const result = await this.commandGateway.execute(
+          createLegacyCommandEnvelope("vb.toggleMatrixPoint", point, ["audio"])
+        );
+        if (ack && !ack.handled) {
+          ack(
+            result.ok
+              ? null
+              : new Error(result.error?.message ?? "Matrix patch failed")
+          );
+        }
+      }
+    );
 
     this.nodecg.listenFor(
       "savePresetToBank",
@@ -677,6 +679,79 @@ export class MatrixManager {
       this.activePatchesRep.value = [...currentPatches];
     } else {
       this.activePatchesRep.value = [...currentPatches, nextPatch];
+    }
+  }
+
+  private applyPatchUpdate(patch: CurrentPatchStatus): void {
+    const vban = this.connections.get(patch.connectionId);
+    if (!vban) throw new Error("VB Matrix connection is unavailable");
+
+    this.nodecg.log.info("Update Patch:", patch);
+    const inCh = patch.inputChannel || 1;
+    const outCh = patch.outputChannel || 1;
+    const point: MatrixPointAddress = {
+      connectionId: patch.connectionId,
+      inputDevice: patch.inputDevice,
+      inputChannel: inCh,
+      outputDevice: patch.outputDevice,
+      outputChannel: outCh,
+    };
+
+    if (patch.exists === false) {
+      vban.send(
+        `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Remove;`
+      );
+      this.upsertMatrixPoint(point, {
+        exists: false,
+        gain: -144,
+        mute: false,
+      });
+      this.upsertActivePatchFromMatrixPoint(
+        point,
+        { exists: false, gain: -144, mute: false },
+        false
+      );
+      patch.gain = -144;
+      patch.mute = false;
+    } else {
+      if (typeof patch.gain === "number") {
+        vban.send(
+          `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = ${patch.gain.toFixed(1)};`
+        );
+      } else if (patch.exists === true) {
+        const existing = (this.activePatchesRep.value || []).find(
+          (candidate: CurrentPatchStatus) => candidate.id === patch.id
+        );
+        if (existing && !existing.exists) {
+          vban.send(
+            `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).dBGain = 0.0;`
+          );
+          patch.gain = 0;
+        }
+      }
+
+      if (typeof patch.mute === "boolean") {
+        vban.send(
+          `Point(${patch.inputDevice}.IN[${inCh}],${patch.outputDevice}.OUT[${outCh}]).Mute = ${patch.mute ? 1 : 0};`
+        );
+      }
+
+      const updates = {
+        exists: (patch.gain ?? 0) > -144,
+        gain: typeof patch.gain === "number" ? patch.gain : 0,
+        mute: typeof patch.mute === "boolean" ? patch.mute : false,
+      };
+      this.upsertMatrixPoint(point, updates);
+      this.upsertActivePatchFromMatrixPoint(point, updates, true);
+    }
+
+    const currentPatches = this.activePatchesRep.value || [];
+    const index = currentPatches.findIndex(
+      (candidate: CurrentPatchStatus) => candidate.id === patch.id
+    );
+    if (index !== -1) {
+      currentPatches[index] = patch;
+      this.activePatchesRep.value = [...currentPatches];
     }
   }
 

@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
+  AtemIntegrationState,
+  MixerIntegrationState,
+  OBSIntegrationState,
   SeamerCard,
   SeamerIntegrations,
+  VBIntegrationState,
 } from "../types/seamer.types";
 import { v4 as uuidv4 } from "uuid";
 import Card from "./components/Card";
@@ -34,13 +38,23 @@ const App = () => {
     });
   }, []);
 
-  const mixerState = integrations.mixer?.state.mixerState || null;
-  const presets = integrations.vb?.state.presets || [];
-  const vbDevices = integrations.vb?.state.devices || [];
-  const obsConnections = integrations.obs?.state.connections || [];
-  const obsStates = integrations.obs?.state.states || {};
-  const atemSwitchers = integrations.atem?.state.switchers || [];
-  const atemStates = integrations.atem?.state.states || {};
+  const mixerIntegration = integrations.mixer?.state as
+    | MixerIntegrationState
+    | undefined;
+  const vbIntegration = integrations.vb?.state as VBIntegrationState | undefined;
+  const obsIntegration = integrations.obs?.state as
+    | OBSIntegrationState
+    | undefined;
+  const atemIntegration = integrations.atem?.state as
+    | AtemIntegrationState
+    | undefined;
+  const mixerState = mixerIntegration?.mixerState || null;
+  const presets = vbIntegration?.presets || [];
+  const vbDevices = vbIntegration?.devices || [];
+  const obsConnections = obsIntegration?.connections || [];
+  const obsStates = obsIntegration?.states || {};
+  const atemSwitchers = atemIntegration?.switchers || [];
+  const atemStates = atemIntegration?.states || {};
 
   const saveCard = (card: SeamerCard) => {
     // Update or Add

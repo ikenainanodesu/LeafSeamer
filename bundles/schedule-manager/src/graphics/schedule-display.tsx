@@ -1,19 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-
-interface ScheduleItem {
-  id: string;
-  time: string;
-  title: string;
-  description: string;
-  active: boolean;
-}
+import type { PlaylistItem } from "../types/schedule.types";
 
 const ScheduleDisplay = () => {
-  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [schedule, setSchedule] = useState<PlaylistItem[]>([]);
 
   useEffect(() => {
-    const scheduleRep = nodecg.Replicant<ScheduleItem[]>("scheduleData");
+    const scheduleRep = nodecg.Replicant<PlaylistItem[]>("scheduleData");
     scheduleRep.on("change", (newVal: any) => {
       if (newVal) {
         setSchedule(newVal);

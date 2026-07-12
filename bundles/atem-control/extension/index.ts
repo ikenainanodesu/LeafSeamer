@@ -6,6 +6,11 @@ import {
   DiscoveredSwitcher,
 } from "../src/types/atem.types";
 import { ensureOptionalLogCapture } from "./optional-log-capture";
+import { CommandGateway } from "../../../shared/security/command-gateway";
+import {
+  createLegacyCommandEnvelope,
+  createOptionalAuditWriter,
+} from "../../../shared/security/nodecg-command";
 
 // TODO: Use a proper discovery library if needed. For now simulating or basic IP.
 // 'atem-connection' checks availability but doesn't do mdns discovery itself directly without helper?
@@ -31,6 +36,29 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   // Map to store active ATEM instances
   const managers = new Map<string, AtemManager>();
+  const commandGateway = new CommandGateway(createOptionalAuditWriter(nodecg));
+
+  commandGateway.register<{ ip: string; macroIndex: number }, void>({
+    command: "atem.runMacro",
+    roles: ["broadcast"],
+    validate: (payload) => {
+      const errors: string[] = [];
+      if (!payload || typeof payload.ip !== "string" || payload.ip.length === 0) {
+        errors.push("ip is required");
+      }
+      if (!Number.isInteger(payload?.macroIndex) || payload.macroIndex < 0) {
+        errors.push("macroIndex must be a non-negative integer");
+      }
+      return errors;
+    },
+    resolveTarget: (payload) => payload.ip,
+    isTargetAllowed: (target) => managers.get(target)?.connected === true,
+    handler: async (payload) => {
+      const manager = managers.get(payload.ip);
+      if (!manager) throw new Error("ATEM target is unavailable");
+      await manager.atem.macroRun(payload.macroIndex);
+    },
+  });
 
   // Helper to get or create replicant for specific switcher state
   const getStateReplicant = (ip: string) => {
@@ -295,10 +323,12 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   nodecg.listenFor(
     "atem:runMacro",
-    (data: { ip: string; macroIndex: number }, cb: any) => {
-      const manager = managers.get(data.ip);
-      if (manager && manager.connected) {
-        manager.atem.macroRun(data.macroIndex).catch(log.error);
+    async (data: { ip: string; macroIndex: number }, cb: any) => {
+      const result = await commandGateway.execute(
+        createLegacyCommandEnvelope("atem.runMacro", data, ["broadcast"])
+      );
+      if (cb && !cb.handled) {
+        cb(result.ok ? null : new Error(result.error?.message ?? "Macro failed"));
       }
     }
   );

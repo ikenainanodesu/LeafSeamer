@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import type { BackupLevel, BackupRequest } from "../types/backup.types";
 
 interface BackupFile {
   filename: string;
@@ -7,113 +8,143 @@ interface BackupFile {
   size: number;
 }
 
+const LEVEL_OPTIONS: Array<{ level: BackupLevel; label: string; detail: string }> = [
+  { level: "L0", label: "L0 Public", detail: "Examples and public metadata" },
+  { level: "L1", label: "L1 Operational", detail: "Standard runtime configuration" },
+  { level: "L2", label: "L2 Confidential", detail: "Databases and internal state" },
+  { level: "L3", label: "L3 Secret", detail: "Credentials and private keys" },
+];
+
 const BackupControl = () => {
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [creating, setCreating] = useState(false);
+  const [levels, setLevels] = useState<BackupLevel[]>(["L0", "L1"]);
+  const [secretConfirmed, setSecretConfirmed] = useState(false);
+  const [secretPassphrase, setSecretPassphrase] = useState("");
 
   useEffect(() => {
-    const backupListRep = nodecg.Replicant<BackupFile[]>("backupList");
-    backupListRep.on("change", (newVal: any) => {
-      if (newVal) {
-        setBackups(newVal);
-      }
-    });
+    const replicant = nodecg.Replicant<BackupFile[]>("backupList");
+    const update = (value: BackupFile[] | undefined) => setBackups(value ?? []);
+    replicant.on("change", update);
+    return () => replicant.removeListener("change", update);
   }, []);
 
-  const handleCreateBackup = () => {
+  const toggleLevel = (level: BackupLevel) => {
+    setLevels((current) =>
+      current.includes(level)
+        ? current.filter((item) => item !== level)
+        : [...current, level]
+    );
+    if (level === "L3" && levels.includes("L3")) {
+      setSecretConfirmed(false);
+      setSecretPassphrase("");
+    }
+  };
+
+  const createBackup = () => {
+    const request: BackupRequest = {
+      levels,
+      includeSecrets: levels.includes("L3") && secretConfirmed,
+      secretPassphrase: levels.includes("L3") ? secretPassphrase : undefined,
+    };
     setCreating(true);
-    nodecg.sendMessage("createBackup", {}, (err: any, filename: any) => {
+    nodecg.sendMessage("createBackup", request, (error: Error | null) => {
       setCreating(false);
-      if (err) {
-        console.error("Backup failed:", err);
-        alert("Backup failed: " + err.message);
-      } else {
-        console.log("Backup created:", filename);
-      }
+      if (error) window.alert(`Backup failed: ${error.message}`);
     });
   };
+
+  const canCreate =
+    !creating &&
+    levels.length > 0 &&
+    (!levels.includes("L3") ||
+      (secretConfirmed && secretPassphrase.trim().length >= 12));
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    const units = ["B", "KB", "MB", "GB"];
+    const index = Math.min(
+      Math.floor(Math.log(bytes) / Math.log(1024)),
+      units.length - 1
+    );
+    return `${(bytes / 1024 ** index).toFixed(2)} ${units[index]}`;
   };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <main style={{ padding: 16, color: "#e5e7eb", background: "#17191d" }}>
+      <section aria-labelledby="backup-levels">
+        <h2 id="backup-levels" style={{ margin: "0 0 12px", fontSize: 16 }}>
+          Data levels
+        </h2>
+        <div style={{ display: "grid", gap: 8 }}>
+          {LEVEL_OPTIONS.map((option) => (
+            <label key={option.level} style={{ display: "flex", gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={levels.includes(option.level)}
+                onChange={() => toggleLevel(option.level)}
+              />
+              <span>
+                <strong>{option.label}</strong>
+                <small style={{ display: "block", color: "#9ca3af" }}>
+                  {option.detail}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      {levels.includes("L3") && (
+        <section style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #34373d" }}>
+          <label style={{ display: "flex", gap: 10 }}>
+            <input
+              type="checkbox"
+              checked={secretConfirmed}
+              onChange={(event) => setSecretConfirmed(event.target.checked)}
+            />
+            I understand that this backup contains encrypted secret data.
+          </label>
+          <input
+            type="password"
+            value={secretPassphrase}
+            onChange={(event) => setSecretPassphrase(event.target.value)}
+            placeholder="Separate passphrase (12+ characters)"
+            autoComplete="new-password"
+            style={{ width: "100%", boxSizing: "border-box", marginTop: 10, padding: 8 }}
+          />
+        </section>
+      )}
+
       <button
-        onClick={handleCreateBackup}
-        disabled={creating}
-        style={{
-          padding: "10px 20px",
-          backgroundColor: creating ? "#666" : "#2196f3",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: creating ? "default" : "pointer",
-          fontSize: "16px",
-          marginBottom: "20px",
-          width: "100%",
-        }}
+        type="button"
+        onClick={createBackup}
+        disabled={!canCreate}
+        style={{ width: "100%", marginTop: 16, padding: 10, cursor: canCreate ? "pointer" : "default" }}
       >
-        {creating ? "Creating Backup..." : "Create New Backup"}
+        {creating ? "Creating backup..." : "Create backup"}
       </button>
 
-      <div
-        style={{
-          backgroundColor: "#1e1e1e",
-          borderRadius: "4px",
-          padding: "10px",
-        }}
-      >
-        <h3
-          style={{
-            marginTop: 0,
-            marginBottom: "10px",
-            borderBottom: "1px solid #333",
-            paddingBottom: "5px",
-          }}
-        >
-          Existing Backups
-        </h3>
+      <section style={{ marginTop: 20 }} aria-labelledby="existing-backups">
+        <h2 id="existing-backups" style={{ fontSize: 16 }}>Existing backups</h2>
         {backups.length === 0 ? (
-          <div style={{ color: "#888", textAlign: "center", padding: "20px" }}>
-            No backups found.
-          </div>
+          <p style={{ color: "#9ca3af" }}>No backups found.</p>
         ) : (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          <ul style={{ listStyle: "none", padding: 0 }}>
             {backups.map((backup) => (
-              <li
-                key={backup.filename}
-                style={{
-                  padding: "10px",
-                  borderBottom: "1px solid #333",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                    {backup.filename}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#aaa" }}>
-                    {new Date(backup.timestamp).toLocaleString()}
-                  </div>
-                </div>
-                <div style={{ fontSize: "14px", color: "#ccc" }}>
-                  {formatSize(backup.size)}
-                </div>
+              <li key={backup.filename} style={{ padding: "10px 0", borderTop: "1px solid #34373d" }}>
+                <strong>{backup.filename}</strong>
+                <small style={{ display: "flex", justifyContent: "space-between", color: "#9ca3af" }}>
+                  <span>{new Date(backup.timestamp).toLocaleString()}</span>
+                  <span>{formatSize(backup.size)}</span>
+                </small>
               </li>
             ))}
           </ul>
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };
 
-const root = createRoot(document.getElementById("root")!);
-root.render(<BackupControl />);
+createRoot(document.getElementById("root")!).render(<BackupControl />);

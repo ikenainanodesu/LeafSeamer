@@ -1,8 +1,12 @@
 import NodeCG from "nodecg/types";
-import type {
-  ScheduleItem,
-  ScheduleManagerApi,
-} from "../../schedule-manager/extension/schedule-service";
+import type { ScheduleManagerApi } from "../../schedule-manager/extension/schedule-service";
+import { transformSheetRows } from "./transform";
+
+interface SyncStatus {
+  lastSync: number;
+  status: string;
+  error: string | null;
+}
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const scheduleManager = nodecg.extension[
@@ -12,38 +16,27 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     "sheetData",
     "data-sync-service"
   );
+  const syncStatusRep = nodecg.Replicant<SyncStatus>(
+    "syncStatus",
+    "data-sync-service"
+  );
 
   sheetDataRep.on("change", (sheetData) => {
     const rows = sheetData?.sheet1;
-    if (!Array.isArray(rows)) {
-      return;
-    }
+    if (!Array.isArray(rows)) return;
 
-    const schedule: ScheduleItem[] = rows.flatMap((row, index) => {
-      if (index === 0 && row[0] === "Time") {
-        return [];
-      }
-      if (row.length < 2) {
-        return [];
-      }
-
-      return [
-        {
-          id: `sheet-item-${index}`,
-          time: String(row[0] || ""),
-          title: String(row[1] || ""),
-          description: String(row[2] || ""),
-          active:
-            row[3] === true ||
-            String(row[3]).toLowerCase() === "true",
-        },
-      ];
+    const fetchedAt = syncStatusRep.value?.lastSync || Date.now();
+    const batch = transformSheetRows(rows, {
+      sourceId: "google-sheets",
+      sourceRevision: String(fetchedAt),
+      fetchedAt,
     });
-
-    scheduleManager.replaceSchedule(schedule);
+    const preview = scheduleManager.commitImport(batch);
     nodecg.log.info(
-      "[ScheduleAdapterGoogleSheets] Imported %d schedule items",
-      schedule.length
+      "[ScheduleAdapterGoogleSheets] Committed %d items (%d added, %d updated)",
+      batch.items.length,
+      preview.added.length,
+      preview.updated.length
     );
   });
 };

@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../.."
+  },
+  "include": ["extension/**/*.ts", "../../shared/**/*.ts", "../schedule-manager/**/*.ts"]
+}

@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from "react";
-import {
+import { v4 as uuidv4 } from "uuid";
+import type {
+  AnySeamerTrigger,
   AtemSwitcherInfo,
   DeviceInfo,
+  DynamicSeamerTrigger,
   MixerState,
   OBSConnectionSettings,
   OBSState,
   SeamerIntegrations,
   SeamerTrigger,
+  TriggerCondition,
+  TriggerResultAction,
 } from "../../types/seamer.types";
+import { isDynamicSeamerTrigger } from "../../types/seamer.types";
+import { createDefaultParameters } from "./CapabilityFields";
+import DynamicTriggerModal from "./DynamicTriggerModal";
 import EditTriggerModal from "./EditTriggerModal";
-import { v4 as uuidv4 } from "uuid";
 
 interface TriggerPageProps {
   mixerState: MixerState | null;
@@ -20,6 +27,61 @@ interface TriggerPageProps {
   integrations: SeamerIntegrations;
 }
 
+const createLegacyDraft = (): SeamerTrigger => ({
+  id: uuidv4(),
+  name: "New Trigger",
+  delay: 0,
+  enabled: true,
+  condition: {
+    module: "mixer",
+    channelId: 1,
+    property: "faderLevel",
+    operator: "gt",
+    value: -10,
+  },
+  action: {
+    module: "mixer",
+    channelId: 1,
+    property: "isMuted",
+    value: true,
+  },
+});
+
+const createDynamicDraft = (
+  integrations: SeamerIntegrations
+): DynamicSeamerTrigger | null => {
+  const values = Object.values(integrations);
+  const conditionIntegration = values.find(
+    (integration) => integration.manifest.triggers.length > 0
+  );
+  const actionIntegration = values.find(
+    (integration) => integration.manifest.actions.length > 0
+  );
+  const condition = conditionIntegration?.manifest.triggers[0];
+  const action = actionIntegration?.manifest.actions[0];
+
+  if (!conditionIntegration || !actionIntegration || !condition || !action) {
+    return null;
+  }
+
+  return {
+    id: uuidv4(),
+    name: "New Trigger",
+    delay: 0,
+    enabled: true,
+    condition: {
+      integrationId: conditionIntegration.id,
+      capabilityId: condition.id,
+      parameters: createDefaultParameters(condition.parameters),
+    },
+    action: {
+      integrationId: actionIntegration.id,
+      capabilityId: action.id,
+      parameters: createDefaultParameters(action.parameters),
+    },
+  };
+};
+
 const TriggerPage: React.FC<TriggerPageProps> = ({
   mixerState,
   obsConnections,
@@ -28,179 +90,80 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
   atemSwitchers,
   integrations,
 }) => {
-  const [triggers, setTriggers] = useState<SeamerTrigger[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentTrigger, setCurrentTrigger] = useState<SeamerTrigger | null>(
+  const [triggers, setTriggers] = useState<AnySeamerTrigger[]>([]);
+  const [currentTrigger, setCurrentTrigger] = useState<AnySeamerTrigger | null>(
     null
   );
 
   useEffect(() => {
-    const rep = nodecg.Replicant<SeamerTrigger[]>("seamerTriggers");
-    rep.on("change", (newVal: SeamerTrigger[] | undefined) => {
-      setTriggers(newVal || []);
+    const replicant = nodecg.Replicant<AnySeamerTrigger[]>("seamerTriggers");
+    replicant.on("change", (value: AnySeamerTrigger[] | undefined) => {
+      setTriggers(value || []);
     });
   }, []);
 
-  const saveTrigger = (trigger: SeamerTrigger) => {
-    const rep = nodecg.Replicant("seamerTriggers");
-    const current = rep.value || [];
-    const exists = current.some((t: SeamerTrigger) => t.id === trigger.id);
-
-    if (exists) {
-      rep.value = current.map((t: SeamerTrigger) =>
-        t.id === trigger.id ? trigger : t
-      );
-    } else {
-      rep.value = [...current, trigger];
-    }
-
-    setIsEditing(false);
+  const saveTrigger = (trigger: AnySeamerTrigger) => {
+    const replicant = nodecg.Replicant<AnySeamerTrigger[]>("seamerTriggers");
+    const current: AnySeamerTrigger[] = replicant.value || [];
+    replicant.value = current.some(
+      (item: AnySeamerTrigger) => item.id === trigger.id
+    )
+      ? current.map((item: AnySeamerTrigger) =>
+          item.id === trigger.id ? trigger : item
+        )
+      : [...current, trigger];
     setCurrentTrigger(null);
   };
 
   const deleteTrigger = (id: string) => {
-    if (confirm("Delete this trigger?")) {
-      const rep = nodecg.Replicant("seamerTriggers");
-      rep.value = (rep.value || []).filter((t: SeamerTrigger) => t.id !== id);
-    }
+    if (!confirm("Delete this trigger?")) return;
+    const replicant = nodecg.Replicant<AnySeamerTrigger[]>("seamerTriggers");
+    replicant.value = (replicant.value || []).filter(
+      (item: AnySeamerTrigger) => item.id !== id
+    );
   };
 
-  const toggleTrigger = (trigger: SeamerTrigger) => {
-    saveTrigger({ ...trigger, enabled: !trigger.enabled });
+  const addTrigger = () => {
+    // 有动态 Manifest 时优先使用新合同，否则保留 legacy 编辑路径。
+    setCurrentTrigger(createDynamicDraft(integrations) ?? createLegacyDraft());
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          onClick={() => {
-            // Default new trigger
-            setCurrentTrigger({
-              id: uuidv4(),
-              name: "New Trigger",
-              delay: 0,
-              enabled: true,
-              condition: {
-                module: "mixer",
-                channelId: 1,
-                property: "faderLevel",
-                operator: "gt",
-                value: -10,
-              },
-              action: {
-                module: "mixer",
-                channelId: 1,
-                property: "isMuted",
-                value: true,
-              },
-            });
-            setIsEditing(true);
-          }}
-          style={{
-            padding: "10px 20px",
-            fontSize: "1.1em",
-            cursor: "pointer",
-            background: "#444",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-          }}
-        >
-          + Add Trigger
-        </button>
+        <button onClick={addTrigger}>Add Trigger</button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-          gap: 20,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
         {triggers.map((trigger) => (
-          <div
-            key={trigger.id}
-            style={{
-              background: "#222",
-              padding: 15,
-              borderRadius: 8,
-              border: "1px solid #333",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
+          <div key={trigger.id} style={{ background: "#222", padding: 15, borderRadius: 6, border: "1px solid #333" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <h3 style={{ margin: 0 }}>{trigger.name || "Trigger"}</h3>
               <div style={{ display: "flex", gap: 10 }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: "0.8em",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={trigger.enabled}
-                    onChange={() => toggleTrigger(trigger)}
-                  />
-                  Active
-                </label>
-                <button
-                  onClick={() => {
-                    setCurrentTrigger(trigger);
-                    setIsEditing(true);
-                  }}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "#aaa",
-                    cursor: "pointer",
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteTrigger(trigger.id)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "red",
-                    cursor: "pointer",
-                  }}
-                >
-                  X
-                </button>
+                <label><input type="checkbox" checked={trigger.enabled} onChange={() => saveTrigger({ ...trigger, enabled: !trigger.enabled })} /> Active</label>
+                <button onClick={() => setCurrentTrigger(trigger)}>Edit</button>
+                <button onClick={() => deleteTrigger(trigger.id)}>Delete</button>
               </div>
             </div>
-
-            <div style={{ fontSize: "0.9em", color: "#ccc", marginBottom: 5 }}>
-              <strong>If:</strong> {formatCondition(trigger.condition)}
-            </div>
-            <div style={{ fontSize: "0.9em", color: "#ccc", marginBottom: 5 }}>
-              <strong>Then:</strong> {formatAction(trigger.action)}
-            </div>
-            <div style={{ fontSize: "0.8em", color: "#888" }}>
-              Delay: {trigger.delay}ms
-            </div>
+            <div><strong>If:</strong> {formatCondition(trigger)}</div>
+            <div><strong>Then:</strong> {formatAction(trigger)}</div>
+            <div style={{ color: "#888" }}>Delay: {trigger.delay}ms</div>
           </div>
         ))}
       </div>
 
-      {isEditing && currentTrigger && (
+      {currentTrigger && isDynamicSeamerTrigger(currentTrigger) ? (
+        <DynamicTriggerModal
+          initialTrigger={currentTrigger}
+          integrations={integrations}
+          onSave={saveTrigger}
+          onCancel={() => setCurrentTrigger(null)}
+        />
+      ) : currentTrigger ? (
         <EditTriggerModal
           initialTrigger={currentTrigger}
           onSave={saveTrigger}
-          onCancel={() => {
-            setIsEditing(false);
-            setCurrentTrigger(null);
-          }}
+          onCancel={() => setCurrentTrigger(null)}
           mixerState={mixerState}
           obsConnections={obsConnections}
           obsStates={obsStates}
@@ -208,44 +171,53 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
           atemSwitchers={atemSwitchers}
           integrations={integrations}
         />
-      )}
+      ) : null}
     </div>
   );
 };
 
-// Helpers to format display string
-import {
-  TriggerCondition,
-  TriggerResultAction,
-} from "../../types/seamer.types";
+const formatParameters = (parameters: Record<string, unknown>): string =>
+  Object.entries(parameters)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(", ");
 
-function formatCondition(c: TriggerCondition): string {
-  switch (c.module) {
+const formatCondition = (trigger: AnySeamerTrigger): string => {
+  if (isDynamicSeamerTrigger(trigger)) {
+    return `${trigger.condition.integrationId}.${trigger.condition.capabilityId} (${formatParameters(trigger.condition.parameters)})`;
+  }
+  return formatLegacyCondition(trigger.condition);
+};
+
+const formatAction = (trigger: AnySeamerTrigger): string => {
+  if (isDynamicSeamerTrigger(trigger)) {
+    return `${trigger.action.integrationId}.${trigger.action.capabilityId} (${formatParameters(trigger.action.parameters)})`;
+  }
+  return formatLegacyAction(trigger.action);
+};
+
+function formatLegacyCondition(condition: TriggerCondition): string {
+  switch (condition.module) {
     case "mixer":
-      return `Mixer CH${c.channelId} ${c.property === "faderLevel" ? "Fader" : "Mute"} ${c.operator} ${c.value}`;
+      return `Mixer CH${condition.channelId} ${condition.property} ${condition.operator} ${condition.value}`;
     case "atem":
-      return `ATEM (${c.switcherIp}) PGM == Source ${c.value}`;
+      return `ATEM (${condition.switcherIp}) program == ${condition.value}`;
     case "obs":
-      return `OBS (${c.connectionId}) ${c.property} == ${c.value}`;
+      return `OBS (${condition.connectionId}) ${condition.property} == ${condition.value}`;
     case "vb":
-      return `VB ${c.inputDevice}[${c.inputChannel}] -> ${c.outputDevice}[${c.outputChannel}] is ${c.status}`;
-    default:
-      return "Unknown";
+      return `VB ${condition.inputDevice}[${condition.inputChannel}] -> ${condition.outputDevice}[${condition.outputChannel}] is ${condition.status}`;
   }
 }
 
-function formatAction(a: TriggerResultAction): string {
-  switch (a.module) {
+function formatLegacyAction(action: TriggerResultAction): string {
+  switch (action.module) {
     case "mixer":
-      return `Set Mixer CH${a.channelId} ${a.property === "faderLevel" ? "Fader" : "Mute"} to ${a.value}`;
+      return `Set Mixer CH${action.channelId} ${action.property} to ${action.value}`;
     case "atem":
-      return `Set ATEM (${a.switcherIp}) ${a.target} to ${a.source}`;
+      return `Set ATEM (${action.switcherIp}) ${action.target} to ${action.source}`;
     case "obs":
-      return `Set OBS (${a.connectionId}) ${a.actionType} to ${a.value}`;
+      return `Set OBS (${action.connectionId}) ${action.actionType} to ${action.value}`;
     case "vb":
-      return `VB ${a.actionType} ${a.inputDevice}[${a.inputChannel}] -> ${a.outputDevice}[${a.outputChannel}]`;
-    default:
-      return "Unknown";
+      return `VB ${action.actionType} ${action.inputDevice}[${action.inputChannel}] -> ${action.outputDevice}[${action.outputChannel}]`;
   }
 }
 

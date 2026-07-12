@@ -8,10 +8,27 @@ import {
 import { installLogCapture } from "./log-capture";
 import { Logger, LogLevel } from "./logger";
 import { Storage } from "./storage";
+import path from "node:path";
+import {
+  SQLiteAuditStore,
+  type AuditInput,
+  type AuditQuery,
+} from "./audit-store";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const storage = new Storage();
   const logger = new Logger(nodecg, storage);
+  let auditStore: SQLiteAuditStore | null = null;
+  try {
+    auditStore = new SQLiteAuditStore(
+      path.join(process.cwd(), "db", "leafseamer-audit.sqlite")
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `[logger-system] Audit store disabled: ${message}\n`
+    );
+  }
   const cleanupPeriodRep = nodecg.Replicant<LogCleanupPeriodMs>(
     "logCleanupPeriodMs",
     {
@@ -96,5 +113,10 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     ) => {
       logger.record(level, bundle, category, message);
     },
+    audit: (event: AuditInput) => {
+      if (!auditStore) throw new Error("Audit store is unavailable");
+      auditStore.append(event);
+    },
+    queryAudit: (query: AuditQuery = {}) => auditStore?.query(query) ?? [],
   };
 };

@@ -1,19 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-
-interface ScheduleItem {
-  id: string;
-  time: string;
-  title: string;
-  description: string;
-  active: boolean;
-}
+import type { PlaylistItem } from "../types/schedule.types";
 
 const SchedulePanel = () => {
-  const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [schedule, setSchedule] = useState<PlaylistItem[]>([]);
 
   useEffect(() => {
-    const scheduleRep = nodecg.Replicant<ScheduleItem[]>("scheduleData");
+    const scheduleRep = nodecg.Replicant<PlaylistItem[]>("scheduleData");
     scheduleRep.on("change", (newVal: any) => {
       if (newVal) {
         setSchedule(newVal);
@@ -21,40 +14,62 @@ const SchedulePanel = () => {
     });
   }, []);
 
+  const persistLocalItems = (items: PlaylistItem[]) => {
+    nodecg.sendMessage(
+      "replaceSchedule",
+      items
+        .filter((item) => item.sourceId === "local")
+        .map(({ id, time, title, description, active }) => ({
+          id,
+          time,
+          title,
+          description,
+          active,
+        }))
+    );
+  };
+
   const toggleActive = (index: number) => {
     const newSchedule = schedule.map((item, itemIndex) =>
       itemIndex === index ? { ...item, active: !item.active } : item
     );
-    nodecg.Replicant("scheduleData").value = newSchedule;
+    persistLocalItems(newSchedule);
   };
 
   const updateItem = (
     index: number,
-    field: keyof Omit<ScheduleItem, "id" | "active">,
+    field: "time" | "title" | "description",
     value: string
   ) => {
-    nodecg.Replicant("scheduleData").value = schedule.map((item, itemIndex) =>
+    persistLocalItems(schedule.map((item, itemIndex) =>
       itemIndex === index ? { ...item, [field]: value } : item
-    );
+    ));
   };
 
   const addItem = () => {
-    nodecg.Replicant("scheduleData").value = [
+    persistLocalItems([
       ...schedule,
       {
         id: crypto.randomUUID(),
+        sourceId: "local",
+        externalId: crypto.randomUUID(),
+        revision: String(Date.now()),
         time: "",
+        plannedAt: null,
         title: "New item",
         description: "",
+        state: "ready",
         active: true,
+        metadata: {},
+        triggerMappings: [],
       },
-    ];
+    ]);
   };
 
   const removeItem = (id: string) => {
-    nodecg.Replicant("scheduleData").value = schedule.filter(
+    persistLocalItems(schedule.filter(
       (item) => item.id !== id
-    );
+    ));
   };
 
   return (
@@ -100,6 +115,7 @@ const SchedulePanel = () => {
                   aria-label="Time"
                   value={item.time}
                   placeholder="Time"
+                  disabled={item.sourceId !== "local"}
                   onChange={(event) =>
                     updateItem(index, "time", event.target.value)
                   }
@@ -108,6 +124,7 @@ const SchedulePanel = () => {
                   aria-label="Title"
                   value={item.title}
                   placeholder="Title"
+                  disabled={item.sourceId !== "local"}
                   onChange={(event) =>
                     updateItem(index, "title", event.target.value)
                   }
@@ -116,6 +133,7 @@ const SchedulePanel = () => {
                   aria-label="Description"
                   value={item.description}
                   placeholder="Description"
+                  disabled={item.sourceId !== "local"}
                   onChange={(event) =>
                     updateItem(index, "description", event.target.value)
                   }
@@ -123,10 +141,10 @@ const SchedulePanel = () => {
                 />
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => toggleActive(index)}>
+                <button onClick={() => toggleActive(index)} disabled={item.sourceId !== "local"}>
                   {item.active ? "Active" : "Inactive"}
                 </button>
-                <button onClick={() => removeItem(item.id)}>Delete</button>
+                <button onClick={() => removeItem(item.id)} disabled={item.sourceId !== "local"}>Delete</button>
               </div>
             </li>
           ))}

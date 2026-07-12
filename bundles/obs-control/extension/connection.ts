@@ -4,6 +4,21 @@ import { SceneManager } from "./scene-manager";
 import { SourceManager } from "./source-manager";
 import { createLogger } from "./logger";
 import { OBSConnectionSettings } from "../src/types/obs.types";
+import { CommandGateway } from "../../../shared/security/command-gateway";
+import { createLegacyCommandEnvelope } from "../../../shared/security/nodecg-command";
+
+interface OBSStreamSettings {
+  server: string;
+  key: string;
+  useAuth: boolean;
+  username?: string;
+  password?: string;
+}
+
+interface SetStreamSettingsPayload {
+  id: string;
+  settings: OBSStreamSettings;
+}
 
 export class ConnectionManager {
   private nodecg: NodeCG.ServerAPI;
@@ -22,6 +37,7 @@ export class ConnectionManager {
     sceneManager: SceneManager,
     sourceManager: SourceManager,
     obsConnectionsRep: any,
+    private readonly commandGateway: CommandGateway,
   ) {
     this.nodecg = nodecg;
     this.logger.setNodeCG(nodecg);
@@ -30,7 +46,43 @@ export class ConnectionManager {
     this.config = nodecg.bundleConfig;
     this.obsConnectionsRep = obsConnectionsRep;
 
+    this.registerCommands();
     this.setupMessageListeners();
+  }
+
+  private registerCommands(): void {
+    this.commandGateway.register<SetStreamSettingsPayload, void>({
+      command: "obs.setStreamSettings",
+      roles: ["broadcast"],
+      validate: (payload) => {
+        const errors: string[] = [];
+        if (!payload || typeof payload.id !== "string" || payload.id.length === 0) {
+          errors.push("id is required");
+        }
+        if (!payload?.settings || typeof payload.settings.server !== "string") {
+          errors.push("settings.server must be a string");
+        }
+        if (typeof payload?.settings?.key !== "string") {
+          errors.push("settings.key must be a string");
+        }
+        if (typeof payload?.settings?.useAuth !== "boolean") {
+          errors.push("settings.useAuth must be a boolean");
+        }
+        if (
+          payload?.settings?.useAuth &&
+          (typeof payload.settings.username !== "string" ||
+            typeof payload.settings.password !== "string")
+        ) {
+          errors.push("authenticated streaming requires username and password");
+        }
+        return errors;
+      },
+      resolveTarget: (payload) => payload.id,
+      isTargetAllowed: (target) => this.obsInstances.has(target),
+      handler: async (payload) => {
+        await this.setStreamSettings(payload.id, payload.settings);
+      },
+    });
   }
 
   public connectAll() {
@@ -87,12 +139,16 @@ export class ConnectionManager {
 
     this.nodecg.listenFor(
       "setStreamSettings",
-      async (data: { id: string; settings: any }, ack: any) => {
-        try {
-          await this.setStreamSettings(data.id, data.settings);
-          if (ack && !ack.handled) ack(null);
-        } catch (err) {
-          if (ack && !ack.handled) ack(err);
+      async (data: SetStreamSettingsPayload, ack: any) => {
+        const result = await this.commandGateway.execute(
+          createLegacyCommandEnvelope("obs.setStreamSettings", data, ["broadcast"])
+        );
+        if (ack && !ack.handled) {
+          ack(
+            result.ok
+              ? null
+              : new Error(result.error?.message ?? "Stream settings failed")
+          );
         }
       },
     );
@@ -470,16 +526,10 @@ export class ConnectionManager {
 
   async setStreamSettings(
     id: string,
-    settings: {
-      server: string;
-      key: string;
-      useAuth: boolean;
-      username?: string;
-      password?: string;
-    },
+    settings: OBSStreamSettings,
   ) {
     const obs = this.getObs(id);
-    if (!obs) return;
+    if (!obs) throw new Error(`OBS instance ${id} is not connected`);
     try {
       const streamSettings: any = {
         server: settings.server,

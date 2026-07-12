@@ -1,3 +1,8 @@
+import type {
+  CapabilityManifest,
+  CapabilityReference,
+} from "../../../../shared/integration/types";
+
 export type SeamerActionType =
   | "mixer-fader"
   | "vb-preset"
@@ -170,6 +175,22 @@ export interface SeamerTrigger {
   enabled: boolean;
 }
 
+export interface DynamicSeamerTrigger {
+  id: string;
+  name?: string;
+  condition: CapabilityReference;
+  action: CapabilityReference;
+  delay: number;
+  enabled: boolean;
+}
+
+export type AnySeamerTrigger = SeamerTrigger | DynamicSeamerTrigger;
+
+export const isDynamicSeamerTrigger = (
+  trigger: AnySeamerTrigger
+): trigger is DynamicSeamerTrigger =>
+  "integrationId" in trigger.condition && "integrationId" in trigger.action;
+
 // 以下 DTO 由可选适配器填充，Seamer 核心不直接依赖任何设备 bundle。
 export interface MixerChannel {
   id: number;
@@ -282,22 +303,21 @@ export interface SeamerIntegrationStateMap {
   vb: VBIntegrationState;
 }
 
-export interface SeamerIntegrationSnapshot<
-  T extends TriggerModule = TriggerModule,
-> {
-  id: T;
+export interface SeamerIntegrationSnapshot {
+  id: string;
   label: string;
   available: boolean;
-  state: SeamerIntegrationStateMap[T];
+  state: unknown;
+  manifest: CapabilityManifest;
 }
 
-export type SeamerIntegrations = Partial<{
-  [K in TriggerModule]: SeamerIntegrationSnapshot<K>;
-}>;
+export type SeamerIntegrations = Record<string, SeamerIntegrationSnapshot>;
 
 export type SeamerExecutionKind = "card" | "trigger";
 
-export interface SeamerIntegrationProvider<T extends TriggerModule> {
+export interface LegacySeamerIntegrationProvider<
+  T extends TriggerModule = TriggerModule,
+> {
   id: T;
   label: string;
   initialState: SeamerIntegrationStateMap[T];
@@ -307,12 +327,30 @@ export interface SeamerIntegrationProvider<T extends TriggerModule> {
   ) => void | Promise<void>;
 }
 
+export interface DynamicSeamerIntegrationProvider {
+  manifest: CapabilityManifest;
+  initialState: unknown;
+  evaluateTrigger: (
+    capabilityId: string,
+    parameters: Record<string, unknown>,
+    nextState: unknown,
+    previousState: unknown
+  ) => boolean;
+  executeAction: (
+    capabilityId: string,
+    parameters: Record<string, unknown>
+  ) => void | Promise<void>;
+  executeLegacy?: (
+    payload: SeamerAction | TriggerResultAction,
+    kind: SeamerExecutionKind
+  ) => void | Promise<void>;
+}
+
+export type SeamerIntegrationProvider<
+  T extends TriggerModule = TriggerModule,
+> = LegacySeamerIntegrationProvider<T> | DynamicSeamerIntegrationProvider;
+
 export interface SeamerExtensionApi {
-  registerIntegration: <T extends TriggerModule>(
-    provider: SeamerIntegrationProvider<T>
-  ) => () => void;
-  updateIntegrationState: <T extends TriggerModule>(
-    id: T,
-    state: SeamerIntegrationStateMap[T]
-  ) => void;
+  registerIntegration: (provider: SeamerIntegrationProvider) => () => void;
+  updateIntegrationState: (id: string, state: unknown) => void;
 }

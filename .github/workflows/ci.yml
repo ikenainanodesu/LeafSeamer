@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - run: node scripts/validate-status-report.mjs
+
+  standalone-bundles:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bundle:
+          - seamer
+          - schedule-manager
+          - logger-system
+          - backup-system
+          - obs-control
+          - atem-control
+          - vb-matrix-control
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace=bundles/${{ matrix.bundle }}

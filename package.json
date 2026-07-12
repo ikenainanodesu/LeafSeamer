@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "test": "ts-node tests/run-tests.ts",
     "start": "nodecg start",
     "dev": "nodecg start",
     "build": "ts-node scripts/build-bundles.ts",

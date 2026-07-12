@@ -264,13 +264,17 @@ seamer-adapter-mixer
 
 Without the adapter, both `seamer` and `mixer-control` still load and work independently. Google Sheets schedule import follows the same pattern with `schedule-manager`, `data-sync-service`, and `schedule-adapter-google-sheets`.
 
-### Planned Modular Integration Contract
+### Modular Integration Contract
 
-The current adapters register four fixed Seamer integrations: Mixer, ATEM, OBS, and VB Matrix. The active hardening plan replaces those fixed UI/type branches with a versioned capability manifest so future adapters can register trigger definitions, actions, parameter schemas, and UI hints without modifying Seamer core.
+Seamer now accepts versioned capability manifests from arbitrary adapter IDs. Mixer, ATEM, OBS, and VB Matrix adapters publish trigger/action schemas, while the dashboard renders their parameters dynamically. Missing adapters leave persisted configuration visible but unavailable, so Seamer and each device core can still run independently.
 
-Schedule Manager will remain source-independent. Google Sheets and PostgreSQL are planned as optional Node.js adapters that normalize external playlist rows into a shared schedule import contract. A separate optional Seamer schedule adapter will expose explicit `item due` and configured field-transition events as automation triggers. Python sidecars are not part of the current plan.
+Schedule Manager owns a source-isolated import, preview, commit, rollback, and event contract. Google Sheets and PostgreSQL use optional Node.js adapters that normalize rows into the same playlist model. The optional Seamer schedule adapter exposes only explicit `schedule.item_due` and configured `schedule.field_changed` triggers. Python sidecars are not used.
 
-Security services are designed as libraries bundled with each core rather than mandatory NodeCG bundles. This preserves standalone operation while providing shared command validation, secret storage, redaction, backup classification, and audit contracts.
+Shared security code is packaged as libraries rather than a mandatory NodeCG bundle. CommandGateway currently protects OBS stream settings, VB Matrix point toggles, and ATEM macros with schema, role, target, correlationId, and optional audit handling. Legacy NodeCG messages remain compatible, but they carry a synthetic dashboard identity until an authenticated identity bridge is added.
+
+Backup System supports selectable L0 Public, L1 Operational, L2 Confidential, and L3 Secret data. L3 is excluded by default and is written only as an AES-256-GCM encrypted payload protected by a separate passphrase. Logger applies redaction before persistence and stores command audit history in a separate SQLite/WAL database that is not affected by runtime-log cleanup.
+
+The PostgreSQL adapter and its `pg` dependency are included in the workspace lockfile. Use a read-only database account and expose the connection string only through the configured environment variable.
 
 ### Access Addresses
 
@@ -284,6 +288,7 @@ After startup visit:
 - NodeCG Core Config: copy `cfg/nodecg.json.example` to `cfg/nodecg.json`
 - Business Module Config: Generally configured dynamically via Dashboard interface (Persisted in `db/`)
 - Google Sheets Config: copy `cfg/data-sync-service.json.example` to `cfg/data-sync-service.json` (Optional)
+- PostgreSQL Schedule Config: copy `cfg/schedule-adapter-postgresql.json.example` to its real config and provide the connection string through `LEAFSEAMER_SCHEDULE_POSTGRES_URL` (Optional)
 - Bundle configs are defined in their respective `package.json`
 - TypeScript Config: `tsconfig.json`
 - Vite Build Config: `vite.config.dashboard.ts` and `vite.config.extension.ts`
@@ -296,6 +301,7 @@ Real configuration files may contain local IP addresses or credentials, so `cfg/
 - Do not commit: `node_modules/`, generated bundle output, logs, databases, backups, local assets, real config files, credentials, or temporary diagnostics.
 - Local Secret files, SQLite audit databases/WAL files, restore keys, and machine-specific backup profiles are ignored by Git.
 - Development status and release-readiness notes are tracked in `DEVELOPMENT_MEMO.md`.
+- CI uses `npm ci`, runs tests and type checks, builds all bundles, validates the HTML report, and separately builds key standalone bundles.
 
 ## Version Information
 

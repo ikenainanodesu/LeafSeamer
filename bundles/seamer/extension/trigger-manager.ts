@@ -3,6 +3,7 @@ import { IntegrationRegistry } from "./integration-registry";
 import {
   AtemIntegrationState,
   AtemTriggerCondition,
+  AnySeamerTrigger,
   CurrentPatchStatus,
   MixerIntegrationState,
   MixerState,
@@ -14,16 +15,17 @@ import {
   TriggerModule,
   VBIntegrationState,
   VBTriggerCondition,
+  isDynamicSeamerTrigger,
 } from "../src/types/seamer.types";
 
 export class TriggerManager {
-  private triggers: SeamerTrigger[] = [];
+  private triggers: AnySeamerTrigger[] = [];
 
   constructor(
     private readonly nodecg: NodeCG.ServerAPI,
     private readonly registry: IntegrationRegistry
   ) {
-    const triggersRep = nodecg.Replicant<SeamerTrigger[]>("seamerTriggers", {
+    const triggersRep = nodecg.Replicant<AnySeamerTrigger[]>("seamerTriggers", {
       defaultValue: [],
     });
 
@@ -37,11 +39,40 @@ export class TriggerManager {
   }
 
   private evaluateTriggers(
-    moduleName: TriggerModule,
+    moduleName: string,
     nextState: unknown,
     previousState: unknown
   ): void {
     this.triggers.forEach((trigger) => {
+      if (isDynamicSeamerTrigger(trigger)) {
+        if (
+          !trigger.enabled ||
+          trigger.condition.integrationId !== moduleName ||
+          !this.registry.evaluateTrigger(
+            trigger.condition.integrationId,
+            trigger.condition.capabilityId,
+            trigger.condition.parameters,
+            nextState,
+            previousState
+          )
+        ) {
+          return;
+        }
+
+        this.nodecg.log.info(
+          '[Seamer] Dynamic trigger matched: "%s"',
+          trigger.name || trigger.id
+        );
+        setTimeout(() => {
+          void this.registry.executeCapability(
+            trigger.action.integrationId,
+            trigger.action.capabilityId,
+            trigger.action.parameters
+          );
+        }, Math.max(0, trigger.delay));
+        return;
+      }
+
       if (
         !trigger.enabled ||
         trigger.condition.module !== moduleName ||

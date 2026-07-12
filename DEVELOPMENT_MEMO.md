@@ -445,3 +445,63 @@ decisions, or release-readiness status changes.
 ### 已解决 Bug 以及解决方法
 
 - 暂无；本条目记录已确认设计与实施顺序。
+
+## 2026-07-12 模块化集成、安全、备份与审计实施
+
+### 需求变化
+
+- 执行已批准的模块化 Integration 方案，不采用 Python sidecar。
+- Seamer 自动识别 Adapter Capability；Schedule 接入 Google Sheets 与 PostgreSQL，并只向 Seamer 暴露显式自动化事件。
+- Backup 支持 L0-L3 数据选择，L3 只能以密钥分离的加密载荷进入归档。
+- Logger 写入前脱敏，高风险命令进入独立审计历史；所有新增 UI 文案使用英文。
+
+### 代码变动
+
+- 新增 `shared/integration` 的 Manifest、Command/Event Envelope、Ack 与参数 schema 校验。
+- Seamer Registry、Trigger Manager 与 Dashboard 改为任意 Provider ID 和 schema-driven 表单；四个设备 Adapter 迁移到版本化 Manifest。
+- Schedule Manager 新增标准 PlaylistItem、来源隔离导入、preview/commit/rollback、到期去重与配置字段迁移事件。
+- Google Sheets Adapter 改用统一 Import Batch；新增 PostgreSQL Adapter、Seamer Schedule Adapter 和配置模板。
+- 新增 AES-256-GCM SecretManager、CommandGateway、NodeCG 兼容 envelope 与统一 redaction。
+- OBS 推流设置、VB Matrix `updatePatch`/节点切换、ATEM Macro 接入 CommandGateway，并保留旧消息名。
+- Backup 新增路径分级、manifest、SHA-256 和 L3 scrypt + AES-256-GCM 加密；Dashboard 新增英文级别选择与风险确认。
+- Logger 接入写入前脱敏；新增独立 SQLite + WAL Audit Store。
+- 新增 29 项无外部服务测试与 GitHub Actions CI。
+
+### 功能增减
+
+- 新增动态 Seamer Capability、Schedule 多来源模型与显式 Schedule 自动化。
+- 新增可选 PostgreSQL 播单来源；`pg` 与 lockfile 已更新并通过 Bundle 构建。
+- 新增分级备份和独立命令审计；普通日志自动清理不再影响审计记录。
+- Graphics Package 保持 Deferred，本轮未修改。
+
+### 功能实现路径
+
+- 核心 Bundle 不依赖中央业务 Bundle；共享 TypeScript Library 随使用方打包，跨核心功能只由可选 Adapter 连接。
+- Replicant 保存当前快照，Schedule Event 表示显式变化，CommandGateway 统一执行角色、schema、目标检查、执行结果与脱敏审计。
+- PostgreSQL 只允许单条 `SELECT`，连接串只从配置指定的环境变量读取。
+- L3 文件不会以明文加入 ZIP；归档只包含密文、salt、iv、认证 tag 和 manifest，口令不入归档。
+
+### 已知 Bug
+
+- 旧 NodeCG `listenFor` 消息不提供可信用户身份；兼容 wrapper 只能记录合成的 `nodecg-dashboard` 身份，不能代替 OIDC/反向代理或会话桥鉴权。
+- OBS WebSocket password 与 stream credentials 仍可能存在旧 Replicant 明文路径；SecretManager Library 已完成，但凭据迁移尚未接线。
+- `node:sqlite` 在当前 Node 24 仍输出 experimental warning。
+- `npm install` 报告 48 个依赖漏洞（2 low、26 moderate、20 high），其中包含开发依赖，尚未完成逐项可达性和升级影响评估。
+
+### 预期解决方法
+
+- 使用 `npm audit` 输出逐项确认生产依赖可达性，优先无破坏性升级；不得直接使用 `npm audit fix --force`。
+- 使用 PostgreSQL 只读账号执行端到端导入测试，并在 CI 运行独立 Bundle matrix。
+- 接入认证身份桥后停止信任客户端自报角色，再逐步关闭高风险 legacy wrapper。
+- 将 OBS 凭据迁入服务端 SecretManager，只向 Dashboard 发布 configured/masked 状态；随后继续迁移其他剩余高风险入口。
+- 在真实硬件上验证 Matrix、ATEM Macro 与 OBS 推流命令，并保存 fixture 和验收记录。
+
+### 已解决 Bug 以及解决方法
+
+- 解决新增 Seamer 模块必须修改核心硬编码的问题：Registry 与 UI 改为消费 Adapter Manifest。
+- 解决 Schedule 外部来源整表互相覆盖的问题：导入按 sourceId 隔离并支持 preview/commit/rollback。
+- 解决任意播单变化可能误触发的问题：只生成 item_due 与配置 field_changed 事件。
+- 解决普通备份无差别包含配置和数据库的问题：引入 L0-L3 选择，L3 仅加密输出。
+- 解决 Logger 可能持久化常见 secret 模式的问题：Replicant 与文件写入前统一 redaction。
+- 解决普通日志清理误删审计历史的架构风险：审计改用独立 SQLite + WAL 存储。
+- 解决 PostgreSQL Adapter 依赖与构建阻塞：安装 `pg`、更新 lockfile，并完成 17 个 Bundle 全量构建。

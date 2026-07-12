@@ -1,5 +1,6 @@
 import NodeCG from "nodecg/types";
 import { Storage, type CleanupResult } from "./storage";
+import { redactString } from "../../../shared/security/redaction";
 
 export type LogLevel = "info" | "warn" | "error";
 
@@ -38,9 +39,9 @@ export class Logger {
     const entry: LogEntry = {
       timestamp: Date.now(),
       level,
-      bundle,
-      category,
-      message,
+      bundle: redactString(bundle),
+      category: redactString(category),
+      message: redactString(message),
     };
 
     const logs = this.recentLogsRep.value ?? [];

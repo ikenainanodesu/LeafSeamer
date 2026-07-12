@@ -1,6 +1,7 @@
 import NodeCG from "nodecg/types";
 import { BackupManager } from "./backup-manager";
 import { ensureOptionalLogCapture } from "./optional-log-capture";
+import type { BackupRequest } from "../src/types/backup.types";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   ensureOptionalLogCapture(nodecg.Logger);
@@ -8,9 +9,9 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   const backupManager = new BackupManager(nodecg);
 
-  nodecg.listenFor("createBackup", async (data, ack) => {
+  nodecg.listenFor("createBackup", async (data: Partial<BackupRequest>, ack) => {
     try {
-      const filename = await backupManager.createBackup();
+      const filename = await backupManager.createBackup(data);
       if (ack && !ack.handled) {
         ack(null, filename);
       }
