@@ -47,6 +47,22 @@ test("dashboard UI target list excludes graphics", () => {
   equal(DASHBOARD_UI_VERSION, "1.0.0");
 });
 
+test("each dashboard bundle declares its icon dependency", () => {
+  for (const bundle of DASHBOARD_UI_TARGETS) {
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, "bundles", bundle, "package.json"), "utf8")
+    ) as { dependencies?: Record<string, string> };
+    equal(packageJson.dependencies?.["lucide-react"], "1.23.0");
+  }
+});
+
+test("graphics package does not declare the dashboard icon dependency", () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(projectRoot, "bundles", "graphics-package", "package.json"), "utf8")
+  ) as { dependencies?: Record<string, string> };
+  equal(Object.prototype.hasOwnProperty.call(packageJson.dependencies ?? {}, "lucide-react"), false);
+});
+
 test("dashboard UI snapshots match the canonical source", () => {
   deepEqual(checkDashboardUiSnapshots(projectRoot), []);
 });
