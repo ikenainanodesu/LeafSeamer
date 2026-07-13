@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Archive } from "lucide-react";
 import type { BackupLevel, BackupRequest } from "../types/backup.types";
+import {
+  Button,
+  Disclosure,
+  PanelErrorBoundary,
+  PanelHeader,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./backup-dashboard.css";
 
 interface BackupFile {
   filename: string;
@@ -21,6 +30,7 @@ const BackupControl = () => {
   const [levels, setLevels] = useState<BackupLevel[]>(["L0", "L1"]);
   const [secretConfirmed, setSecretConfirmed] = useState(false);
   const [secretPassphrase, setSecretPassphrase] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const replicant = nodecg.Replicant<BackupFile[]>("backupList");
@@ -47,10 +57,11 @@ const BackupControl = () => {
       includeSecrets: levels.includes("L3") && secretConfirmed,
       secretPassphrase: levels.includes("L3") ? secretPassphrase : undefined,
     };
+    setErrorMessage(null);
     setCreating(true);
     nodecg.sendMessage("createBackup", request, (error: Error | null) => {
       setCreating(false);
-      if (error) window.alert(`Backup failed: ${error.message}`);
+      if (error) setErrorMessage(`Backup failed: ${error.message}`);
     });
   };
 
@@ -60,7 +71,7 @@ const BackupControl = () => {
     (!levels.includes("L3") ||
       (secretConfirmed && secretPassphrase.trim().length >= 12));
 
-  const formatSize = (bytes: number) => {
+  const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B";
     const units = ["B", "KB", "MB", "GB"];
     const index = Math.min(
@@ -71,80 +82,129 @@ const BackupControl = () => {
   };
 
   return (
-    <main style={{ padding: 16, color: "#e5e7eb", background: "#17191d" }}>
-      <section aria-labelledby="backup-levels">
-        <h2 id="backup-levels" style={{ margin: "0 0 12px", fontSize: 16 }}>
-          Data levels
-        </h2>
-        <div style={{ display: "grid", gap: 8 }}>
-          {LEVEL_OPTIONS.map((option) => (
-            <label key={option.level} style={{ display: "flex", gap: 10 }}>
+    <main className="backup-shell leaf-panel">
+      <PanelHeader
+        kicker="Backup System"
+        title="Create Backup"
+        target={`${levels.length} data levels selected`}
+        status={creating ? "Creating" : "Ready"}
+        statusTone={creating ? "warning" : "success"}
+      />
+      <div className="backup-content">
+        {errorMessage ? (
+          <div className="backup-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <section className="backup-section" aria-labelledby="backup-levels">
+          <div className="backup-section-heading">
+            <h2 id="backup-levels">Data Levels</h2>
+            <span>{levels.length}/4 selected</span>
+          </div>
+          <div className="backup-levels">
+            {LEVEL_OPTIONS.map((option) => (
+              <label
+                key={option.level}
+                className="backup-level"
+                data-selected={levels.includes(option.level)}
+              >
               <input
                 type="checkbox"
                 checked={levels.includes(option.level)}
                 onChange={() => toggleLevel(option.level)}
               />
-              <span>
+              <span className="backup-level-copy">
                 <strong>{option.label}</strong>
-                <small style={{ display: "block", color: "#9ca3af" }}>
-                  {option.detail}
-                </small>
+                <small>{option.detail}</small>
               </span>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      {levels.includes("L3") && (
-        <section style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #34373d" }}>
-          <label style={{ display: "flex", gap: 10 }}>
-            <input
-              type="checkbox"
-              checked={secretConfirmed}
-              onChange={(event) => setSecretConfirmed(event.target.checked)}
-            />
-            I understand that this backup contains encrypted secret data.
-          </label>
-          <input
-            type="password"
-            value={secretPassphrase}
-            onChange={(event) => setSecretPassphrase(event.target.value)}
-            placeholder="Separate passphrase (12+ characters)"
-            autoComplete="new-password"
-            style={{ width: "100%", boxSizing: "border-box", marginTop: 10, padding: 8 }}
-          />
-        </section>
-      )}
-
-      <button
-        type="button"
-        onClick={createBackup}
-        disabled={!canCreate}
-        style={{ width: "100%", marginTop: 16, padding: 10, cursor: canCreate ? "pointer" : "default" }}
-      >
-        {creating ? "Creating backup..." : "Create backup"}
-      </button>
-
-      <section style={{ marginTop: 20 }} aria-labelledby="existing-backups">
-        <h2 id="existing-backups" style={{ fontSize: 16 }}>Existing backups</h2>
-        {backups.length === 0 ? (
-          <p style={{ color: "#9ca3af" }}>No backups found.</p>
-        ) : (
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {backups.map((backup) => (
-              <li key={backup.filename} style={{ padding: "10px 0", borderTop: "1px solid #34373d" }}>
-                <strong>{backup.filename}</strong>
-                <small style={{ display: "flex", justifyContent: "space-between", color: "#9ca3af" }}>
-                  <span>{new Date(backup.timestamp).toLocaleString()}</span>
-                  <span>{formatSize(backup.size)}</span>
-                </small>
-              </li>
+              </label>
             ))}
-          </ul>
-        )}
-      </section>
+          </div>
+        </section>
+
+        {levels.includes("L3") ? (
+          <section className="backup-secret" aria-labelledby="backup-secret-title">
+            <div>
+              <h2 id="backup-secret-title">Secret Data</h2>
+              <p>L3 data is encrypted with the separate passphrase below.</p>
+            </div>
+            <label className="backup-confirm">
+              <input
+                type="checkbox"
+                checked={secretConfirmed}
+                onChange={(event) => setSecretConfirmed(event.target.checked)}
+              />
+              <span>I understand that this backup contains encrypted secret data.</span>
+            </label>
+            <label className="leaf-field">
+              <span>Separate Passphrase</span>
+              <input
+                className="leaf-input"
+                type="password"
+                value={secretPassphrase}
+                onChange={(event) => setSecretPassphrase(event.target.value)}
+                placeholder="At least 12 characters"
+                autoComplete="new-password"
+              />
+            </label>
+          </section>
+        ) : null}
+
+        <div className="backup-create">
+          <Button
+            tone="primary"
+            pending={creating}
+            pendingLabel="Creating Backup"
+            onClick={createBackup}
+            disabled={!canCreate}
+          >
+            <Archive size={15} aria-hidden="true" />
+            Create Backup
+          </Button>
+          {!canCreate && !creating ? (
+            <p className="backup-create-hint">
+              {levels.length === 0
+                ? "Select at least one data level."
+                : "Confirm secret data and enter a passphrase of at least 12 characters."}
+            </p>
+          ) : null}
+        </div>
+
+        <Disclosure
+          title="Existing Backups"
+          summary={`${backups.length} available`}
+          defaultOpen
+          storageKey="backup-system.existing-backups"
+        >
+          {backups.length === 0 ? (
+            <p className="backup-empty">No backups found.</p>
+          ) : (
+            <ul className="backup-history">
+              {backups.map((backup) => {
+                const timestamp = new Date(backup.timestamp);
+
+                return (
+                  <li key={backup.filename} className="backup-history-row">
+                    <strong className="backup-filename" title={backup.filename}>
+                      {backup.filename}
+                    </strong>
+                    <span className="backup-size">{formatBytes(backup.size)}</span>
+                    <time dateTime={timestamp.toISOString()}>{timestamp.toLocaleString()}</time>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Disclosure>
+      </div>
     </main>
   );
 };
 
-createRoot(document.getElementById("root")!).render(<BackupControl />);
+const root = createRoot(document.getElementById("root")!);
+root.render(
+  <PanelErrorBoundary>
+    <BackupControl />
+  </PanelErrorBoundary>
+);
