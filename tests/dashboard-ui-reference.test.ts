@@ -445,6 +445,37 @@ const hasUniqueBinding = (
   return owners.length === 1 && predicate(owners[0]);
 };
 
+const importSpecifierModule = (node: ts.Node): string | undefined => {
+  if (!ts.isImportSpecifier(node) || !ts.isNamedImports(node.parent)) {
+    return undefined;
+  }
+  const importClause = node.parent.parent;
+  if (!ts.isImportClause(importClause) || !ts.isImportDeclaration(importClause.parent)) {
+    return undefined;
+  }
+  return stringLiteralValue(importClause.parent.moduleSpecifier);
+};
+
+const hasUniqueNamedImport = (
+  source: ts.SourceFile,
+  name: string,
+  moduleSpecifier: string
+): boolean => {
+  const owners = bindingOwners(source, name);
+  return (
+    owners.length === 1 &&
+    ts.isImportSpecifier(owners[0]) &&
+    owners[0].name.text === name &&
+    importSpecifierModule(owners[0]) === moduleSpecifier
+  );
+};
+
+const hasUniqueUseToastImport = (source: ts.SourceFile): boolean =>
+  hasUniqueNamedImport(source, "useToast", "../_leaf-ui/components");
+
+const hasUniqueUseStateImport = (source: ts.SourceFile): boolean =>
+  hasUniqueNamedImport(source, "useState", "react");
+
 const hasUniqueUseToastPushToastBinding = (source: ts.SourceFile): boolean =>
   hasUniqueBinding(source, "pushToast", isUseToastPushToastBinding);
 
@@ -452,7 +483,8 @@ const hasUniqueUseStatePendingSetterBinding = (source: ts.SourceFile): boolean =
   hasUniqueBinding(source, "setPendingKeys", isUseStatePendingSetterBinding);
 
 const hasToastBinding = (source: ts.SourceFile): boolean => {
-  const usesToast = hasUniqueUseToastPushToastBinding(source);
+  const usesToast =
+    hasUniqueUseToastImport(source) && hasUniqueUseToastPushToastBinding(source);
   const rendersToastRegion = descendants(source).some((node) => {
     if (!ts.isJsxSelfClosingElement(node) || jsxTagName(node.tagName) !== "ToastRegion") {
       return false;
@@ -602,6 +634,7 @@ const hasPendingKeysUpdaterContract = (handler: ts.Expression): boolean =>
   });
 
 const hasAuthenticatedCatchToastContract = (source: ts.SourceFile): boolean =>
+  hasUniqueUseToastImport(source) &&
   hasUniqueUseToastPushToastBinding(source) &&
   descendants(source).some(
     (node) =>
@@ -634,6 +667,8 @@ const hasPromiseScopedPendingContract = (source: ts.SourceFile): boolean => {
     .find((body): body is ts.Block => body !== undefined);
   if (
     !toggleBody ||
+    !hasUniqueUseToastImport(source) ||
+    !hasUniqueUseStateImport(source) ||
     !hasUniqueUseToastPushToastBinding(source) ||
     !hasUniqueUseStatePendingSetterBinding(source)
   ) {
@@ -750,19 +785,19 @@ const networkRemovalFixture = (statement: string): ts.SourceFile =>
     ts.ScriptKind.TSX
   );
 
-const matrixPromiseFixture = (body: string): ts.SourceFile =>
+const matrixPromiseFixture = (body: string, setup = ""): ts.SourceFile =>
   ts.createSourceFile(
     "matrix-promise-fixture.tsx",
-    `const { items: toasts, pushToast } = useToast(); const [pendingKeys, setPendingKeys] = useState(new Set()); const togglePoint = () => { const key = "point"; const patch = {}; ${body} };`,
+    `import { ToastRegion, useToast } from "../_leaf-ui/components"; import { useState } from "react"; const Component = () => { ${setup} const { items: toasts, pushToast } = useToast(); const [pendingKeys, setPendingKeys] = useState(new Set()); const togglePoint = () => { const key = "point"; const patch = {}; ${body} }; return <ToastRegion items={toasts} />; };`,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX
   );
 
-const toastFixture = (command: string): ts.SourceFile =>
+const toastFixture = (command: string, setup = ""): ts.SourceFile =>
   ts.createSourceFile(
     "toast-fixture.tsx",
-    `const { items: toasts, pushToast } = useToast(); const [pendingKeys, setPendingKeys] = useState(new Set()); const view = <ToastRegion items={toasts} />; ${command}`,
+    `import { ToastRegion, useToast } from "../_leaf-ui/components"; import { useState } from "react"; const Component = () => { ${setup} const { items: toasts, pushToast } = useToast(); const [pendingKeys, setPendingKeys] = useState(new Set()); ${command} return <ToastRegion items={toasts} />; };`,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX
@@ -875,6 +910,22 @@ test("VB matrix promise and toast fixtures reject unrelated callbacks", () => {
     !hasPromiseScopedPendingContract(
       matrixPromiseFixture(
         'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")).finally(() => { const setPendingKeys = () => {}; setPendingKeys((current) => { const next = new Set(current); next.delete(key); return next; }); });'
+      )
+    )
+  );
+  ok(
+    !hasAuthenticatedCatchToastContract(
+      toastFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger"));',
+        "const useToast = () => ({ items: [], pushToast: () => {} });"
+      )
+    )
+  );
+  ok(
+    !hasPromiseScopedPendingContract(
+      matrixPromiseFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")).finally(() => { setPendingKeys((current) => { const next = new Set(current); next.delete(key); return next; }); });',
+        "const useState = () => [new Set(), () => {}];"
       )
     )
   );
