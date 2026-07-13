@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  Button,
+  PanelErrorBoundary,
+  PanelHeader,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./mixer-dashboard.css";
+import {
   MixerState,
   MixerConnectionSettings,
 } from "../types/mixer.types";
@@ -53,116 +60,79 @@ const MixerConnection = () => {
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>Mixer Connection</h2>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            width: "12px",
-            height: "12px",
-            borderRadius: "50%",
-            backgroundColor: connected ? "#4caf50" : "#f44336",
-            marginRight: "10px",
-          }}
-        />
-        <span style={{ fontWeight: "bold" }}>
-          {connected ? "Connected" : "Disconnected"}
-        </span>
-      </div>
+    <div className="mixer-shell">
+      <PanelHeader
+        kicker="Mixer Control"
+        title="Mixer Connection"
+        target={`${settings.ip}:${settings.port}`}
+        status={connected ? "Connected" : "Disconnected"}
+        statusTone={connected ? "success" : "warning"}
+      />
 
-      <div
-        style={{
-          marginBottom: "20px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        <div style={{ display: "flex", gap: "10px" }}>
-          <input
-            type="text"
-            placeholder="IP Address"
-            value={settings.ip}
-            onChange={(e) => updateSetting("ip", e.target.value)}
-            disabled={connected}
-            style={{ padding: "5px", flex: 2 }}
-          />
-          <input
-            type="number"
-            placeholder="Port"
-            value={settings.port}
-            onChange={(e) => updateSetting("port", e.target.value)}
-            disabled={connected}
-            style={{ padding: "5px", flex: 1 }}
-          />
-        </div>
-
-        <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
-          <label>
+      <main className="mixer-connection-content">
+        <div className="mixer-field-grid">
+          <label className="leaf-field">
+            <span>Host</span>
             <input
-              type="radio"
-              value="udp"
-              checked={settings.protocol === "udp"}
-              onChange={(e) => updateSetting("protocol", "udp")}
+              className="leaf-input"
+              type="text"
+              value={settings.ip}
+              onChange={(event) => updateSetting("ip", event.target.value)}
               disabled={connected}
+              placeholder="127.0.0.1"
             />
-            UDP
           </label>
-          <label>
+          <label className="leaf-field">
+            <span>Port</span>
             <input
-              type="radio"
-              value="tcp"
-              checked={settings.protocol === "tcp"}
-              onChange={(e) => updateSetting("protocol", "tcp")}
+              className="leaf-input"
+              type="number"
+              value={settings.port}
+              onChange={(event) => updateSetting("port", event.target.value)}
               disabled={connected}
+              placeholder="8000"
             />
-            TCP
           </label>
+          <fieldset className="mixer-protocol-field" disabled={connected}>
+            <legend>Protocol</legend>
+            <label>
+              <input
+                type="radio"
+                value="udp"
+                checked={settings.protocol === "udp"}
+                onChange={() => updateSetting("protocol", "udp")}
+              />
+              UDP
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="tcp"
+                checked={settings.protocol === "tcp"}
+                onChange={() => updateSetting("protocol", "tcp")}
+              />
+              TCP
+            </label>
+          </fieldset>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!connected ? (
-            <button
-              onClick={handleConnect}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#2196f3",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                flex: 1,
-              }}
-            >
-              Connect
-            </button>
-          ) : (
-            <button
-              onClick={handleDisconnect}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#f44336",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                flex: 1,
-              }}
-            >
-              Disconnect
-            </button>
-          )}
-        </div>
-      </div>
+        {connected ? (
+          <Button tone="danger" onClick={handleDisconnect}>
+            Disconnect
+          </Button>
+        ) : (
+          <Button tone="primary" onClick={handleConnect}>
+            Connect
+          </Button>
+        )}
+      </main>
     </div>
   );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<MixerConnection />);
+root.render(
+  <PanelErrorBoundary>
+    <MixerConnection />
+  </PanelErrorBoundary>
+);

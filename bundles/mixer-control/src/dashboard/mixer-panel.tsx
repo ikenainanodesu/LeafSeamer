@@ -2,21 +2,29 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import MixerControlPanel from "./mixer-control-panel";
 import OutputControlPanel from "./output-control-panel";
+import {
+  Disclosure,
+  PanelErrorBoundary,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./mixer-dashboard.css";
 
 const MixerPanel = () => {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <div style={{ borderBottom: "1px solid #555", paddingBottom: "20px" }}>
-        <h2 style={{ margin: "0 0 10px 0", color: "#eee" }}>Input Channels</h2>
+    <div className="mixer-shell">
+      <Disclosure title="Input Channels" defaultOpen storageKey="mixer.inputs.open">
         <MixerControlPanel />
-      </div>
-      <div>
-        <h2 style={{ margin: "0 0 10px 0", color: "#eee" }}>Output Channels</h2>
+      </Disclosure>
+      <Disclosure title="Output Channels" defaultOpen storageKey="mixer.outputs.open">
         <OutputControlPanel />
-      </div>
+      </Disclosure>
     </div>
   );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<MixerPanel />);
+root.render(
+  <PanelErrorBoundary>
+    <MixerPanel />
+  </PanelErrorBoundary>
+);
