@@ -1,6 +1,15 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  ListVideo,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+  Square,
+} from "lucide-react";
+import {
   OBSState,
   OBSScene,
   OBSConnectionSettings,
@@ -10,6 +19,16 @@ import {
   OBSStreamSettings,
   OBSStreamSettingsDraft,
 } from "../types/obs.types";
+import {
+  Button,
+  Disclosure,
+  IconButton,
+  PanelErrorBoundary,
+  PanelHeader,
+  ToastRegion,
+  useToast,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
 import "./obs-control-panel.css";
 import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
 
@@ -73,10 +92,8 @@ const PlaylistDialog = ({
     <div className="playlist-overlay" onClick={onClose}>
       <div className="playlist-modal" onClick={(e) => e.stopPropagation()}>
         <div className="playlist-header">
-          <h4 className="playlist-title">📋 Playlist</h4>
-          <button onClick={onClose} className="playlist-close-btn">
-            ✕
-          </button>
+          <h4 className="playlist-title">Playlist</h4>
+          <Button onClick={onClose}>Close</Button>
         </div>
         {playlist.length === 0 ? (
           <p className="playlist-empty">Playlist is empty</p>
@@ -94,19 +111,17 @@ const PlaylistDialog = ({
                 }`}
               >
                 {/* 播放按钮 */}
-                <button
+                <IconButton
+                  label={`Play: ${getFileName(item.value)}`}
+                  icon={<Play size={15} aria-hidden="true" />}
                   onClick={() => onPlayItem(idx)}
-                  className={`media-btn${item.selected ? " playlist-play-btn--active" : ""}`}
-                  title={`Play: ${getFileName(item.value)}`}
-                >
-                  ▶
-                </button>
+                />
                 <span className="playlist-item-index">{idx + 1}.</span>
                 <span className="playlist-item-name">
                   {getFileName(item.value)}
                 </span>
                 {item.selected && (
-                  <span className="playlist-item-playing-icon">🔊</span>
+                  <span className="playlist-item-playing-icon">Playing</span>
                 )}
               </li>
             ))}
@@ -287,7 +302,7 @@ const MediaControlPanel = ({
           <div
             className={`media-filename-scroll${mediaFileName.length > 30 ? " media-filename-scroll--marquee" : ""}`}
           >
-            🎵 {mediaFileName}
+            {mediaFileName}
           </div>
         </div>
       )}
@@ -296,20 +311,25 @@ const MediaControlPanel = ({
       <div className="media-buttons-row">
         {/* 上一曲（仅VLC显示） */}
         {isVlcSource(inputKind) && (
-          <button
-            className="media-btn"
+          <IconButton
+            label="Previous"
+            icon={<SkipBack size={16} aria-hidden="true" />}
             onClick={() =>
               triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PREVIOUS")
             }
-            title="Previous"
-          >
-            ⏮
-          </button>
+          />
         )}
 
         {/* 播放/暂停 */}
-        <button
-          className="media-btn"
+        <IconButton
+          label={isPlaying ? "Pause" : "Play"}
+          icon={
+            isPlaying ? (
+              <Pause size={16} aria-hidden="true" />
+            ) : (
+              <Play size={16} aria-hidden="true" />
+            )
+          }
           onClick={() =>
             triggerAction(
               isPlaying
@@ -317,53 +337,43 @@ const MediaControlPanel = ({
                 : "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PLAY",
             )
           }
-          title={isPlaying ? "Pause" : "Play"}
-        >
-          {isPlaying ? "⏸" : "▶"}
-        </button>
+        />
 
         {/* 停止 */}
-        <button
-          className="media-btn"
+        <IconButton
+          label="Stop"
+          icon={<Square size={16} aria-hidden="true" />}
           onClick={() => triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP")}
-          title="Stop"
-        >
-          ⏹
-        </button>
+        />
 
         {/* 重置 */}
-        <button
-          className="media-btn"
+        <IconButton
+          label="Restart"
+          icon={<RotateCcw size={16} aria-hidden="true" />}
           onClick={() =>
             triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART")
           }
-          title="Restart"
-        >
-          🔄
-        </button>
+        />
 
         {/* 下一曲（仅VLC显示） */}
         {isVlcSource(inputKind) && (
-          <button
-            className="media-btn"
+          <IconButton
+            label="Next"
+            icon={<SkipForward size={16} aria-hidden="true" />}
             onClick={() =>
               triggerAction("OBS_WEBSOCKET_MEDIA_INPUT_ACTION_NEXT")
             }
-            title="Next"
-          >
-            ⏭
-          </button>
+          />
         )}
 
         {/* VLC播放列表按钮 */}
         {isVlcSource(inputKind) && (
-          <button
-            className="media-btn media-playlist-btn"
+          <IconButton
+            className="media-playlist-btn"
+            label="View Playlist"
+            icon={<ListVideo size={16} aria-hidden="true" />}
             onClick={handleShowPlaylist}
-            title="View Playlist"
-          >
-            📋 Playlist
-          </button>
+          />
         )}
       </div>
 
@@ -513,9 +523,7 @@ const SourceItem = ({
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={() => onDrop(index)}
       className="source-item"
-      style={{
-        borderLeft: `3px solid ${item.sceneItemEnabled ? "#4caf50" : "#666"}`,
-      }}
+      data-enabled={item.sceneItemEnabled ? "true" : "false"}
     >
       {/* Source基本信息行 */}
       <div className="source-item-row">
@@ -571,11 +579,13 @@ const SingleObsControl = ({
   name,
   obsState,
   streamSettings,
+  showCommandError,
 }: {
   id: string;
   name: string;
   obsState: OBSState;
   streamSettings?: OBSStreamSettings;
+  showCommandError: (error: unknown) => void;
 }) => {
   const {
     connected,
@@ -584,6 +594,7 @@ const SingleObsControl = ({
     transitions,
     currentTransition,
     isStreaming,
+    isRecording,
     streamStats,
   } = obsState;
   const [showKey, setShowKey] = useState(false);
@@ -797,9 +808,7 @@ const SingleObsControl = ({
     if (isStreaming) {
       void sendAuthenticatedCommand("obs-control", "obs.stopStreaming", {
         id,
-      }).catch((error) =>
-        window.alert(error instanceof Error ? error.message : String(error))
-      );
+      }).catch(showCommandError);
     } else {
       sendAuthenticatedCommand("obs-control", "obs.setStreamSettings", {
           id,
@@ -810,9 +819,7 @@ const SingleObsControl = ({
             id,
           })
         )
-        .catch((error) =>
-          window.alert(error instanceof Error ? error.message : String(error))
-        );
+        .catch(showCommandError);
     }
   };
 
@@ -825,286 +832,266 @@ const SingleObsControl = ({
   }
 
   return (
-    <div
+    <article
       className={`obs-control-card ${
         isStreaming ? "obs-control-card--streaming" : "obs-control-card--idle"
       }`}
     >
-      <h3 className="obs-card-title">{name}</h3>
-
-      <div className="obs-current-scene">
-        <p>
-          Current Scene: <strong>{currentScene}</strong>
-        </p>
-      </div>
-
-      {/* Transitions */}
-      <div className="obs-transition-group">
-        <label className="obs-label-block">Transition:</label>
-        <select
-          title="Select transition"
-          value={currentTransition || ""}
-          onChange={handleTransitionChange}
-          className="obs-select-full"
-        >
-          {(transitions || []).map((t: string) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Stream Control */}
-      <div className="obs-stream-settings">
-        <h4 className="obs-stream-settings-title">Destination</h4>
-        <div className="obs-field-group">
-          <label className="obs-field-label">Server</label>
-          <input
-            type="text"
-            title="Stream server URL"
-            placeholder="rtmp://..."
-            value={localSettings.server}
-            onChange={(e) => handleLocalSettingChange("server", e.target.value)}
-            disabled={isStreaming}
-            className="obs-text-input"
-          />
+      <div className="obs-live-strip">
+        <h2>{name}</h2>
+        <div className="obs-live-statuses">
+          <span className="leaf-status" data-tone={isStreaming ? "success" : "warning"}>
+            {isStreaming ? "Live" : "Offline"}
+          </span>
+          <span className="leaf-status" data-tone={isRecording ? "danger" : "warning"}>
+            {isRecording ? "Recording" : "Not Recording"}
+          </span>
         </div>
-        <div className="obs-field-group obs-field-row--gap">
-          <label className="obs-field-label">Stream Key</label>
-          <div className="obs-field-row">
-            <input
-              type={showKey ? "text" : "password"}
-              title="Stream key"
-              placeholder={
-                localSettings.keyConfigured
-                  ? "Stream key configured; leave blank to keep"
-                  : "Stream key"
-              }
-              value={localSettings.key ?? ""}
-              onChange={(e) => handleLocalSettingChange("key", e.target.value)}
-              disabled={isStreaming}
-              className="obs-text-input--flex"
-            />
-            <button
-              onClick={() => setShowKey(!showKey)}
-              className="obs-show-hide-btn"
-            >
-              {showKey ? "Hide" : "Show"}
-            </button>
+      </div>
+
+      <div className="obs-primary-grid">
+        <div className="obs-current-scene">
+          <span>Current Scene</span>
+          <strong>{currentScene || "No scene selected"}</strong>
+        </div>
+        <label className="leaf-field">
+          <span>Transition</span>
+          <select
+            title="Select transition"
+            value={currentTransition || ""}
+            onChange={handleTransitionChange}
+            className="leaf-input"
+          >
+            {(transitions || []).map((transition: string) => (
+              <option key={transition} value={transition}>
+                {transition}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="obs-live-actions">
+        <Button tone={isStreaming ? "danger" : "primary"} onClick={toggleStreaming}>
+          {isStreaming ? "Stop Streaming" : "Start Streaming"}
+        </Button>
+        {isStreaming && streamStats ? (
+          <div className="obs-stream-stats">
+            <span>Time: {streamStats.outputTimecode || "00:00:00"}</span>
+            {streamStats.kbitsPerSec > 0 ? (
+              <span>Bitrate: {streamStats.kbitsPerSec} kbps</span>
+            ) : null}
           </div>
-          {localSettings.keyConfigured && (
-            <label className="obs-secret-clear">
+        ) : null}
+      </div>
+
+      <Disclosure
+        title="Stream Destination"
+        summary={isStreaming ? "Locked while live" : "Ready"}
+        storageKey={`obs.${id}.destination`}
+      >
+        <div className="obs-settings-grid">
+          <label className="leaf-field">
+            <span>Server</span>
+            <input
+              className="leaf-input"
+              type="text"
+              title="Stream server URL"
+              placeholder="rtmp://..."
+              value={localSettings.server}
+              onChange={(event) => handleLocalSettingChange("server", event.target.value)}
+              disabled={isStreaming}
+            />
+          </label>
+          <div className="leaf-field">
+            <span>Stream Key</span>
+            <div className="obs-secret-input-row">
               <input
-                type="checkbox"
-                checked={localSettings.clearKey === true}
-                onChange={(event) =>
-                  handleLocalSettingChange("clearKey", event.target.checked)
+                className="leaf-input"
+                type={showKey ? "text" : "password"}
+                title="Stream key"
+                placeholder={
+                  localSettings.keyConfigured
+                    ? "Stream key configured; leave blank to keep"
+                    : "Stream key"
                 }
+                value={localSettings.key ?? ""}
+                onChange={(event) => handleLocalSettingChange("key", event.target.value)}
                 disabled={isStreaming}
               />
-              Clear saved stream key
-            </label>
-          )}
-        </div>
-        <div className="obs-field-group">
-          <label>
+              <Button onClick={() => setShowKey(!showKey)} disabled={isStreaming}>
+                {showKey ? "Hide" : "Show"}
+              </Button>
+            </div>
+            {localSettings.keyConfigured ? (
+              <label className="obs-secret-clear">
+                <input
+                  type="checkbox"
+                  checked={localSettings.clearKey === true}
+                  onChange={(event) =>
+                    handleLocalSettingChange("clearKey", event.target.checked)
+                  }
+                  disabled={isStreaming}
+                />
+                Clear saved stream key
+              </label>
+            ) : null}
+          </div>
+          <label className="obs-auth-toggle">
             <input
               type="checkbox"
               checked={localSettings.useAuth}
-              onChange={(e) =>
-                handleLocalSettingChange("useAuth", e.target.checked)
+              onChange={(event) =>
+                handleLocalSettingChange("useAuth", event.target.checked)
               }
               disabled={isStreaming}
-            />{" "}
+            />
             Use authentication
           </label>
-        </div>
-        {localSettings.useAuth && (
-          <>
-            <div className="obs-field-group">
-              <label className="obs-field-label">Username</label>
-              <input
-                type="text"
-                title="Username"
-                placeholder="Username"
-                value={localSettings.username}
-                onChange={(e) =>
-                  handleLocalSettingChange("username", e.target.value)
-                }
-                disabled={isStreaming}
-                className="obs-text-input"
-              />
-            </div>
-            <div className="obs-field-group">
-              <label className="obs-field-label">Password</label>
-              <div className="obs-field-row">
+          {localSettings.useAuth ? (
+            <>
+              <label className="leaf-field">
+                <span>Username</span>
                 <input
-                  type={showPass ? "text" : "password"}
-                  title="Password"
-                  placeholder={
-                    localSettings.passwordConfigured
-                      ? "Password configured; leave blank to keep"
-                      : "Password"
-                  }
-                  value={localSettings.password ?? ""}
-                  onChange={(e) =>
-                    handleLocalSettingChange("password", e.target.value)
+                  className="leaf-input"
+                  type="text"
+                  title="Username"
+                  placeholder="Username"
+                  value={localSettings.username}
+                  onChange={(event) =>
+                    handleLocalSettingChange("username", event.target.value)
                   }
                   disabled={isStreaming}
-                  className="obs-text-input--flex"
                 />
-                <button
-                  onClick={() => setShowPass(!showPass)}
-                  className="obs-show-hide-btn"
-                >
-                  {showPass ? "Hide" : "Show"}
-                </button>
-              </div>
-              {localSettings.passwordConfigured && (
-                <label className="obs-secret-clear">
+              </label>
+              <div className="leaf-field">
+                <span>Password</span>
+                <div className="obs-secret-input-row">
                   <input
-                    type="checkbox"
-                    checked={localSettings.clearPassword === true}
+                    className="leaf-input"
+                    type={showPass ? "text" : "password"}
+                    title="Password"
+                    placeholder={
+                      localSettings.passwordConfigured
+                        ? "Password configured; leave blank to keep"
+                        : "Password"
+                    }
+                    value={localSettings.password ?? ""}
                     onChange={(event) =>
-                      handleLocalSettingChange(
-                        "clearPassword",
-                        event.target.checked
-                      )
+                      handleLocalSettingChange("password", event.target.value)
                     }
                     disabled={isStreaming}
                   />
-                  Clear saved authentication password
-                </label>
-              )}
-            </div>
-          </>
-        )}
-        <div className="obs-stream-actions">
-          <button
-            onClick={toggleStreaming}
-            className={`obs-stream-btn ${
-              isStreaming ? "obs-stream-btn--stop" : "obs-stream-btn--start"
-            }`}
-          >
-            {isStreaming ? "Stop Streaming" : "Start Streaming"}
-          </button>
-          {isStreaming && streamStats && (
-            <div className="obs-stream-stats">
-              <div>Time: {streamStats.outputTimecode || "00:00:00"}</div>
-              {streamStats.kbitsPerSec > 0 && (
-                <div>Bitrate: {streamStats.kbitsPerSec} kbps</div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Scenes - 可点击展开Source列表 */}
-      <div className="obs-scenes-header">
-        <h4 className="obs-scenes-title">Scenes</h4>
-        <button
-          onClick={handleRefreshScenes}
-          className="obs-refresh-btn"
-          title="Refresh Scene and Source List"
-        >
-          🔄 Refresh
-        </button>
-      </div>
-      <ul className="obs-scenes-list">
-        {(scenes || []).map((scene: OBSScene) => {
-          const isExpanded = expandedScene === scene.name;
-          const isActive = currentScene === scene.name; // 当前PGM活动Scene
-          const isSelected = selectedScene === scene.name; // 用户选中预览的Scene
-          const items = sceneItems[scene.name] || [];
-
-          // 确定Scene背景颜色：红色=活动中PGM，黄色=预览选中，灰色=普通
-          let sceneBgColor = "#424242";
-          if (isActive) {
-            sceneBgColor = "#c62828"; // 红色 - 活动中PGM
-          } else if (isSelected) {
-            sceneBgColor = "#f9a825"; // 黄色 - 预览选中
-          }
-
-          return (
-            <li key={scene.name} className="obs-scene-item">
-              {/* Scene按钮 */}
-              <div
-                onClick={() => handleSceneClick(scene.name)}
-                className={`obs-scene-btn ${
-                  isExpanded ? "obs-scene-btn--expanded" : ""
-                }`}
-                style={{ backgroundColor: sceneBgColor }}
-              >
-                <div className="obs-scene-btn-left">
-                  <span
-                    className={
-                      isActive || isSelected
-                        ? "obs-scene-name--active"
-                        : "obs-scene-name--normal"
-                    }
-                  >
-                    {scene.name}
-                  </span>
-                  {isActive && <span className="obs-pgm-badge">PGM</span>}
-                  {/* Switch按钮 - 仅在预览选中（非活动）时显示 */}
-                  {isSelected && !isActive && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSwitchScene(scene.name);
-                      }}
-                      className="obs-switch-btn"
-                      title="Switch this scene to program"
-                    >
-                      SWITCH
-                    </button>
-                  )}
+                  <Button onClick={() => setShowPass(!showPass)} disabled={isStreaming}>
+                    {showPass ? "Hide" : "Show"}
+                  </Button>
                 </div>
-                <span
-                  className={`obs-scene-arrow ${
-                    isActive || isSelected
-                      ? "obs-scene-arrow--active"
-                      : "obs-scene-arrow--normal"
-                  } ${isExpanded ? "obs-scene-arrow--expanded" : ""}`}
-                >
-                  ▼
-                </span>
+                {localSettings.passwordConfigured ? (
+                  <label className="obs-secret-clear">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.clearPassword === true}
+                      onChange={(event) =>
+                        handleLocalSettingChange("clearPassword", event.target.checked)
+                      }
+                      disabled={isStreaming}
+                    />
+                    Clear saved authentication password
+                  </label>
+                ) : null}
               </div>
+            </>
+          ) : null}
+        </div>
+      </Disclosure>
 
-              {/* 展开的Source列表 */}
-              {isExpanded && (
-                <div className="obs-source-list-container">
-                  {items.length === 0 ? (
-                    <div className="obs-source-list-loading">Loading...</div>
-                  ) : (
-                    items.map((item, idx) => (
-                      <SourceItem
-                        key={item.sceneItemId}
-                        obsId={id}
-                        sceneName={scene.name}
-                        item={item}
-                        index={idx}
-                        totalItems={items.length}
-                        onDragStart={handleDragStart}
-                        onDragOver={handleDragOver}
-                        onDrop={(dropIdx) => handleDrop(scene.name, dropIdx)}
-                        onToggleEnabled={(sceneItemId, enabled) =>
-                          handleToggleEnabled(scene.name, sceneItemId, enabled)
-                        }
-                        isPlaying={
-                          isMediaSource(item.inputKind) && item.sceneItemEnabled
-                        }
-                      />
-                    ))
-                  )}
+      <Disclosure
+        title="Scenes"
+        summary={`${(scenes || []).length} available`}
+        defaultOpen
+        storageKey={`obs.${id}.scenes`}
+      >
+        <div className="obs-scenes-header">
+          <Button onClick={handleRefreshScenes}>Refresh</Button>
+        </div>
+        <ul className="obs-scenes-list">
+          {(scenes || []).map((scene: OBSScene) => {
+            const isExpanded = expandedScene === scene.name;
+            const isActive = currentScene === scene.name;
+            const isSelected = selectedScene === scene.name;
+            const items = sceneItems[scene.name] || [];
+
+            return (
+              <li key={scene.name} className="obs-scene-item">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSceneClick(scene.name)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleSceneClick(scene.name);
+                    }
+                  }}
+                  className="obs-scene"
+                  aria-current={isActive ? "true" : undefined}
+                  aria-selected={isSelected ? "true" : undefined}
+                  aria-expanded={isExpanded}
+                >
+                  <div className="obs-scene-heading">
+                    <span className="obs-scene-name">{scene.name}</span>
+                    {isActive ? <span className="obs-pgm-badge">PGM</span> : null}
+                    {isSelected && !isActive ? (
+                      <Button
+                        tone="primary"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleSwitchScene(scene.name);
+                        }}
+                        title="Switch this scene to program"
+                      >
+                        Switch
+                      </Button>
+                    ) : null}
+                  </div>
+                  <span className="obs-scene-arrow" aria-hidden="true">
+                    {isExpanded ? "-" : "+"}
+                  </span>
                 </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+
+                {isExpanded ? (
+                  <div className="obs-source-list-container">
+                    {items.length === 0 ? (
+                      <div className="obs-source-list-loading">Loading...</div>
+                    ) : (
+                      items.map((item, index) => (
+                        <SourceItem
+                          key={item.sceneItemId}
+                          obsId={id}
+                          sceneName={scene.name}
+                          item={item}
+                          index={index}
+                          totalItems={items.length}
+                          onDragStart={handleDragStart}
+                          onDragOver={handleDragOver}
+                          onDrop={(dropIndex) => handleDrop(scene.name, dropIndex)}
+                          onToggleEnabled={(sceneItemId, enabled) =>
+                            handleToggleEnabled(scene.name, sceneItemId, enabled)
+                          }
+                          isPlaying={
+                            isMediaSource(item.inputKind) && item.sceneItemEnabled
+                          }
+                        />
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </Disclosure>
+    </article>
   );
 };
 
@@ -1115,6 +1102,11 @@ const ObsControlPanel = () => {
   const [allStreamSettings, setAllStreamSettings] = useState<
     Record<string, OBSStreamSettings>
   >({});
+  const { items: toasts, pushToast } = useToast();
+
+  const showCommandError = (error: unknown) => {
+    pushToast(error instanceof Error ? error.message : String(error), "danger");
+  };
 
   useEffect(() => {
     const obsConnectionsRep = nodecg.Replicant<OBSConnectionSettings[]>(
@@ -1141,23 +1133,42 @@ const ObsControlPanel = () => {
     });
   }, []);
 
-  return (
-    <div className="obs-panel-root">
-      <h2>OBS Controls</h2>
-      {connections.length === 0 && <p>No OBS connections configured.</p>}
+  const connectedCount = connections.filter((connection) => obsStates[connection.id]?.connected)
+    .length;
 
-      {connections.map((conn) => (
-        <SingleObsControl
-          key={conn.id}
-          id={conn.id}
-          name={conn.name || "Unknown OBS"}
-          obsState={obsStates[conn.id] || { connected: false }}
-          streamSettings={allStreamSettings[conn.id]}
-        />
-      ))}
+  return (
+    <div className="obs-shell">
+      <PanelHeader
+        kicker="OBS Control"
+        title="Live Control"
+        target={`${connections.length} configured`}
+        status={connectedCount > 0 ? `${connectedCount} Online` : "Offline"}
+        statusTone={connectedCount > 0 ? "success" : "warning"}
+      />
+      <main className="obs-card-list">
+        {connections.length === 0 ? (
+          <div className="obs-empty-state">No OBS connections configured.</div>
+        ) : null}
+
+        {connections.map((conn) => (
+          <SingleObsControl
+            key={conn.id}
+            id={conn.id}
+            name={conn.name || "Unknown OBS"}
+            obsState={obsStates[conn.id] || { connected: false }}
+            streamSettings={allStreamSettings[conn.id]}
+            showCommandError={showCommandError}
+          />
+        ))}
+      </main>
+      <ToastRegion items={toasts} />
     </div>
   );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<ObsControlPanel />);
+root.render(
+  <PanelErrorBoundary>
+    <ObsControlPanel />
+  </PanelErrorBoundary>,
+);
