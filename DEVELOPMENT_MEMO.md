@@ -702,3 +702,51 @@ decisions, or release-readiness status changes.
 - 静态/业务测试：80/80。
 - Playwright：40/40，其中 36 个视觉基线与 4 个交互测试。
 - 覆盖范围：12 个非 Graphics Dashboard；8 个受管共享 UI 快照；17 bundle 源码独立构建 CI。
+
+## 2026-07-14 F1 终审真实 UI 行为修复
+
+### 需求变化
+
+- 终审要求 ATEM Macro、OBS Streaming/Connection 和 VB Patch 的异步认证命令在 Promise 完成前同步防重复提交，且不得改变既有命令、payload 或 Replicant 成功状态来源。
+- OBS Scene 必须消除嵌套交互元素；Playlist 必须具备完整模态对话框焦点生命周期；VB Network 删除后需将焦点恢复到稳定的相邻删除按钮或新增按钮。
+
+### 代码变动
+
+- ATEM Macro、OBS Streaming、OBS Connection 与 VB Patch 分别加入 `useRef` 同步锁、可见 pending 状态、禁用控件和 `finally` 解锁；既有 toast 错误路径保持不变。
+- OBS Scene 改为相邻的原生选择按钮与 "Switch to program" 按钮；后者只调用既有 `setOBSScene` 消息。
+- OBS Playlist 加入 `role="dialog"`、模态语义、标题/描述关联、初始聚焦、Tab 圈定、Escape/遮罩关闭和仍连接触发元素的焦点恢复。
+- VB Network 删除通过稳定的 `data-network-remove-id` 和 ref，在确认后恢复相邻删除按钮或 Add Configuration。
+- 扩展 Dashboard AST/契约测试，覆盖同步锁、pending、`finally`、Scene 语义、Playlist 焦点合同与删除焦点恢复。
+
+### 功能增减
+
+- 新增命令在途阻断和可访问的 pending 提示；没有新增、删除或重命名任何 NodeCG 消息、bundle 名或命令 payload。
+
+### 功能实现路径
+
+- 所有锁在发送认证命令前立即写入 `ref.current`，React 状态仅负责渲染 pending；Promise 的 `catch` 仍写入现有 toast，`finally` 负责唯一解锁点。
+- 焦点恢复以 DOM 稳定属性和 ref 为准，不按可见文本定位；Cancel 继续使用既有 ConfirmDialog 的原触发元素恢复路径。
+
+### 已知 Bug
+
+- 当前环境没有真实 ATEM、OBS 或 VB Matrix 设备与认证 NodeCG 会话；静态契约和构建不能替代真实设备命令往返验收。
+
+### 预期解决方法
+
+- 在具备可回滚设备窗口后，对 Macro、Start/Stop、Save/Connect/Disconnect/Remove、Patch 与 Playlist 键盘焦点路径执行端到端验收。
+
+### 已解决 Bug 以及解决方法
+
+- 解决快速重复点击可在 React 状态提交前重复发出认证命令：以同步 ref 在命令前加锁，并在 `finally` 释放。
+- 解决 Scene 容器嵌套真实按钮导致的键盘语义冲突：拆分为相邻原生按钮。
+- 解决 Playlist 缺少对话框语义和焦点管理：实现模态属性、焦点圈定和关闭恢复。
+- 解决删除配置后焦点悬空：删除完成渲染后定位相邻稳定删除按钮，无相邻项则回退新增按钮。
+
+### 阶段验证
+
+- 实现提交：`b410358`（`fix: harden dashboard command interactions`）。
+- 定向 RED：`node -r ts-node/register -e "require('./tests/dashboard-ui-device.test'); require('./tests/test-harness').runTests();"`，初始 7 项中 4 项失败，原因是缺少命令锁、Scene 按钮语义、Playlist 焦点合同和 Network 删除焦点；随后针对连接性恢复合同得到 1 项预期失败。
+- 定向 GREEN：同一命令通过，7/7。
+- `npm.cmd test`：84/84 通过；仅有既有 `node:sqlite` experimental warning。
+- `npm.cmd run typecheck`：通过。
+- `npm.cmd run build --workspace atem-control`、`obs-control`、`vb-matrix-control`：通过；仅有既有 Vite `build.outDir` 警告。
