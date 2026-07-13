@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { NetworkConfig } from "../../types";
-import { Button, ConfirmDialog, IconButton, PanelHeader } from "../_leaf-ui/components";
+import { ConfirmDialog, IconButton, PanelHeader } from "../_leaf-ui/components";
 
 const NetworkConfigList: React.FC = () => {
   const [configs, setConfigs] = useState<NetworkConfig[]>([]);
   const [localIPs, setLocalIPs] = useState<string[]>([]);
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
+  const focusAfterRemovalRef = useRef<{ neighborId: string | null } | null>(null);
+  const addConfigurationButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const rep = nodecg.Replicant<NetworkConfig[]>("networkConfigs", {
@@ -48,10 +50,31 @@ const NetworkConfigList: React.FC = () => {
   };
 
   const handleRemove = (id: string) => {
+    const index = configs.findIndex((config) => config.id === id);
+    focusAfterRemovalRef.current = {
+      neighborId: configs[index + 1]?.id ?? configs[index - 1]?.id ?? null,
+    };
     const newConfigs = configs.filter((c) => c.id !== id);
     setConfigs(newConfigs);
     nodecg.Replicant<NetworkConfig[]>("networkConfigs").value = newConfigs;
   };
+
+  useEffect(() => {
+    const focusTarget = focusAfterRemovalRef.current;
+    if (!focusTarget) return;
+    window.requestAnimationFrame(() => {
+      if (focusTarget.neighborId) {
+        document
+          .querySelector<HTMLButtonElement>(
+            `[data-network-remove-id="${focusTarget.neighborId}"]`,
+          )
+          ?.focus();
+      } else {
+        addConfigurationButtonRef.current?.focus();
+      }
+      focusAfterRemovalRef.current = null;
+    });
+  }, [configs]);
 
   return (
     <div className="vb-shell vb-shell--compact">
@@ -77,10 +100,16 @@ const NetworkConfigList: React.FC = () => {
         ))}
       </div>
 
-      <Button tone="primary" onClick={handleAdd}>
+      <button
+        ref={addConfigurationButtonRef}
+        type="button"
+        className="leaf-button"
+        data-tone="primary"
+        onClick={handleAdd}
+      >
         <Plus size={15} aria-hidden="true" />
         Add Configuration
-      </Button>
+      </button>
 
       <ConfirmDialog
         open={pendingRemovalId !== null}
@@ -108,6 +137,7 @@ const NetworkConfigCard: React.FC<{
         onClick={onRemove}
         className="network-remove"
         tone="danger"
+        data-network-remove-id={config.id}
         label={`Remove connection ${config.name}`}
         icon={<Trash2 size={15} aria-hidden="true" />}
       />

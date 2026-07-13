@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useId } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ListVideo,
@@ -88,13 +88,65 @@ const PlaylistDialog = ({
   onClose: () => void;
   onPlayItem: (index: number) => void;
 }) => {
+  const playlistDialogRef = useRef<HTMLDivElement>(null);
+  const playlistTitleId = useId();
+  const playlistDescriptionId = useId();
+
+  useEffect(() => {
+    playlistDialogRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const dialog = playlistDialogRef.current;
+    if (!dialog) return;
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    if (event.shiftKey && (currentIndex <= 0 || document.activeElement === dialog)) {
+      event.preventDefault();
+      focusable[focusable.length - 1].focus();
+    } else if (!event.shiftKey && currentIndex === focusable.length - 1) {
+      event.preventDefault();
+      focusable[0].focus();
+    }
+  };
+
   return (
     <div className="playlist-overlay" onClick={onClose}>
-      <div className="playlist-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={playlistDialogRef}
+        className="playlist-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={playlistTitleId}
+        aria-describedby={playlistDescriptionId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="playlist-header">
-          <h4 className="playlist-title">Playlist</h4>
+          <h4 id={playlistTitleId} className="playlist-title">Playlist</h4>
           <Button onClick={onClose}>Close</Button>
         </div>
+        <p id={playlistDescriptionId} className="playlist-dialog-description">
+          Select a playlist item to make it active.
+        </p>
         {playlist.length === 0 ? (
           <p className="playlist-empty">Playlist is empty</p>
         ) : (
@@ -159,6 +211,7 @@ const MediaControlPanel = ({
   const [showPlaylist, setShowPlaylist] = useState(false);
   // 轮询定时器引用
   const pollingRef = useRef<number | null>(null);
+  const playlistTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   // 获取媒体状态
   const fetchMediaStatus = useCallback(() => {
@@ -262,7 +315,8 @@ const MediaControlPanel = ({
   };
 
   // 查看VLC播放列表
-  const handleShowPlaylist = () => {
+  const handleShowPlaylist = (event: React.MouseEvent<HTMLButtonElement>) => {
+    playlistTriggerRef.current = event.currentTarget;
     nodecg
       .sendMessageToBundle("getInputSettings", "obs-control", {
         id: obsId,
@@ -283,6 +337,14 @@ const MediaControlPanel = ({
         setShowPlaylist(true);
       })
       .catch((err: any) => console.error("Failed to get playlist:", err));
+  };
+
+  const handleClosePlaylist = () => {
+    setShowPlaylist(false);
+    window.requestAnimationFrame(() => {
+      const trigger = playlistTriggerRef.current;
+      if (trigger?.isConnected) trigger.focus();
+    });
   };
 
   // 当前进度百分比
@@ -369,10 +431,10 @@ const MediaControlPanel = ({
         {/* VLC播放列表按钮 */}
         {isVlcSource(inputKind) && (
           <IconButton
-            className="media-playlist-btn"
-            label="View Playlist"
-            icon={<ListVideo size={16} aria-hidden="true" />}
-            onClick={handleShowPlaylist}
+          className="media-playlist-btn"
+          label="View Playlist"
+          icon={<ListVideo size={16} aria-hidden="true" />}
+          onClick={handleShowPlaylist}
           />
         )}
       </div>
@@ -439,7 +501,7 @@ const MediaControlPanel = ({
       {showPlaylist && (
         <PlaylistDialog
           playlist={playlist}
-          onClose={() => setShowPlaylist(false)}
+          onClose={handleClosePlaylist}
           onPlayItem={(idx) => {
             // 通过SetInputSettings切换VLC播放列表中的指定项
             // 先更新playlist的selected状态，然后用triggerAction切到对应项
@@ -599,6 +661,8 @@ const SingleObsControl = ({
   } = obsState;
   const [showKey, setShowKey] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [isStreamCommandPending, setIsStreamCommandPending] = useState(false);
+  const streamCommandLockRef = useRef(false);
 
   // 当前展开的Scene名称（null表示全部收起）
   const [expandedScene, setExpandedScene] = useState<string | null>(null);
@@ -805,12 +869,14 @@ const SingleObsControl = ({
   };
 
   const toggleStreaming = () => {
-    if (isStreaming) {
-      void sendAuthenticatedCommand("obs-control", "obs.stopStreaming", {
+    if (streamCommandLockRef.current) return;
+    streamCommandLockRef.current = true;
+    setIsStreamCommandPending(true);
+    const command = isStreaming
+      ? sendAuthenticatedCommand("obs-control", "obs.stopStreaming", {
         id,
-      }).catch(showCommandError);
-    } else {
-      sendAuthenticatedCommand("obs-control", "obs.setStreamSettings", {
+      })
+      : sendAuthenticatedCommand("obs-control", "obs.setStreamSettings", {
           id,
           settings: localSettings,
         })
@@ -818,9 +884,13 @@ const SingleObsControl = ({
           sendAuthenticatedCommand("obs-control", "obs.startStreaming", {
             id,
           })
-        )
-        .catch(showCommandError);
-    }
+        );
+    void command
+      .catch(showCommandError)
+      .finally(() => {
+        streamCommandLockRef.current = false;
+        setIsStreamCommandPending(false);
+      });
   };
 
   if (!connected) {
@@ -872,7 +942,14 @@ const SingleObsControl = ({
       </div>
 
       <div className="obs-live-actions">
-        <Button tone={isStreaming ? "danger" : "primary"} onClick={toggleStreaming}>
+        <Button
+          tone={isStreaming ? "danger" : "primary"}
+          onClick={toggleStreaming}
+          disabled={isStreamCommandPending}
+          aria-busy={isStreamCommandPending}
+          pending={isStreamCommandPending}
+          pendingLabel={isStreaming ? "Stopping stream..." : "Starting stream..."}
+        >
           {isStreaming ? "Stop Streaming" : "Start Streaming"}
         </Button>
         {isStreaming && streamStats ? (
@@ -1023,9 +1100,9 @@ const SingleObsControl = ({
 
             return (
               <li key={scene.name} className="obs-scene-item">
-                <div
-                  role="button"
-                  tabIndex={0}
+                <div className="obs-scene-actions">
+                  <button
+                    type="button"
                   onClick={() => handleSceneClick(scene.name)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -1033,30 +1110,29 @@ const SingleObsControl = ({
                       handleSceneClick(scene.name);
                     }
                   }}
-                  className="obs-scene"
+                    className="obs-scene"
                   aria-current={isActive ? "true" : undefined}
                   aria-selected={isSelected ? "true" : undefined}
                   aria-expanded={isExpanded}
-                >
-                  <div className="obs-scene-heading">
+                  >
+                    <span className="obs-scene-heading">
                     <span className="obs-scene-name">{scene.name}</span>
                     {isActive ? <span className="obs-pgm-badge">PGM</span> : null}
-                    {isSelected && !isActive ? (
-                      <Button
-                        tone="primary"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleSwitchScene(scene.name);
-                        }}
-                        title="Switch this scene to program"
-                      >
-                        Switch
-                      </Button>
-                    ) : null}
-                  </div>
-                  <span className="obs-scene-arrow" aria-hidden="true">
-                    {isExpanded ? "-" : "+"}
-                  </span>
+                    </span>
+                    <span className="obs-scene-arrow" aria-hidden="true">
+                      {isExpanded ? "-" : "+"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="leaf-button"
+                    data-tone="primary"
+                    onClick={() => handleSwitchScene(scene.name)}
+                    disabled={isActive}
+                    title="Switch this scene to program"
+                  >
+                    Switch to program
+                  </button>
                 </div>
 
                 {isExpanded ? (

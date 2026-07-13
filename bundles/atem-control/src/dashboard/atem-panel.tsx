@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { AtemState, AtemSwitcherInfo } from "../types/atem.types";
 import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
 import { Button, Disclosure, ToastRegion, useToast } from "./_leaf-ui/components";
@@ -13,6 +13,8 @@ interface AtemPanelProps {
 const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
   const [selectedIp, setSelectedIp] = useState<string>("");
   const [state, setState] = useState<AtemState | null>(null);
+  const [pendingMacroId, setPendingMacroId] = useState<number | null>(null);
+  const macroCommandLockRef = useRef(false);
   const { items: toasts, pushToast } = useToast();
 
   useEffect(() => {
@@ -82,13 +84,20 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
   };
 
   const handleRunMacro = (id: number) => {
-    if (!selectedIp) return;
+    if (!selectedIp || macroCommandLockRef.current) return;
+    macroCommandLockRef.current = true;
+    setPendingMacroId(id);
     void sendAuthenticatedCommand("atem-control", "atem.runMacro", {
       ip: selectedIp,
       macroIndex: id,
-    }).catch((error) =>
-      pushToast(error instanceof Error ? error.message : String(error), "danger")
-    );
+    })
+      .catch((error) =>
+        pushToast(error instanceof Error ? error.message : String(error), "danger")
+      )
+      .finally(() => {
+        macroCommandLockRef.current = false;
+        setPendingMacroId(null);
+      });
   };
 
   const onDragStart = (event: React.DragEvent, sourceId: number) => {
@@ -238,7 +247,16 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
           <Disclosure title="Macros" summary={`${Object.keys(state.macros).length} available`} storageKey={`atem.${selectedIp}.macros`}>
             <div className="atem-macro-grid">
               {Object.entries(state.macros).map(([id, name]) => (
-                <Button key={id} onClick={() => handleRunMacro(parseInt(id))}>{String(name)}</Button>
+                <Button
+                  key={id}
+                  onClick={() => handleRunMacro(parseInt(id))}
+                  disabled={pendingMacroId !== null}
+                  aria-busy={pendingMacroId === parseInt(id)}
+                  pending={pendingMacroId === parseInt(id)}
+                  pendingLabel="Running macro..."
+                >
+                  {String(name)}
+                </Button>
               ))}
               {Object.keys(state.macros).length === 0 ? <div>No macros found.</div> : null}
             </div>

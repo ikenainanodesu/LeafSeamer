@@ -579,3 +579,141 @@ test("设备合同夹具拒绝伪造入口和 API 绑定", () => {
     })
   );
 });
+
+const jsxAttributes = (node: ts.JsxOpeningLikeElement): ts.JsxAttributes => node.attributes;
+
+const hasJsxAttribute = (
+  node: ts.JsxOpeningLikeElement,
+  name: string,
+  expectedText?: string
+): boolean =>
+  jsxAttributes(node).properties.some(
+    (property): property is ts.JsxAttribute =>
+      ts.isJsxAttribute(property) &&
+      ts.isIdentifier(property.name) &&
+      property.name.text === name &&
+      (expectedText === undefined || property.initializer?.getText().includes(expectedText) === true)
+  );
+
+const jsxOpenings = (source: ts.SourceFile): ts.JsxOpeningLikeElement[] => {
+  const openings: ts.JsxOpeningLikeElement[] = [];
+  for (const node of descendants(source)) {
+    if (ts.isJsxElement(node)) openings.push(node.openingElement);
+    if (ts.isJsxSelfClosingElement(node)) openings.push(node);
+  }
+  return openings;
+};
+
+const hasUseRefLock = (source: ts.SourceFile, lockName: string): boolean =>
+  descendants(source).some(
+    (node) =>
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === lockName &&
+      node.initializer !== undefined &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === "useRef"
+  );
+
+const hasFinallyLockRelease = (source: ts.SourceFile, lockName: string): boolean =>
+  descendants(source).some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "finally" &&
+      node.arguments.some((argument) =>
+        descendants(argument).some(
+          (child) =>
+            ts.isBinaryExpression(child) &&
+            child.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+            ts.isPropertyAccessExpression(child.left) &&
+            ts.isIdentifier(child.left.expression) &&
+            child.left.expression.text === lockName &&
+            child.left.name.text === "current" &&
+            child.right.kind === ts.SyntaxKind.FalseKeyword
+        )
+      )
+  );
+
+const hasPendingButtonContract = (source: ts.SourceFile, pendingName: string): boolean =>
+  jsxOpenings(source).some(
+    (opening) =>
+      (jsxTagName(opening.tagName) === "Button" || jsxTagName(opening.tagName) === "button") &&
+      hasJsxAttribute(opening, "disabled", pendingName) &&
+      hasJsxAttribute(opening, "aria-busy", pendingName)
+  );
+
+// 终审中的异步命令必须在 React 渲染前以同步 ref 获取锁，并在 finally 统一释放。
+test("终审 Dashboard 命令锁、等待状态与 finally 合同", () => {
+  const atem = parseSource("bundles/atem-control/src/dashboard/atem-panel.tsx");
+  const obsPanel = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
+  const obsConnection = parseSource("bundles/obs-control/src/dashboard/obs-connection.tsx");
+  const patchStatus = parseSource("bundles/vb-matrix-control/src/dashboard/components/PatchStatus.tsx");
+
+  ok(hasUseRefLock(atem, "macroCommandLockRef"));
+  ok(hasFinallyLockRelease(atem, "macroCommandLockRef"));
+  ok(hasPendingButtonContract(atem, "pendingMacroId"));
+
+  ok(hasUseRefLock(obsPanel, "streamCommandLockRef"));
+  ok(hasFinallyLockRelease(obsPanel, "streamCommandLockRef"));
+  ok(hasPendingButtonContract(obsPanel, "isStreamCommandPending"));
+
+  ok(hasUseRefLock(obsConnection, "connectionCommandLockRef"));
+  ok(hasFinallyLockRelease(obsConnection, "connectionCommandLockRef"));
+  ok(hasPendingButtonContract(obsConnection, "isConnectionCommandPending"));
+
+  ok(hasUseRefLock(patchStatus, "patchCommandLockRef"));
+  ok(hasFinallyLockRelease(patchStatus, "patchCommandLockRef"));
+  ok(hasPendingButtonContract(patchStatus, "isPatchCommandPending"));
+});
+
+// Scene 的选择与 PGM 切换必须是相邻的原生按钮，避免嵌套交互元素吞掉键盘事件。
+test("OBS Scene 使用相邻原生按钮且不嵌套交互控件", () => {
+  const source = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
+  const openings = jsxOpenings(source);
+  ok(!openings.some((opening) => hasJsxAttribute(opening, "role", '"button"')));
+  const sceneButtons = openings.filter(
+    (opening) =>
+      jsxTagName(opening.tagName) === "button" &&
+      hasJsxAttribute(opening, "className", "obs-scene")
+  );
+  ok(sceneButtons.length > 0);
+  ok(
+    openings.some(
+      (opening) =>
+        jsxTagName(opening.tagName) === "button" &&
+        hasJsxAttribute(opening, "onClick", "handleSwitchScene")
+    )
+  );
+});
+
+// Playlist 对话框必须声明模态语义，并完整管理打开、圈定和恢复焦点。
+test("OBS Playlist 对话框保留焦点生命周期合同", () => {
+  const source = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
+  const openings = jsxOpenings(source);
+  ok(
+    openings.some(
+      (opening) =>
+        hasJsxAttribute(opening, "role", '"dialog"') &&
+        hasJsxAttribute(opening, "aria-modal", '"true"') &&
+        hasJsxAttribute(opening, "aria-labelledby")
+    )
+  );
+  ok(hasUseRefLock(source, "playlistTriggerRef"));
+  ok(hasUseRefLock(source, "playlistDialogRef"));
+  const text = source.getFullText();
+  ok(text.includes('"Tab"') && text.includes('"Escape"'));
+  ok(text.includes("trigger.focus"));
+  ok(text.includes("trigger?.isConnected"));
+});
+
+// 删除后的焦点只允许通过稳定数据属性定位相邻按钮，空列表回退到新增按钮。
+test("VB Network 删除后使用稳定目标恢复焦点", () => {
+  const source = parseSource("bundles/vb-matrix-control/src/dashboard/components/NetworkConfigList.tsx");
+  const text = source.getFullText();
+  ok(hasUseRefLock(source, "focusAfterRemovalRef"));
+  ok(hasUseRefLock(source, "addConfigurationButtonRef"));
+  ok(text.includes("data-network-remove-id"));
+  ok(text.includes("addConfigurationButtonRef.current?.focus"));
+});

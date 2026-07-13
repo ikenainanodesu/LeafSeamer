@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Plus, Trash2 } from "lucide-react";
 import {
@@ -28,6 +28,11 @@ const ObsConnection = () => {
     {},
   );
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
+  const [pendingConnectionAction, setPendingConnectionAction] = useState<
+    "save" | "connect" | "disconnect" | "remove" | null
+  >(null);
+  const connectionCommandLockRef = useRef(false);
+  const isConnectionCommandPending = pendingConnectionAction !== null;
   const { items: toasts, pushToast } = useToast();
   const showCommandError = (error: unknown) => {
     pushToast(error instanceof Error ? error.message : String(error), "danger");
@@ -91,7 +96,22 @@ const ObsConnection = () => {
     });
   };
 
-  const handleSave = async (conn: OBSConnectionDraft) => {
+  const runConnectionCommand = (
+    action: "save" | "connect" | "disconnect" | "remove",
+    command: () => Promise<unknown>,
+  ) => {
+    if (connectionCommandLockRef.current) return;
+    connectionCommandLockRef.current = true;
+    setPendingConnectionAction(action);
+    void command()
+      .catch(showCommandError)
+      .finally(() => {
+        connectionCommandLockRef.current = false;
+        setPendingConnectionAction(null);
+      });
+  };
+
+  const saveConnection = async (conn: OBSConnectionDraft) => {
     await sendAuthenticatedCommand<OBSConnectionSettings>(
       "obs-control",
       "obs.saveConnection",
@@ -106,15 +126,19 @@ const ObsConnection = () => {
     );
   };
 
-  const handleConnect = async (conn: OBSConnectionDraft) => {
-    await handleSave(conn);
-    await sendAuthenticatedCommand("obs-control", "obs.connect", {
-      id: conn.id,
+  const handleSave = (conn: OBSConnectionDraft) =>
+    runConnectionCommand("save", () => saveConnection(conn));
+
+  const handleConnect = (conn: OBSConnectionDraft) =>
+    runConnectionCommand("connect", async () => {
+      await saveConnection(conn);
+      await sendAuthenticatedCommand("obs-control", "obs.connect", { id: conn.id });
     });
-  };
 
   const handleDisconnect = (id: string) =>
-    sendAuthenticatedCommand("obs-control", "obs.disconnect", { id });
+    runConnectionCommand("disconnect", () =>
+      sendAuthenticatedCommand("obs-control", "obs.disconnect", { id })
+    );
 
   const addConnection = () => {
     const newConn: OBSConnectionDraft = {
@@ -131,15 +155,15 @@ const ObsConnection = () => {
   const removeConnection = (id: string) => {
     const connToRemove = connections.find((connection) => connection.id === id);
     if (!connToRemove) return;
-    void sendAuthenticatedCommand("obs-control", "obs.removeConnection", {
-      id: connToRemove.id,
-    })
-      .then(() => {
+    runConnectionCommand("remove", () =>
+      sendAuthenticatedCommand("obs-control", "obs.removeConnection", {
+        id: connToRemove.id,
+      }).then(() => {
         setConnections((current) =>
           current.filter((item) => item.id !== connToRemove.id),
         );
       })
-      .catch(showCommandError);
+    );
   };
 
   const connectedCount = connections.filter(
@@ -189,6 +213,8 @@ const ObsConnection = () => {
                       label={`Remove connection ${conn.name || index + 1}`}
                       icon={<Trash2 size={15} aria-hidden="true" />}
                       onClick={() => setPendingRemovalId(conn.id)}
+                      disabled={isConnectionCommandPending}
+                      aria-busy={isConnectionCommandPending}
                     />
                   ) : null}
                 </div>
@@ -268,21 +294,34 @@ const ObsConnection = () => {
                 </Disclosure>
 
                 <div className="obs-conn-actions">
-                  <Button onClick={() => void handleSave(conn).catch(showCommandError)}>
+                  <Button
+                    onClick={() => handleSave(conn)}
+                    disabled={isConnectionCommandPending}
+                    aria-busy={isConnectionCommandPending}
+                    pending={pendingConnectionAction === "save"}
+                    pendingLabel="Saving..."
+                  >
                     Save
                   </Button>
                   {!isConnected ? (
                     <Button
                       tone="primary"
-                      onClick={() => void handleConnect(conn).catch(showCommandError)}
-                      disabled={isConnecting}
+                      onClick={() => handleConnect(conn)}
+                      disabled={isConnecting || isConnectionCommandPending}
+                      aria-busy={isConnectionCommandPending}
+                      pending={pendingConnectionAction === "connect"}
+                      pendingLabel="Connecting..."
                     >
                       {isConnecting ? "Connecting..." : "Connect"}
                     </Button>
                   ) : (
                     <Button
                       tone="danger"
-                      onClick={() => void handleDisconnect(conn.id).catch(showCommandError)}
+                      onClick={() => handleDisconnect(conn.id)}
+                      disabled={isConnectionCommandPending}
+                      aria-busy={isConnectionCommandPending}
+                      pending={pendingConnectionAction === "disconnect"}
+                      pendingLabel="Disconnecting..."
                     >
                       Disconnect
                     </Button>
@@ -295,6 +334,11 @@ const ObsConnection = () => {
             <div className="obs-conn-empty">No OBS connections configured.</div>
           ) : null}
         </div>
+        {isConnectionCommandPending ? (
+          <p className="obs-conn-pending" role="status" aria-live="polite">
+            {pendingConnectionAction === "remove" ? "Removing connection..." : "Command in progress..."}
+          </p>
+        ) : null}
       </main>
 
       <ConfirmDialog
