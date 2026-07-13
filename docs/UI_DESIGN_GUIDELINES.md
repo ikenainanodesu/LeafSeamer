@@ -185,7 +185,7 @@
 
 - 视觉验收覆盖 12 个非 Graphics Dashboard 页面：ATEM Connection/Control、Mixer Connection/Panel、OBS Connection/Control、VB Network/Control、Logger、Schedule、Seamer 和 Backup。
 - 每个页面在 Windows Chromium 的 320、480、768px 内容宽度下保存并比对基线，共 36 张视觉基线；Windows Chromium 是基线平台，其他平台不得无意刷新这些 PNG。
-- 另保留 4 个关键交互流程：Schedule 外部条目只读、Schedule 删除后的焦点恢复、Seamer tabs/card/trigger 合同、Backup L3 pending/error/success；各流程都检查无运行时错误。
+- 另保留 14 个行为与基础设施回归：4 个核心业务流程（Schedule 外部条目只读、Schedule 删除后的焦点恢复、Seamer tabs/card/trigger 合同、Backup L3 pending/error/success）、2 个测试服务器访问边界/空闲持续可用性检查，以及 8 个 ATEM、OBS、VB 设备命令与焦点流程；各流程都检查无运行时错误。
 - 新增或修改页面时，先运行 `npm run ui:check`，再运行 `npm run test:ui`。只有经过评审的有意视觉变化需要更新基线时，才运行 `npm run test:ui:update`。
 
 ## 10. Bundle 独立性规则

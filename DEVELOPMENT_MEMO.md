@@ -900,3 +900,35 @@ decisions, or release-readiness status changes.
 - socket 精确断言负控：临时加入额外 emit 后 ATEM 0/1、退出码 1；移除负控后 8 个设备/焦点分支分别 1/1、退出码 0。
 - 服务器 Playwright：2/2、退出码 0；全量 UI：50/50、退出码 0；`npm.cmd test`：83/83、退出码 0；typecheck 退出码 0。
 - `git diff --check`、graphics 工作树/基线范围检查与 4173 监听检查均通过。
+
+## 2026-07-14 UI 验收口径与设计规范收尾
+
+### 需求变化
+
+- 统一非 Graphics Dashboard 的 Dense Hardware Console 设计语言，并将规范保存为后续开发的长期约束。
+- README、三语用户手册与设计规范必须反映当前完整 UI 自动化规模，不再沿用初始阶段的 40 项口径。
+
+### 代码变动
+
+- 更新 README、中文/英文/日文用户手册与 `docs/UI_DESIGN_GUIDELINES.md`，统一记录 36 个视觉基线和 14 个行为/基础设施回归，共 50 个 Playwright 测试。
+- 更新子代理开发进度，记录 A2 命令交互收紧与 A3 浏览器/测试服务器加固已经通过独立审查。
+
+### 功能增减
+
+- 未新增生产功能、消息、payload 或 Replicant schema；未修改 `graphics-package`。
+
+### 功能实现路径
+
+- UI 规范作为非 Graphics Dashboard 新增页面、控件与评审的单一设计依据；README 与三语 Manual 只保留面向使用者的测试入口和当前验收规模。
+
+### 已知 Bug
+
+- 真实 NodeCG 登录会话与 ATEM、OBS、VB Matrix 硬件仍未接入自动化验收。
+
+### 预期解决方法
+
+- 在具备可回滚设备窗口后执行真实认证命令往返、快速重复操作和焦点恢复验收。
+
+### 已解决 Bug 以及解决方法
+
+- 解决现行文档仍写作 36 个视觉基线加 4 个交互流程、与实际 50 项测试不一致的问题：按视觉、核心业务、测试服务器访问边界/空闲持续可用性和设备/焦点四类同步说明。

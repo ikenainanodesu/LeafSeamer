@@ -48,7 +48,7 @@ npm run ui:check
 npm run test:ui
 ```
 
-`npm run test:ui` は 320、480、768px で 36 枚の Windows Chromium ビジュアルベースラインと 4 本のインタラクションフローを受け入れます。レビュー済みの意図的な視覚変更でベースラインを更新する場合にのみ、`npm run test:ui:update` を使用します。
+`npm run test:ui` は 320、480、768px で 36 枚の Windows Chromium ビジュアルベースラインと 14 本の動作/基盤リグレッション（4 本の主要業務フロー、2 本のテストサーバーアクセス境界/アイドル後の継続可用性確認、8 本のデバイスコマンド/フォーカスフロー）、合計 50 本の Playwright テストを実行します。レビュー済みの意図的な視覚変更でベースラインを更新する場合にのみ、`npm run test:ui:update` を使用します。
 
 各 bundle は、ソースを単独でコピーした後もインストールおよびビルド可能でなければなりません。実行時の Dashboard は自 bundle の `_leaf-ui` スナップショットだけを import でき、権威ソースまたは他 bundle からの UI import は禁止です。bundle ローカルの `_leaf-core` スナップショットは、共有コアについて同じソース独立性を提供します。Graphics は今回の UI 統一の対象外です。
 

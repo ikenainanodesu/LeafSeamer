@@ -48,7 +48,7 @@ npm run ui:check
 npm run test:ui
 ```
 
-`npm run test:ui` accepts 36 Windows Chromium visual baselines and four interaction workflows at 320, 480, and 768px. Use `npm run test:ui:update` only to deliberately refresh reviewed baselines.
+`npm run test:ui` accepts 36 Windows Chromium visual baselines and 14 behavior/infrastructure regressions (four core operation workflows, two server boundary/continued-availability checks, and eight device/focus workflows), for 50 Playwright tests total at 320, 480, and 768px. Use `npm run test:ui:update` only to deliberately refresh reviewed baselines.
 
 Each bundle must remain installable and buildable after its source is copied independently. At runtime, a Dashboard may import only its own `_leaf-ui` snapshot; imports from the authority source or another bundle are prohibited. Bundle-local `_leaf-core` snapshots provide the corresponding shared-core source independence. Graphics is explicitly outside this UI unification.
 

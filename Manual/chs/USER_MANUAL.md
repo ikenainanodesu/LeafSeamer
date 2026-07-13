@@ -48,7 +48,7 @@ npm run ui:check
 npm run test:ui
 ```
 
-`npm run test:ui` 在 320、480、768px 下验收 36 张 Windows Chromium 视觉基线和 4 个交互流程。只有经过评审的有意视觉变更需要刷新基线时，才使用 `npm run test:ui:update`。
+`npm run test:ui` 在 320、480、768px 下验收 36 张 Windows Chromium 视觉基线，以及 14 个行为/基础设施回归（4 个核心业务流程、2 个测试服务器访问边界/空闲持续可用性检查、8 个设备命令与焦点流程），合计 50 个 Playwright 测试。只有经过评审的有意视觉变更需要刷新基线时，才使用 `npm run test:ui:update`。
 
 每个 bundle 的源码单独复制后仍必须能够安装和构建。运行时 Dashboard 只能导入本 bundle 的 `_leaf-ui` 快照，禁止从权威源或其他 bundle 导入 UI。bundle 本地 `_leaf-core` 快照提供对应的共享核心源码独立性。Graphics 明确不纳入本次 UI 统一。
 
