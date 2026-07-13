@@ -11,6 +11,7 @@ import "./obs-secret-settings.test";
 import "./authenticated-command.test";
 import "./postgresql-live.test";
 import "./bundle-source-independence.test";
+import "./dashboard-ui-contract.test";
 import { runTests } from "./test-harness";
 
 void runTests();
