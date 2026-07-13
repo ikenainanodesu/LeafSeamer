@@ -65,3 +65,63 @@
 - 浏览器测试使用 NodeCG stub，不能替代真实登录会话、认证 socket 与 ATEM/OBS/VB 硬件往返验收。
 - 视觉基线限定 Windows Chromium；其他平台不应直接刷新这些 PNG。
 - 受管环境可能仍有接手前启动的历史 Playwright runner。本轮未广泛终止未知 Node 进程；所有 F2 runner 均得到真实退出码，global teardown 生效且 4173 无监听。
+
+## 独立审查修复（2026-07-14）
+
+### 结果
+
+- 状态：五项 finding 全部修复。
+- 实现提交：`7f154bd`（`fix: address F2 hardening review`）。
+- 文档由后续提交承载，避免报告提交自引用自身 SHA。
+- 未修改 `graphics-package`，未改变生产 bundle 命令契约。
+
+### Finding 处置
+
+1. **原始 HTTP 点段绕过**：在 WHATWG `new URL()` 规范化前，从 `request.url` 提取原始 pathname，百分号解码并将反斜线视作分隔符，拒绝独立 `.`/`..` 段。测试使用 `node:http` 的原始 request path，覆盖明文 `../`、`%2e%2e%2f` 和 `%2e%2e%5c`。
+2. **bundles 根 junction**：解析 `realProjectRoot`，要求 `realBundlesRoot` 严格位于其内；保留 `realBundleRoot -> realBundlesRoot`、`realOutputRoot -> realBundleRoot`、`realTarget -> realOutputRoot` 全链校验。新增整个 `projectRoot/bundles` junction 指向外部时返回 404 的用例。
+3. **设备命令精确断言**：读取全部 `socket.emit` 调用，不按 command 过滤；用 `toEqual` 比较完整 event、payload 数组、command 与业务 payload，仅 correlationId 使用 `expect.any(String)`。Streaming/Connect 在第一条 ack 前及第二条命令发出后分别断言完整序列。
+4. **Windows 正常退出**：保留 Playwright global setup 同进程 stop；直接脚本仅在 Node IPC channel 存在时响应内部 shutdown 消息。生命周期测试用 `child_process.fork` 发送 IPC，等待 `{ code: 0, signal: null }`；`child.kill()` 只用于失败清理，不参与成功判定。`closeServer()` 明确 await `stopDashboardServer()`。
+5. **并发 stop 完成边界**：模块级 `WeakMap` 按 server 缓存关闭 Promise，第二次调用返回同一对象，不因 `listening` 已变为 false 而提前完成。
+
+### 本轮 RED/GREEN 与命令记录
+
+| 阶段 | 命令 | 退出码 | 数量/结果 |
+| --- | --- | ---: | --- |
+| 原始点段 RED | `node --test tests/dashboard-server-lifecycle.test.mjs` | 1 | 3/4；原始 `../` 实际返回 200 |
+| 原始点段 GREEN | `node --test tests/dashboard-server-lifecycle.test.mjs` | 0 | 4/4 |
+| bundles junction RED | `node --test tests/dashboard-server-lifecycle.test.mjs` | 1 | 4/5；外部 bundles junction 实际返回 200 |
+| bundles junction GREEN | `node --test tests/dashboard-server-lifecycle.test.mjs` | 0 | 5/5 |
+| IPC 自然退出 RED | `node --test tests/dashboard-server-lifecycle.test.mjs` | 1 | 4/5；内部关闭请求超时 |
+| IPC 自然退出 GREEN | `node --test tests/dashboard-server-lifecycle.test.mjs` | 0 | 5/5；自然退出 code 0、signal null |
+| 并发 stop RED | `node --test tests/dashboard-server-lifecycle.test.mjs` | 1 | 5/6；两次调用不是同一 Promise |
+| 生命周期最终 GREEN | `node --test tests/dashboard-server-lifecycle.test.mjs` | 0 | 6/6；最终复验耗时 377.7ms |
+| socket 精确负控 RED | `npx.cmd playwright test --workers=1 --reporter=line --grep "ATEM Macro"` | 1 | 0/1；临时额外 emit 被完整序列断言捕获 |
+| ATEM Macro GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "ATEM Macro"` | 0 | 1/1 |
+| OBS Streaming GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "OBS Streaming"` | 0 | 1/1 |
+| OBS Connection GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "OBS Connection Connect"` | 0 | 1/1 |
+| OBS Scene GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "OBS Scene Switch"` | 0 | 1/1 |
+| OBS Playlist GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "OBS Playlist"` | 0 | 1/1 |
+| VB Patch GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "VB Patch"` | 0 | 1/1 |
+| VB Network 相邻项 GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "VB Network 删除后"` | 0 | 1/1 |
+| VB Network 最后一项 GREEN | `npx.cmd playwright test --workers=1 --reporter=line --grep "VB Network 删除最后一项"` | 0 | 1/1 |
+| 服务器 Playwright | `npx.cmd playwright test --workers=1 --reporter=line --grep "Dashboard test server"` | 0 | 2/2；teardown 正常退出 |
+| 全量 UI | `npm.cmd run test:ui -- --workers=1 --reporter=line` | 0 | 50/50；17 个 bundle 构建成功，总命令 109.7s |
+| 单元/合同测试 | `npm.cmd test` | 0 | 83/83；仅既有 SQLite experimental warning |
+| 类型检查 | `npm.cmd run typecheck` | 0 | 0 个类型错误 |
+| 工作树格式检查 | `git diff --check` | 0 | 无 whitespace error；仅 Git 的 LF/CRLF 提示 |
+| 暂存区格式检查 | `git diff --cached --check` | 0 | 无 whitespace error |
+| Graphics 工作树边界 | `git diff --name-only -- bundles/graphics-package` | 0 | 空输出 |
+| Graphics 基线范围 | `git diff --name-only 4cb3af2..HEAD -- bundles/graphics-package` | 0 | 空输出 |
+| 服务器残留 | `Get-NetTCPConnection -LocalPort 4173 -State Listen` 包装检查 | 0 | 无监听 |
+
+### 快照复核
+
+- 本轮修复没有新增或更新快照；全量 50/50 继续通过。
+- 保留此前人工确认的 OBS Control 320/480/768 三张 Scene 双按钮快照；三个宽度清晰、无截断、重叠或溢出。
+- VB Network 320/480/768 继续匹配旧基线，没有更新。
+
+### 遗留风险
+
+- NodeCG stub 无法替代真实登录会话、认证 socket 与设备硬件往返验收。
+- Windows Chromium PNG 不代表其他平台的字体栅格化结果；跨平台不应直接刷新当前基线。
+- IPC shutdown 只在父进程显式创建 IPC channel 时启用，不是网络端点；直接人工运行仍通过既有 SIGINT/SIGTERM 路径关闭。

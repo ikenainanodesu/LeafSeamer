@@ -848,3 +848,55 @@ decisions, or release-readiness status changes.
 - `npm.cmd test`：83/83 通过；仅输出既有 `node:sqlite` experimental warning。
 - `npm.cmd run typecheck`、`git diff --check`：通过。
 - `git diff --name-only 4cb3af2..HEAD -- bundles/graphics-package`：空；4173 无监听。
+
+## 2026-07-14 F2 独立审查修复
+
+### 需求变化
+
+- 测试服务器必须在 WHATWG URL 规范化前拒绝原始 pathname 中独立的 `.`/`..` 段，包括百分号解码后的正斜线与反斜线分隔形式。
+- 除既有 bundle/output/target 真实路径链外，必须确认 `bundles` 根 junction 严格位于真实项目根内。
+- 设备命令浏览器回归必须精确比较全部 `socket.emit` 调用序列，不得按 command 过滤或用局部对象匹配。
+- Windows 独立脚本生命周期必须通过 Node IPC 请求正常关闭并自然退出；并发 stop 必须共享同一个关闭 Promise 和完成边界。
+
+### 代码变动
+
+- `serve-dashboard-ui.mjs` 新增原始请求目标 pathname 提取与解码后点段检查，检查发生在 `new URL()` 前；新增 `realProjectRoot` 到 `realBundlesRoot` 的严格包含校验。
+- `stopDashboardServer()` 通过模块级 `WeakMap` 缓存每个 server 的关闭 Promise；直接执行模式仅在存在 Node IPC channel 时接受内部 `leafseamer:shutdown` 消息，并等待 stop 完成后断开 IPC。
+- 生命周期测试改用 `node:http` 保留原始请求路径，覆盖明文/编码斜线/编码反斜线点段、整个 bundles junction 逃逸、IPC 自然退出和并发 stop Promise 同一性。
+- 设备回归读取全部 `socket.emit` 调用并用 `toEqual` 比较完整序列；仅 `correlationId` 使用 `expect.any(String)`，OBS Streaming 与 Connect 的链前后两段均精确断言。
+
+### 功能增减
+
+- 新增仅限父子 Node IPC channel 的内部关闭协议，不新增网络端点，也不改变直接启动脚本与生产 bundle 命令契约。
+- 未修改 `graphics-package`、生产消息名、命令 payload 或 Replicant schema。
+
+### 功能实现路径
+
+- 原始 URL 防护先去除 query/fragment、百分号解码、统一反斜线后检查独立点段；通过后才进入既有 URL 解析、路由白名单和真实路径链。
+- 关闭操作首次调用即缓存 Promise，后续调用不再根据已经变为 false 的 `server.listening` 提前完成。
+- 脚本 fork 测试通过 IPC 发送内部关闭消息并等待 `{ code: 0, signal: null }`；`child.kill()` 仅保留为失败后的强制清理。
+
+### 已知 Bug
+
+- 浏览器命令仍由 NodeCG stub 验证，未覆盖真实登录会话与 ATEM、OBS、VB Matrix 硬件往返。
+- 视觉基线仍限定 Windows Chromium；本轮未产生新快照变化。
+
+### 预期解决方法
+
+- 在可回滚设备窗口补做真实认证 socket 与设备命令验收；跨平台视觉基线另行维护。
+
+### 已解决 Bug 以及解决方法
+
+- 解决 `/bundles/graphics-package/../logger-system/...` 在 URL 规范化后绕过首段 bundle 白名单：在规范化前拒绝原始点段。
+- 解决整个 `projectRoot/bundles` junction 指向项目外仍可读取：加入真实项目根边界。
+- 解决命令测试忽略额外 socket 调用或 payload 字段：完整序列使用精确深比较。
+- 解决 Windows 直接执行测试只能靠信号强杀清理：使用仅 IPC 可达的内部关闭请求并等待自然退出。
+- 解决第二次 stop 因 `listening` 已变为 false 而提前 resolve：以 WeakMap 复用首个关闭 Promise。
+
+### 阶段验证
+
+- 实现提交：`7f154bd`（`fix: address F2 hardening review`）。
+- 生命周期 RED 依次命中原始点段 3/4、bundles junction 4/5、IPC 自然退出 4/5、并发 stop 5/6；对应修复后最终 6/6，退出码 0。
+- socket 精确断言负控：临时加入额外 emit 后 ATEM 0/1、退出码 1；移除负控后 8 个设备/焦点分支分别 1/1、退出码 0。
+- 服务器 Playwright：2/2、退出码 0；全量 UI：50/50、退出码 0；`npm.cmd test`：83/83、退出码 0；typecheck 退出码 0。
+- `git diff --check`、graphics 工作树/基线范围检查与 4173 监听检查均通过。
