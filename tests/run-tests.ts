@@ -10,6 +10,7 @@ import "./logger-security.test";
 import "./obs-secret-settings.test";
 import "./authenticated-command.test";
 import "./postgresql-live.test";
+import "./bundle-source-independence.test";
 import { runTests } from "./test-harness";
 
 void runTests();
