@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Plus, Trash2 } from "lucide-react";
 import type { PlaylistItem } from "../types/schedule.types";
@@ -15,6 +15,7 @@ import "./schedule-dashboard.css";
 const SchedulePanel = () => {
   const [schedule, setSchedule] = useState<PlaylistItem[]>([]);
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
+  const removalTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const scheduleRep = nodecg.Replicant<PlaylistItem[]>("scheduleData");
@@ -95,6 +96,20 @@ const SchedulePanel = () => {
     ));
   };
 
+  // 对话框卸载后的下一帧再恢复焦点，避免键盘焦点落回已经关闭的 dialog。
+  const restoreRemovalFocus = () => {
+    requestAnimationFrame(() => {
+      const trigger = removalTriggerRef.current;
+      if (trigger?.isConnected) {
+        trigger.focus();
+        return;
+      }
+      document
+        .querySelector<HTMLButtonElement>(".schedule-add-item")
+        ?.focus();
+    });
+  };
+
   const localCount = schedule.filter((item) => item.sourceId === "local").length;
   const externalCount = schedule.length - localCount;
 
@@ -107,7 +122,7 @@ const SchedulePanel = () => {
         status={`${schedule.length} Items`}
         statusTone={schedule.length > 0 ? "success" : "neutral"}
         actions={
-          <Button tone="primary" onClick={addItem}>
+          <Button className="schedule-add-item" tone="primary" onClick={addItem}>
             <Plus size={15} aria-hidden="true" />
             Add Item
           </Button>
@@ -178,7 +193,10 @@ const SchedulePanel = () => {
                       tone="danger"
                       label="Delete schedule item"
                       icon={<Trash2 size={15} aria-hidden="true" />}
-                      onClick={() => setPendingRemovalId(item.id)}
+                      onClick={(event) => {
+                        removalTriggerRef.current = event.currentTarget;
+                        setPendingRemovalId(item.id);
+                      }}
                     />
                   ) : null}
                 </div>
@@ -192,12 +210,17 @@ const SchedulePanel = () => {
         title="Delete Schedule Item"
         message="This permanently removes the selected local schedule item."
         confirmLabel="Delete Item"
-        onCancel={() => setPendingRemovalId(null)}
+        onCancel={() => {
+          setPendingRemovalId(null);
+          restoreRemovalFocus();
+        }}
         onConfirm={() => {
           if (pendingRemovalId !== null) {
             removeItem(pendingRemovalId);
           }
+          removalTriggerRef.current = null;
           setPendingRemovalId(null);
+          restoreRemovalFocus();
         }}
       />
     </div>
