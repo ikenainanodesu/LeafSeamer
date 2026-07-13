@@ -1,28 +1,31 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type {
-  AtemSwitcherInfo,
-  DiscoveredSwitcher,
-} from "../types/atem.types";
+import { Trash2 } from "lucide-react";
+import type { AtemSwitcherInfo } from "../types/atem.types";
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  PanelErrorBoundary,
+  PanelHeader,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./atem-dashboard.css";
 
-// Declare NodeCG Types (global)
 declare const nodecg: any;
-declare const NodeCG: any;
 
 const AtemConnection = () => {
   const [ip, setIp] = useState("");
   const [switchers, setSwitchers] = useState<AtemSwitcherInfo[]>([]);
+  const [pendingRemovalIp, setPendingRemovalIp] = useState<string | null>(null);
 
   useEffect(() => {
-    // Replicant subscription
     const switchersRep = nodecg.Replicant("atem:switchers");
-
     const updateSwitchers = (newVal: AtemSwitcherInfo[]) => {
       if (newVal) setSwitchers(newVal);
     };
 
     switchersRep.on("change", updateSwitchers);
-
     return () => {
       switchersRep.removeListener("change", updateSwitchers);
     };
@@ -38,129 +41,104 @@ const AtemConnection = () => {
     nodecg.sendMessage("atem:disconnect", ipStr);
   };
 
-  return (
-    <div style={{ padding: "20px", fontFamily: "sans-serif" }}>
-      <h2>ATEM Switcher Connection</h2>
+  const hasConnectedSwitcher = switchers.some((item) => item.connected);
 
-      <div
-        style={{
-          marginBottom: "20px",
-          background: "#444",
-          padding: "15px",
-          borderRadius: "8px",
-        }}
-      >
-        <h3>Add Switcher by IP</h3>
-        <input
-          type="text"
-          value={ip}
-          onChange={(e) => setIp(e.target.value)}
-          placeholder="192.168.1.50"
-          style={{ padding: "8px", marginRight: "10px", width: "200px" }}
-        />
-        <button
-          onClick={handleConnect}
-          style={{
-            padding: "8px 16px",
-            background: "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
+  return (
+    <div className="atem-shell">
+      <PanelHeader
+        kicker="ATEM Control"
+        title="Switcher Connection"
+        target={`${switchers.length} configured`}
+        status={hasConnectedSwitcher ? "Connected" : "Disconnected"}
+        statusTone={hasConnectedSwitcher ? "success" : "warning"}
+      />
+
+      <main className="atem-content">
+        <form
+          className="atem-connection-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleConnect();
           }}
         >
-          Connect
-        </button>
-      </div>
+          <label className="leaf-field">
+            <span>Switcher IP Address</span>
+            <input
+              className="leaf-input"
+              type="text"
+              value={ip}
+              onChange={(event) => setIp(event.target.value)}
+              placeholder="192.168.1.50"
+            />
+          </label>
+          <Button tone="primary" type="submit">
+            Add Switcher
+          </Button>
+        </form>
 
-      {/* TODO: Discovery Dropdown (Simulated for now as feature request mentioned "if possible") */}
+        <div className="atem-switcher-list">
+          {switchers.map((switcher) => (
+            <article
+              className="atem-switcher-card"
+              data-connected={switcher.connected ? "true" : "false"}
+              key={switcher.ip}
+            >
+              <div className="atem-switcher-card-heading">
+                <div>
+                  <h2>{switcher.alias || switcher.ip}</h2>
+                  <div className="atem-switcher-ip">{switcher.ip}</div>
+                </div>
+                <IconButton
+                  tone="danger"
+                  label={`Remove switcher ${switcher.alias || switcher.ip}`}
+                  icon={<Trash2 size={15} aria-hidden="true" />}
+                  onClick={() => setPendingRemovalIp(switcher.ip)}
+                />
+              </div>
+              <div className="atem-switcher-actions">
+                <span
+                  className="leaf-status"
+                  data-tone={switcher.connected ? "success" : "warning"}
+                >
+                  {switcher.connected ? "Connected" : "Disconnected"}
+                </span>
+                {switcher.connected ? (
+                  <Button onClick={() => handleDisconnect(switcher.ip)}>
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button onClick={() => nodecg.sendMessage("atem:connect", switcher.ip)}>
+                    Connect
+                  </Button>
+                )}
+              </div>
+            </article>
+          ))}
+          {switchers.length === 0 ? (
+            <div className="atem-empty-state">No switchers configured.</div>
+          ) : null}
+        </div>
+      </main>
 
-      <div
-        style={{
-          display: "grid",
-          gap: "15px",
-          gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+      <ConfirmDialog
+        open={pendingRemovalIp !== null}
+        title="Remove Switcher"
+        message="This removes the selected switcher from this NodeCG instance."
+        confirmLabel="Remove Switcher"
+        onCancel={() => setPendingRemovalIp(null)}
+        onConfirm={() => {
+          if (pendingRemovalIp === null) return;
+          nodecg.sendMessage("atem:remove", pendingRemovalIp);
+          setPendingRemovalIp(null);
         }}
-      >
-        {switchers.map((switcher) => (
-          <div
-            key={switcher.ip}
-            style={{
-              background: "#333",
-              padding: "15px",
-              borderRadius: "8px",
-              borderLeft: switcher.connected
-                ? "5px solid #28a745"
-                : "5px solid #dc3545",
-            }}
-          >
-            <h4 style={{ margin: "0 0 10px 0" }}>
-              {switcher.alias || switcher.ip}
-            </h4>
-            <p style={{ margin: "0 0 10px 0", color: "#888" }}>
-              Status:{" "}
-              <span
-                style={{
-                  color: switcher.connected ? "#28a745" : "#dc3545",
-                  fontWeight: "bold",
-                }}
-              >
-                {switcher.connected ? "Connected" : "Disconnected"}
-              </span>
-            </p>
-            <div style={{ display: "flex", gap: "10px" }}>
-              {!switcher.connected && (
-                <button
-                  onClick={() =>
-                    nodecg.sendMessage("atem:connect", switcher.ip)
-                  }
-                  style={{
-                    padding: "5px 10px",
-                    background: "#28a745",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Connect
-                </button>
-              )}
-              {switcher.connected && (
-                <button
-                  onClick={() => handleDisconnect(switcher.ip)}
-                  style={{
-                    padding: "5px 10px",
-                    background: "#d39e00", // Yellowish/Orange for disconnect to warn
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Disconnect
-                </button>
-              )}
-              <button
-                onClick={() => nodecg.sendMessage("atem:remove", switcher.ip)}
-                style={{
-                  padding: "5px 10px",
-                  background: "#dc3545", // Red for delete
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      />
     </div>
   );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<AtemConnection />);
+root.render(
+  <PanelErrorBoundary>
+    <AtemConnection />
+  </PanelErrorBoundary>
+);

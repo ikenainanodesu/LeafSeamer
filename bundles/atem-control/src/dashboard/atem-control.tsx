@@ -1,24 +1,31 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Plus } from "lucide-react";
 import type { AtemSwitcherInfo } from "../types/atem.types";
 import AtemPanel from "./atem-panel";
+import {
+  IconButton,
+  PanelErrorBoundary,
+  PanelHeader,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./atem-dashboard.css";
 
 declare const nodecg: any;
 
 const AtemControl = () => {
   const [switchers, setSwitchers] = useState<AtemSwitcherInfo[]>([]);
-  // We track an array of unique IDs for the panels.
-  // Using Date.now() + index or just a counter for IDs.
   const [panelIds, setPanelIds] = useState<number[]>([Date.now()]);
 
-  // Track list of switchers
   useEffect(() => {
     const switchersRep = nodecg.Replicant("atem:switchers");
-    switchersRep.on("change", (newVal: AtemSwitcherInfo[]) => {
-      if (newVal) {
-        setSwitchers(newVal);
-      }
-    });
+    const updateSwitchers = (newVal: AtemSwitcherInfo[]) => {
+      if (newVal) setSwitchers(newVal);
+    };
+    switchersRep.on("change", updateSwitchers);
+    return () => {
+      switchersRep.removeListener("change", updateSwitchers);
+    };
   }, []);
 
   const addPage = () => {
@@ -29,44 +36,48 @@ const AtemControl = () => {
     setPanelIds((prev) => prev.filter((id) => id !== idToRemove));
   };
 
-  if (switchers.length === 0) {
-    return (
-      <div style={{ color: "white", padding: 20 }}>
-        No Active Connections. Please add a switcher in Connection panel.
-      </div>
-    );
-  }
+  const hasConnectedSwitcher = switchers.some((switcher) => switcher.connected);
 
   return (
-    <div style={{ padding: "20px", color: "white", fontFamily: "sans-serif" }}>
-      <div style={{ marginBottom: 20 }}>
-        <button
-          onClick={addPage}
-          style={{
-            padding: "10px 20px",
-            background: "#2e7d32",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "14px",
-          }}
-        >
-          + Add Page
-        </button>
-      </div>
+    <div className="atem-shell">
+      <PanelHeader
+        kicker="ATEM Control"
+        title="Switcher Console"
+        target={`${switchers.length} configured`}
+        status={hasConnectedSwitcher ? "Connected" : "Disconnected"}
+        statusTone={hasConnectedSwitcher ? "success" : "warning"}
+        actions={
+          <IconButton
+            tone="primary"
+            label="Add control page"
+            icon={<Plus size={15} aria-hidden="true" />}
+            onClick={addPage}
+          />
+        }
+      />
 
-      {panelIds.map((id) => (
-        <AtemPanel
-          key={id}
-          switchers={switchers}
-          onRemove={panelIds.length > 1 ? () => removePage(id) : undefined}
-        />
-      ))}
+      <main className="atem-content">
+        {switchers.length === 0 ? (
+          <div className="atem-empty-state">
+            No active switchers. Configure a connection first.
+          </div>
+        ) : (
+          panelIds.map((id) => (
+            <AtemPanel
+              key={id}
+              switchers={switchers}
+              onRemove={panelIds.length > 1 ? () => removePage(id) : undefined}
+            />
+          ))
+        )}
+      </main>
     </div>
   );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<AtemControl />);
+root.render(
+  <PanelErrorBoundary>
+    <AtemControl />
+  </PanelErrorBoundary>
+);
