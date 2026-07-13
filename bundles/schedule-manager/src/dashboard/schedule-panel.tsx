@@ -1,9 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Plus, Trash2 } from "lucide-react";
 import type { PlaylistItem } from "../types/schedule.types";
+import {
+  Button,
+  ConfirmDialog,
+  IconButton,
+  PanelErrorBoundary,
+  PanelHeader,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./schedule-dashboard.css";
 
 const SchedulePanel = () => {
   const [schedule, setSchedule] = useState<PlaylistItem[]>([]);
+  const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
 
   useEffect(() => {
     const scheduleRep = nodecg.Replicant<PlaylistItem[]>("scheduleData");
@@ -30,6 +41,10 @@ const SchedulePanel = () => {
   };
 
   const toggleActive = (index: number) => {
+    if (schedule[index]?.sourceId !== "local") {
+      return;
+    }
+
     const newSchedule = schedule.map((item, itemIndex) =>
       itemIndex === index ? { ...item, active: !item.active } : item
     );
@@ -41,6 +56,10 @@ const SchedulePanel = () => {
     field: "time" | "title" | "description",
     value: string
   ) => {
+    if (schedule[index]?.sourceId !== "local") {
+      return;
+    }
+
     persistLocalItems(schedule.map((item, itemIndex) =>
       itemIndex === index ? { ...item, [field]: value } : item
     ));
@@ -67,92 +86,127 @@ const SchedulePanel = () => {
   };
 
   const removeItem = (id: string) => {
+    if (schedule.find((item) => item.id === id)?.sourceId !== "local") {
+      return;
+    }
+
     persistLocalItems(schedule.filter(
       (item) => item.id !== id
     ));
   };
 
+  const localCount = schedule.filter((item) => item.sourceId === "local").length;
+  const externalCount = schedule.length - localCount;
+
   return (
-    <div style={{ padding: "10px" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
-        <h3 style={{ margin: 0 }}>Schedule Items</h3>
-        <button onClick={addItem}>Add Item</button>
-      </div>
+    <div className="schedule-shell leaf-panel">
+      <PanelHeader
+        kicker="Schedule Manager"
+        title="Schedule Items"
+        target={`${localCount} local · ${externalCount} external`}
+        status={`${schedule.length} Items`}
+        statusTone={schedule.length > 0 ? "success" : "neutral"}
+        actions={
+          <Button tone="primary" onClick={addItem}>
+            <Plus size={15} aria-hidden="true" />
+            Add Item
+          </Button>
+        }
+      />
       {schedule.length === 0 ? (
-        <div style={{ color: "#888" }}>No schedule items yet.</div>
+        <div className="schedule-empty">No schedule items yet.</div>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {schedule.map((item, index) => (
-            <li
-              key={item.id}
-              style={{
-                marginBottom: "10px",
-                padding: "10px",
-                backgroundColor: item.active ? "#388e3c" : "#424242",
-                borderRadius: "4px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "90px 1fr",
-                  gap: 6,
-                  flex: 1,
-                }}
+        <ul className="schedule-list">
+          {schedule.map((item, index) => {
+            const isLocal = item.sourceId === "local";
+
+            return (
+              <li
+                key={item.id}
+                className="schedule-item"
+                data-active={item.active}
+                data-source={isLocal ? "local" : "external"}
               >
-                <input
-                  aria-label="Time"
-                  value={item.time}
-                  placeholder="Time"
-                  disabled={item.sourceId !== "local"}
-                  onChange={(event) =>
-                    updateItem(index, "time", event.target.value)
-                  }
-                />
-                <input
-                  aria-label="Title"
-                  value={item.title}
-                  placeholder="Title"
-                  disabled={item.sourceId !== "local"}
-                  onChange={(event) =>
-                    updateItem(index, "title", event.target.value)
-                  }
-                />
-                <input
-                  aria-label="Description"
-                  value={item.description}
-                  placeholder="Description"
-                  disabled={item.sourceId !== "local"}
-                  onChange={(event) =>
-                    updateItem(index, "description", event.target.value)
-                  }
-                  style={{ gridColumn: "1 / -1" }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => toggleActive(index)} disabled={item.sourceId !== "local"}>
-                  {item.active ? "Active" : "Inactive"}
-                </button>
-                <button onClick={() => removeItem(item.id)} disabled={item.sourceId !== "local"}>Delete</button>
-              </div>
-            </li>
-          ))}
+                <div className="schedule-fields">
+                  <input
+                    className="leaf-input"
+                    aria-label="Time"
+                    value={item.time}
+                    placeholder="Time"
+                    disabled={!isLocal}
+                    onChange={(event) =>
+                      updateItem(index, "time", event.target.value)
+                    }
+                  />
+                  <input
+                    className="leaf-input"
+                    aria-label="Title"
+                    value={item.title}
+                    placeholder="Title"
+                    disabled={!isLocal}
+                    onChange={(event) =>
+                      updateItem(index, "title", event.target.value)
+                    }
+                  />
+                  <input
+                    className="leaf-input schedule-description"
+                    aria-label="Description"
+                    value={item.description}
+                    placeholder="Description"
+                    disabled={!isLocal}
+                    onChange={(event) =>
+                      updateItem(index, "description", event.target.value)
+                    }
+                  />
+                  <div className="schedule-meta">
+                    <span>Source: {item.sourceId}</span>
+                    <span>State: {item.state}</span>
+                  </div>
+                </div>
+                <div className="schedule-actions">
+                  <label className="schedule-active-control">
+                    <input
+                      type="checkbox"
+                      checked={item.active}
+                      disabled={!isLocal}
+                      onChange={() => toggleActive(index)}
+                    />
+                    <span>Active</span>
+                  </label>
+                  {isLocal ? (
+                    <IconButton
+                      tone="danger"
+                      label="Delete schedule item"
+                      icon={<Trash2 size={15} aria-hidden="true" />}
+                      onClick={() => setPendingRemovalId(item.id)}
+                    />
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
+      <ConfirmDialog
+        open={pendingRemovalId !== null}
+        title="Delete Schedule Item"
+        message="This permanently removes the selected local schedule item."
+        confirmLabel="Delete Item"
+        onCancel={() => setPendingRemovalId(null)}
+        onConfirm={() => {
+          if (pendingRemovalId !== null) {
+            removeItem(pendingRemovalId);
+          }
+          setPendingRemovalId(null);
+        }}
+      />
     </div>
   );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<SchedulePanel />);
+root.render(
+  <PanelErrorBoundary>
+    <SchedulePanel />
+  </PanelErrorBoundary>
+);
