@@ -13,6 +13,7 @@ This manual details how to use each function module of LeafSeamer.
 7. [Schedule Manager](#schedule-manager)
 8. [Logger System](#logger-system)
 9. [Backup System](#backup-system)
+10. [Dashboard UI Development and Acceptance](#dashboard-ui-development-and-acceptance)
 
 ---
 
@@ -34,6 +35,22 @@ The Dashboard is organized into multiple workspaces by function, click the top t
 ### Panel Layout
 
 Each workspace contains multiple Panels, which can be dragged and arranged freely in the Dashboard.
+
+### Dashboard UI Development and Acceptance
+
+The [UI Design Guidelines](../../docs/UI_DESIGN_GUIDELINES.md) define the approved workflow for the 12 non-Graphics Dashboard pages. Visible LeafSeamer Dashboard text is English.
+
+`shared/dashboard-ui/` is the authoritative UI source. Every managed Dashboard bundle commits a versioned local `src/dashboard/_leaf-ui/` snapshot. Do not edit snapshots manually; update the authority source and then run:
+
+```powershell
+npm run ui:sync
+npm run ui:check
+npm run test:ui
+```
+
+`npm run test:ui` accepts 36 Windows Chromium visual baselines and four interaction workflows at 320, 480, and 768px. Use `npm run test:ui:update` only to deliberately refresh reviewed baselines.
+
+Each bundle must remain installable and buildable after its source is copied independently. At runtime, a Dashboard may import only its own `_leaf-ui` snapshot; imports from the authority source or another bundle are prohibited. Bundle-local `_leaf-core` snapshots provide the corresponding shared-core source independence. Graphics is explicitly outside this UI unification.
 
 ---
 

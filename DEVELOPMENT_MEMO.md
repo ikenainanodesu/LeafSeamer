@@ -651,3 +651,54 @@ decisions, or release-readiness status changes.
 - `npm.cmd run build --workspace mixer-control`：通过；仅输出既有 Vite `build.outDir` 与 root 父子目录关系警告。
 - `npm.cmd run build --workspace obs-control`：通过；仅输出既有 Vite `build.outDir` 与 root 父子目录关系警告。
 - `git diff --check`：通过。
+
+## 2026-07-13 Dashboard UI 统一文档与最终验收说明
+
+### 需求变化
+
+- README 与英、中、日三语用户手册统一记录非 Graphics Dashboard 的 UI 开发、同步与验收流程，并链接 `docs/UI_DESIGN_GUIDELINES.md`。
+- 文档明确 `shared/dashboard-ui/` 是权威源，8 个受管 Dashboard bundle 使用本地 `_leaf-ui` 快照；Dashboard 运行时禁止跨 bundle 或直接导入权威源。
+- 可见 Dashboard UI 文案统一使用英文；Graphics 明确不属于本轮 UI 统一范围。
+
+### 代码变动
+
+- 更新 UI 设计规范的源码独立性状态：17 个 bundle 已使用版本化 `_leaf-core` 快照，`core:check` 防止漂移，CI 已具备 17 bundle 临时目录隔离安装与构建能力。
+- 补充 Playwright 验收说明：12 个非 Graphics Dashboard 在 320、480、768px 下有 36 张 Windows Chromium 视觉基线，并保留 4 个关键交互流程。
+- 补充 ConfirmDialog 的可访问性合同：`aria-labelledby` 绑定标题，`aria-describedby` 绑定说明正文。
+- `.gitignore` 继续忽略 `playwright-report/` 与 `test-results/`，并明确 UI 规范、本地 `_leaf-ui` 快照和 Playwright snapshot PNG 受版本控制。
+
+### 功能增减
+
+- 新增统一的 UI 同步、漂移检查和视觉验收文档入口；有意刷新视觉基线使用 `npm run test:ui:update`。
+- 未增加或移除业务功能，消息名、payload 与 Replicant schema 未因 UI 改造改变。
+
+### 功能实现路径
+
+- 开发者在 `shared/dashboard-ui/` 修改权威 UI 源，执行 `npm run ui:sync` 写入并提交各 bundle 本地 `_leaf-ui` 快照，再用 `npm run ui:check` 检查漂移。
+- Bundle 单独复制后依赖自身源码、`_leaf-ui` 和 `_leaf-core` 快照安装构建；CI 对 17 个 bundle 的临时目录隔离构建路径进行验证。
+- 页面改动在 320、480、768px 检查无页面级溢出、焦点可见和运行时错误，随后由 `npm run test:ui` 比对 36 张视觉基线及 4 个交互流程。
+- 本轮文档任务不执行 8 个核心 bundle 的最终隔离构建；该验收由主代理最终验证执行。
+
+### 已知 Bug
+
+- 真实 NodeCG、认证 socket 与 ATEM、Mixer、OBS、VB Matrix 等硬件尚未接入本轮验收环境，现有 UI 交互测试使用 stub，不能替代端到端设备验证。
+- Playwright snapshot 基线限定 Windows Chromium；在其他浏览器或平台刷新 PNG 会引入非产品差异，当前仅记录该平台约束。
+- `npm audit` 仍报告 11 个 moderate 漏洞；本轮仅记录，不擅自执行 `npm audit fix` 或破坏性升级。
+
+### 预期解决方法
+
+- 在具备真实 NodeCG、认证会话、目标硬件和可回滚窗口后，执行真实 socket 与设备端到端验收。
+- 在 Windows Chromium CI 环境维护和审阅视觉基线；跨平台差异另建兼容性任务评估。
+- 跟踪上游依赖修复，在独立升级分支评估兼容性后处理 11 个 moderate 漏洞。
+
+### 已解决 Bug 以及解决方法
+
+- 解决 UI 规范仍将源码级独立性描述为未成立的问题：文档改为记录已完成的 `_leaf-core` 快照、`core:check` 漂移检查和 17 bundle CI 隔离构建能力。
+- 解决 ConfirmDialog 缺少稳定可访问名称与描述约束的问题：规范要求以 `aria-labelledby` 和 `aria-describedby` 分别绑定唯一的标题与说明节点。
+- 解决 UI 快照、视觉基线和 Playwright 运行产物的版本控制边界不清的问题：保留运行产物忽略规则，同时明确受管快照和 PNG 基线不忽略。
+
+### 阶段验证
+
+- 静态/业务测试：80/80。
+- Playwright：40/40，其中 36 个视觉基线与 4 个交互测试。
+- 覆盖范围：12 个非 Graphics Dashboard；8 个受管共享 UI 快照；17 bundle 源码独立构建 CI。

@@ -12,6 +12,22 @@ LeafSeamer is a modern broadcast production control system providing centralized
 
 All dashboard and graphic UI text is maintained in English.
 
+## Dashboard UI Development and Acceptance
+
+The approved Dashboard UI rules are maintained in [UI Design Guidelines](docs/UI_DESIGN_GUIDELINES.md). They apply to the 12 non-Graphics Dashboard pages. Visible LeafSeamer Dashboard text is English.
+
+`shared/dashboard-ui/` is the authoritative UI source. Each managed Dashboard bundle commits its own versioned `src/dashboard/_leaf-ui/` snapshot; do not edit a snapshot by hand. Update the authority source, then synchronize and check the snapshots with:
+
+```powershell
+npm run ui:sync
+npm run ui:check
+npm run test:ui
+```
+
+`npm run test:ui` accepts the 36 Windows Chromium visual baselines and four interaction workflows at 320, 480, and 768px. Run `npm run test:ui:update` only when an intentional visual change has been reviewed and its baselines must be refreshed.
+
+Every bundle must still install and build after its source is copied independently. A Dashboard may import only its own `_leaf-ui` snapshot at runtime: importing the authority source or another bundle's UI is prohibited. Bundle-local `_leaf-core` snapshots provide the same source-level independence for shared core code. Graphics is explicitly excluded from this UI unification.
+
 ## Core Features
 
 ### 🎛️ Card-Based Scene Control (Seamer)

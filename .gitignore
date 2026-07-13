@@ -10,6 +10,7 @@ bundles/*/node_modules/
 dist/
 dist-ssr/
 coverage/
+# Playwright 运行产物；tests/ui/**/*-snapshots/ 内的视觉基线 PNG 明确保留在 Git。
 playwright-report/
 test-results/
 *.tsbuildinfo
@@ -19,6 +20,11 @@ bundles/*/graphics/
 bundles/*/shared/
 bundles/*/extension/index.js
 bundles/*/extension/index.js.map
+
+# Dashboard UI 权威规范、bundle 本地 _leaf-ui 快照和 Playwright snapshots 是受管源码，明确不忽略。
+# docs/UI_DESIGN_GUIDELINES.md
+# bundles/*/src/dashboard/_leaf-ui/**
+# tests/ui/**/*-snapshots/**
 
 # NodeCG runtime data
 db/

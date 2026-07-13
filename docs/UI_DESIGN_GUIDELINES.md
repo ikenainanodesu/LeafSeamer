@@ -2,7 +2,7 @@
 
 - 规范版本：1.0.0
 - 更新日期：2026-07-13
-- 状态：已批准，等待实施
+- 状态：已批准，已实施并持续验收
 - 适用范围：所有非 Graphics NodeCG Dashboard
 - 界面语言：英文
 
@@ -136,6 +136,7 @@
 - CUT/AUTO、Scene 切换、Patch、Mute 等直播高频操作不增加确认步骤。
 - Toast 用于临时命令结果；连接中断、认证失败和 Secret 缺失使用持续状态区。
 - 对话框打开时移动焦点，关闭后把焦点返回触发控件。
+- `ConfirmDialog` 必须以唯一 ID 将 `aria-labelledby` 指向标题、将 `aria-describedby` 指向说明正文；标题和说明都不得省略，以保证可访问名称和描述稳定可测。
 
 ### 6.8 Error Boundary
 
@@ -180,6 +181,13 @@
 - 状态变化使用合适的 `aria-live`。
 - 禁用、pending 和错误状态不能只靠颜色表达。
 
+### 9.4 Playwright 视觉与交互验收
+
+- 视觉验收覆盖 12 个非 Graphics Dashboard 页面：ATEM Connection/Control、Mixer Connection/Panel、OBS Connection/Control、VB Network/Control、Logger、Schedule、Seamer 和 Backup。
+- 每个页面在 Windows Chromium 的 320、480、768px 内容宽度下保存并比对基线，共 36 张视觉基线；Windows Chromium 是基线平台，其他平台不得无意刷新这些 PNG。
+- 另保留 4 个关键交互流程：Schedule 外部条目只读、Schedule 删除后的焦点恢复、Seamer tabs/card/trigger 合同、Backup L3 pending/error/success；各流程都检查无运行时错误。
+- 新增或修改页面时，先运行 `npm run ui:check`，再运行 `npm run test:ui`。只有经过评审的有意视觉变化需要更新基线时，才运行 `npm run test:ui:update`。
+
 ## 10. Bundle 独立性规则
 
 ### 10.1 权威源与快照
@@ -204,9 +212,9 @@
 
 ### 10.4 当前独立性前置条件
 
-截至 2026-07-13，部分 bundle 源码仍直接导入仓库根目录的 `shared/security` 或 `shared/integration`。因此“构建产物可独立运行”已经成立，但“单独复制 bundle 源码后可安装并构建”尚未成立。UI 快照不得掩盖这项差异。
+截至 2026-07-13，源码独立性前置任务已经完成。17 个 bundle 使用版本化的本地 `src/_leaf-core/` 快照；`npm run core:check` 防止快照与 `shared/integration`、`shared/security` 权威源发生漂移。
 
-在宣称源码级独立之前，必须先执行 `docs/superpowers/plans/2026-07-13-bundle-source-independence-prerequisite.md`，把所需共享核心源码同步为各 bundle 的本地版本化快照，并通过真正的临时目录隔离构建验证。
+CI 已对 17 个 bundle 使用临时目录进行隔离安装与构建，验证复制 bundle 源码后的构建路径。开发者仍必须保留本节的同步、漂移检查与禁止跨 bundle 运行时导入约束；UI 快照和 core 快照都不得手工修改。
 
 ## 11. 新面板检查清单
 
@@ -222,6 +230,7 @@
 - [ ] 键盘焦点可见，状态不只依赖颜色。
 - [ ] 消息名、payload 和 Replicant schema 没有因 UI 改造改变。
 - [ ] 单独复制 bundle 后可以安装、构建和运行。
+- [ ] 已执行 `npm run ui:check`、`npm run test:ui`；有意刷新视觉基线时才执行 `npm run test:ui:update`。
 
 ## 12. 规范变更流程
 

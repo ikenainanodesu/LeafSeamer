@@ -13,6 +13,7 @@
 7. [Schedule Manager - 日程管理](#schedule-manager---日程管理)
 8. [Logger System - 日志系统](#logger-system---日志系统)
 9. [Backup System - 备份系统](#backup-system---备份系统)
+10. [Dashboard UI 开发与验收](#dashboard-ui-开发与验收)
 
 ---
 
@@ -34,6 +35,22 @@ Dashboard 按功能组织为多个工作区，点击顶部标签可切换：
 ### 面板布局
 
 每个工作区包含多个面板（Panel），面板可以在 Dashboard 中自由拖动和排列。
+
+### Dashboard UI 开发与验收
+
+[UI 设计规范](../../docs/UI_DESIGN_GUIDELINES.md) 定义了 12 个非 Graphics Dashboard 页面的批准流程。LeafSeamer Dashboard 的可见文案统一使用英文。
+
+`shared/dashboard-ui/` 是 UI 权威源。每个受管 Dashboard bundle 都提交版本化的本地 `src/dashboard/_leaf-ui/` 快照。不得手工修改快照；修改权威源后执行：
+
+```powershell
+npm run ui:sync
+npm run ui:check
+npm run test:ui
+```
+
+`npm run test:ui` 在 320、480、768px 下验收 36 张 Windows Chromium 视觉基线和 4 个交互流程。只有经过评审的有意视觉变更需要刷新基线时，才使用 `npm run test:ui:update`。
+
+每个 bundle 的源码单独复制后仍必须能够安装和构建。运行时 Dashboard 只能导入本 bundle 的 `_leaf-ui` 快照，禁止从权威源或其他 bundle 导入 UI。bundle 本地 `_leaf-core` 快照提供对应的共享核心源码独立性。Graphics 明确不纳入本次 UI 统一。
 
 ---
 
