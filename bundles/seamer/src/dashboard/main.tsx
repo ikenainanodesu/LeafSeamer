@@ -1,12 +1,16 @@
 import React from "react";
-import ReactDOM from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import App from "./App";
+import { PanelErrorBoundary } from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+import "./seamer-dashboard.css";
 
-const root = ReactDOM.createRoot(
-  document.getElementById("root") as HTMLElement
-);
+const root = createRoot(document.getElementById("root") as HTMLElement);
+
 root.render(
   <React.StrictMode>
-    <App />
+    <PanelErrorBoundary>
+      <App />
+    </PanelErrorBoundary>
   </React.StrictMode>
 );

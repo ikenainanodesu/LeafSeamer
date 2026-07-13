@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { Button, ConfirmDialog, IconButton } from "../_leaf-ui/components";
 import type {
   AnySeamerTrigger,
   AtemSwitcherInfo,
@@ -94,6 +96,9 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
   const [currentTrigger, setCurrentTrigger] = useState<AnySeamerTrigger | null>(
     null
   );
+  const [pendingTriggerId, setPendingTriggerId] = useState<string | null>(null);
+  const triggerDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const addTriggerRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     const replicant = nodecg.Replicant<AnySeamerTrigger[]>("seamerTriggers");
@@ -116,7 +121,6 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
   };
 
   const deleteTrigger = (id: string) => {
-    if (!confirm("Delete this trigger?")) return;
     const replicant = nodecg.Replicant<AnySeamerTrigger[]>("seamerTriggers");
     replicant.value = (replicant.value || []).filter(
       (item: AnySeamerTrigger) => item.id !== id
@@ -128,29 +132,78 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
     setCurrentTrigger(createDynamicDraft(integrations) ?? createLegacyDraft());
   };
 
+  const restoreTriggerDeleteFocus = useCallback(() => {
+    requestAnimationFrame(() => {
+      const trigger = triggerDeleteTriggerRef.current;
+      if (trigger?.isConnected) {
+        trigger.focus();
+        return;
+      }
+      addTriggerRef.current
+        ?.querySelector<HTMLButtonElement>("button")
+        ?.focus();
+    });
+  }, []);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={addTrigger}>Add Trigger</button>
+    <div className="seamer-trigger-page">
+      <div className="seamer-trigger-toolbar">
+        <span ref={addTriggerRef}>
+          <Button tone="primary" onClick={addTrigger}>
+            <Plus size={16} aria-hidden="true" />
+            Add Trigger
+          </Button>
+        </span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 20 }}>
+      <main className="seamer-trigger-grid">
         {triggers.map((trigger) => (
-          <div key={trigger.id} style={{ background: "#222", padding: 15, borderRadius: 6, border: "1px solid #333" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <h3 style={{ margin: 0 }}>{trigger.name || "Trigger"}</h3>
-              <div style={{ display: "flex", gap: 10 }}>
-                <label><input type="checkbox" checked={trigger.enabled} onChange={() => saveTrigger({ ...trigger, enabled: !trigger.enabled })} /> Active</label>
-                <button onClick={() => setCurrentTrigger(trigger)}>Edit</button>
-                <button onClick={() => deleteTrigger(trigger.id)}>Delete</button>
+          <article className="seamer-trigger" key={trigger.id}>
+            <header className="seamer-trigger-header">
+              <div className="seamer-trigger-title-row">
+                <h2 title={trigger.name || "Trigger"}>
+                  {trigger.name || "Trigger"}
+                </h2>
+                <label className="seamer-toggle">
+                  <input
+                    type="checkbox"
+                    checked={trigger.enabled}
+                    onChange={() =>
+                      saveTrigger({ ...trigger, enabled: !trigger.enabled })
+                    }
+                  />
+                  Enabled
+                </label>
               </div>
+              <div className="seamer-trigger-actions">
+                <IconButton
+                  label="Edit trigger"
+                  icon={<Pencil size={16} aria-hidden="true" />}
+                  onClick={() => setCurrentTrigger(trigger)}
+                />
+                <IconButton
+                  label="Delete trigger"
+                  tone="danger"
+                  icon={<Trash2 size={16} aria-hidden="true" />}
+                  onClick={(event) => {
+                    triggerDeleteTriggerRef.current = event.currentTarget;
+                    setPendingTriggerId(trigger.id);
+                  }}
+                />
+              </div>
+            </header>
+            <div className="seamer-trigger-body">
+              <div className="seamer-trigger-detail">
+                <strong>If:</strong> {formatCondition(trigger)}
+              </div>
+              <div className="seamer-trigger-detail">
+                <strong>Then:</strong> {formatAction(trigger)}
+              </div>
+              <div className="seamer-trigger-detail">Delay: {trigger.delay}ms</div>
             </div>
-            <div><strong>If:</strong> {formatCondition(trigger)}</div>
-            <div><strong>Then:</strong> {formatAction(trigger)}</div>
-            <div style={{ color: "#888" }}>Delay: {trigger.delay}ms</div>
-          </div>
+          </article>
         ))}
-      </div>
+      </main>
 
       {currentTrigger && isDynamicSeamerTrigger(currentTrigger) ? (
         <DynamicTriggerModal
@@ -172,6 +225,30 @@ const TriggerPage: React.FC<TriggerPageProps> = ({
           integrations={integrations}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={pendingTriggerId !== null}
+        title="Delete trigger"
+        message="This trigger will be removed."
+        confirmLabel="Delete"
+        onCancel={() => {
+          setPendingTriggerId(null);
+          restoreTriggerDeleteFocus();
+        }}
+        onConfirm={() => {
+          const triggerId = pendingTriggerId;
+          triggerDeleteTriggerRef.current = null;
+          setPendingTriggerId(null);
+          if (triggerId !== null) {
+            deleteTrigger(triggerId);
+          }
+          requestAnimationFrame(() =>
+            addTriggerRef.current
+              ?.querySelector<HTMLButtonElement>("button")
+              ?.focus()
+          );
+        }}
+      />
     </div>
   );
 };

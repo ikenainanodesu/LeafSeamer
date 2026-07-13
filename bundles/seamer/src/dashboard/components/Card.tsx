@@ -1,16 +1,18 @@
 import React from "react";
+import { Download, Pencil, Play, Trash2 } from "lucide-react";
+import { Button, IconButton } from "../_leaf-ui/components";
 import { SeamerCard } from "../../types/seamer.types";
 
 interface CardProps {
   card: SeamerCard;
   onRun: () => void;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const Card: React.FC<CardProps> = ({ card, onRun, onEdit, onDelete }) => {
-  const downloadJson = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const downloadJson = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     const dataStr =
       "data:text/json;charset=utf-8," +
       encodeURIComponent(JSON.stringify(card, null, 2));
@@ -26,106 +28,42 @@ const Card: React.FC<CardProps> = ({ card, onRun, onEdit, onDelete }) => {
   };
 
   return (
-    <div
-      style={{
-        backgroundColor: "#333",
-        borderRadius: 8,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        height: 200,
-        boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
-        position: "relative",
-        transition: "transform 0.1s",
-        border: "1px solid #444",
-      }}
-      className="seamer-card"
-    >
-      <div
-        style={{
-          padding: 10,
-          backgroundColor: "#444",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: "1em",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {card.title}
-        </h3>
-        <div>
-          <button
+    <article className="seamer-card">
+      <header className="seamer-card-header">
+        <h2 title={card.title}>{card.title}</h2>
+        <div className="seamer-card-actions">
+          <IconButton
+            label="Export JSON"
+            icon={<Download size={16} aria-hidden="true" />}
             onClick={downloadJson}
-            title="Export JSON"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#aaa",
-            }}
-          >
-            💾
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
+          />
+          <IconButton
+            label="Edit card"
+            icon={<Pencil size={16} aria-hidden="true" />}
+            onClick={(event) => {
+              event.stopPropagation();
               onEdit();
             }}
-            title="Edit"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#aaa",
+          />
+          <IconButton
+            label="Delete card"
+            tone="danger"
+            icon={<Trash2 size={16} aria-hidden="true" />}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(event);
             }}
-          >
-            ✏️
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            title="Delete"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#f66",
-            }}
-          >
-            ✕
-          </button>
+          />
         </div>
+      </header>
+      <div className="seamer-card-body">
+        <span className="seamer-card-count">{card.actions.length} Actions</span>
+        <Button tone="primary" className="seamer-run-button" onClick={onRun}>
+          <Play size={16} aria-hidden="true" />
+          Run
+        </Button>
       </div>
-
-      <div
-        style={{
-          flex: 1,
-          padding: 15,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          background: "#2a2a2a",
-        }}
-        onClick={onRun}
-      >
-        <span style={{ fontSize: "3em", color: "#666" }}>▶</span>
-        <span style={{ marginTop: 10, color: "#888", fontSize: "0.8em" }}>
-          {card.actions.length} Actions
-        </span>
-      </div>
-    </div>
+    </article>
   );
 };
 

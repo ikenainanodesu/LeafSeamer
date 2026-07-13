@@ -4,6 +4,7 @@ import type {
   DynamicSeamerTrigger,
   SeamerIntegrations,
 } from "../../types/seamer.types";
+import { EditorDialogFrame } from "../components/EditorDialogFrame";
 import CapabilityFields, {
   createDefaultParameters,
 } from "./CapabilityFields";
@@ -57,8 +58,8 @@ const DynamicTriggerModal: React.FC<DynamicTriggerModalProps> = ({
       kind === "condition" ? conditionDefinition : actionDefinition;
 
     return (
-      <div style={{ display: "grid", gap: 10 }}>
-        <label style={{ display: "grid", gap: 5 }}>
+      <div className="seamer-fields-grid">
+        <label className="seamer-field">
           <span>{kind === "condition" ? "Condition source" : "Action target"}</span>
           <select
             value={current.integrationId}
@@ -85,7 +86,7 @@ const DynamicTriggerModal: React.FC<DynamicTriggerModalProps> = ({
               ))}
           </select>
         </label>
-        <label style={{ display: "grid", gap: 5 }}>
+        <label className="seamer-field">
           <span>{kind === "condition" ? "Trigger" : "Action"}</span>
           <select
             value={current.capabilityId}
@@ -104,16 +105,18 @@ const DynamicTriggerModal: React.FC<DynamicTriggerModalProps> = ({
           </select>
         </label>
         {definition ? (
-          <CapabilityFields
-            schema={definition.parameters}
-            values={current.parameters}
-            onChange={(parameters) =>
-              setTrigger((existing) => ({
-                ...existing,
-                [kind]: { ...existing[kind], parameters },
-              }))
-            }
-          />
+          <div className="seamer-fields-grid">
+            <CapabilityFields
+              schema={definition.parameters}
+              values={current.parameters}
+              onChange={(parameters) =>
+                setTrigger((existing) => ({
+                  ...existing,
+                  [kind]: { ...existing[kind], parameters },
+                }))
+              }
+            />
+          </div>
         ) : (
           <p>This capability is unavailable. Install its adapter to edit it.</p>
         )}
@@ -122,31 +125,52 @@ const DynamicTriggerModal: React.FC<DynamicTriggerModalProps> = ({
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-      <div style={{ width: 620, maxHeight: "90vh", overflowY: "auto", background: "#333", padding: 20, borderRadius: 6 }}>
-        <h2>Edit Trigger</h2>
-        <label style={{ display: "grid", gap: 5, marginBottom: 15 }}>
-          <span>Name</span>
-          <input value={trigger.name ?? ""} onChange={(event) => setTrigger({ ...trigger, name: event.target.value })} />
+    <EditorDialogFrame
+      title="Edit Trigger"
+      onCancel={onCancel}
+      onSave={() => onSave(trigger)}
+      saveDisabled={!conditionDefinition || !actionDefinition}
+    >
+      <label className="seamer-field">
+        <span>Name</span>
+        <input
+          value={trigger.name ?? ""}
+          onChange={(event) =>
+            setTrigger({ ...trigger, name: event.target.value })
+          }
+        />
+      </label>
+      <section className="seamer-editor-section">
+        <h3>When</h3>
+        {renderCapabilitySelector("condition")}
+      </section>
+      <section className="seamer-editor-section">
+        <h3>Then</h3>
+        {renderCapabilitySelector("action")}
+      </section>
+      <div className="seamer-inline-controls">
+        <label className="seamer-field">
+          <span>Delay (ms)</span>
+          <input
+            type="number"
+            value={trigger.delay}
+            onChange={(event) =>
+              setTrigger({ ...trigger, delay: Number(event.target.value) })
+            }
+          />
         </label>
-        <section style={{ border: "1px solid #555", padding: 12, marginBottom: 15 }}>
-          <h3>When</h3>
-          {renderCapabilitySelector("condition")}
-        </section>
-        <section style={{ border: "1px solid #555", padding: 12, marginBottom: 15 }}>
-          <h3>Then</h3>
-          {renderCapabilitySelector("action")}
-        </section>
-        <div style={{ display: "flex", gap: 16, marginBottom: 15 }}>
-          <label>Delay (ms) <input type="number" value={trigger.delay} onChange={(event) => setTrigger({ ...trigger, delay: Number(event.target.value) })} /></label>
-          <label><input type="checkbox" checked={trigger.enabled} onChange={(event) => setTrigger({ ...trigger, enabled: event.target.checked })} /> Enabled</label>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button onClick={onCancel}>Cancel</button>
-          <button onClick={() => onSave(trigger)} disabled={!conditionDefinition || !actionDefinition}>Save</button>
-        </div>
+        <label className="seamer-toggle">
+          <input
+            type="checkbox"
+            checked={trigger.enabled}
+            onChange={(event) =>
+              setTrigger({ ...trigger, enabled: event.target.checked })
+            }
+          />
+          Enabled
+        </label>
       </div>
-    </div>
+    </EditorDialogFrame>
   );
 };
 

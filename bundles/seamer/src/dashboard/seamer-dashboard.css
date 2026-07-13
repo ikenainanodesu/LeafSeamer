@@ -1,0 +1,252 @@
+.seamer-app {
+  min-width: 0;
+  min-height: 100vh;
+  background: var(--leaf-bg);
+  color: var(--leaf-text);
+}
+
+.seamer-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--leaf-border);
+  background: var(--leaf-surface);
+}
+
+.seamer-tab {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--leaf-text-muted);
+  cursor: pointer;
+}
+
+.seamer-tab[aria-selected="true"] {
+  border-color: var(--leaf-command);
+  color: var(--leaf-command);
+}
+
+.seamer-card-grid,
+.seamer-trigger-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  padding: 8px;
+}
+
+.seamer-card,
+.seamer-trigger,
+.seamer-editor-section {
+  min-width: 0;
+  border: 1px solid var(--leaf-border);
+  border-radius: 4px;
+  background: var(--leaf-surface);
+}
+
+.seamer-card {
+  display: grid;
+  min-height: 156px;
+  grid-template-rows: auto 1fr;
+}
+
+.seamer-card-header,
+.seamer-trigger-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--leaf-border);
+  background: var(--leaf-surface-raised);
+}
+
+.seamer-card-header h2,
+.seamer-trigger-header h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seamer-card-body,
+.seamer-trigger-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.seamer-card-actions,
+.seamer-trigger-actions,
+.seamer-inline-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.seamer-card-count,
+.seamer-trigger-detail {
+  overflow-wrap: anywhere;
+  color: var(--leaf-text-muted);
+  font-size: 12px;
+}
+
+.seamer-run-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.seamer-empty-state {
+  display: grid;
+  min-height: 156px;
+  place-items: center;
+  padding: 16px;
+  border: 1px dashed var(--leaf-border);
+  border-radius: 4px;
+  color: var(--leaf-text-muted);
+  text-align: center;
+}
+
+.seamer-trigger-page {
+  min-width: 0;
+}
+
+.seamer-trigger-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+}
+
+.seamer-trigger-title-row {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+.seamer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--leaf-text-muted);
+  font-size: 12px;
+}
+
+.seamer-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgb(0 0 0 / 68%);
+}
+
+.seamer-modal {
+  display: grid;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 24px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid var(--leaf-border);
+  border-radius: 4px;
+  background: var(--leaf-surface);
+}
+
+.seamer-modal-header,
+.seamer-modal-actions {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--leaf-border);
+}
+
+.seamer-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.seamer-modal-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--leaf-border);
+  border-bottom: 0;
+}
+
+.seamer-modal-body {
+  min-width: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.seamer-modal-body input,
+.seamer-modal-body select {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.seamer-editor-section {
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.seamer-editor-section h3,
+.seamer-editor-section h4 {
+  margin-top: 0;
+}
+
+.seamer-condition-action-grid,
+.seamer-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.seamer-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--leaf-text-muted);
+  font-size: 12px;
+}
+
+.seamer-field input,
+.seamer-field select {
+  width: 100%;
+}
+
+.seamer-action-row {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--leaf-border);
+  background: var(--leaf-surface-deep);
+}
+
+@media (max-width: 479px) {
+  .seamer-card-grid,
+  .seamer-trigger-grid,
+  .seamer-condition-action-grid,
+  .seamer-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .seamer-card-header,
+  .seamer-trigger-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .seamer-trigger-toolbar .leaf-button,
+  .seamer-tabs,
+  .seamer-tabs .seamer-tab {
+    width: 100%;
+  }
+}

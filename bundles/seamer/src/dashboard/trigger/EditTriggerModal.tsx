@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   SeamerTrigger,
   TriggerCondition,
@@ -11,6 +11,7 @@ import {
   OBSState,
   SeamerIntegrations,
 } from "../../types/seamer.types";
+import { EditorDialogFrame } from "../components/EditorDialogFrame";
 
 interface EditTriggerModalProps {
   initialTrigger: SeamerTrigger;
@@ -45,7 +46,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
     initialTrigger.action
   );
 
-  // Helper for rendering Module Select
+  // 渲染模块选择器。
   const renderModuleSelect = (
     value: TriggerModule,
     onChange: (m: TriggerModule) => void,
@@ -74,9 +75,9 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
     </div>
   );
 
-  // --- Condition Form ---
+  // 条件表单。
   const handleConditionModuleChange = (module: TriggerModule) => {
-    // strict defaults when switching
+    // 切换模块时使用固定默认值。
     switch (module) {
       case "mixer":
         setCondition({
@@ -88,7 +89,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         });
         break;
       case "atem":
-        // Default to first switcher if available
+        // 可用时默认选择第一台切换台。
         setCondition({
           module: "atem",
           switcherIp: atemSwitchers[0]?.ip || "",
@@ -349,13 +350,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
                       {d.name}
                     </option>
                   ))}
-                {/* Note: VB Inputs are outputs of device? Wait, Matrix Input is Device Output (e.g. Mic) or Device Input? 
-                                 VB-Matrix: Point(Input, Output).
-                                 Input is "strip" or "input device"? 
-                                 Usually Source (Input) -> Destination (Output).
-                                 DeviceInfo has .inputs and .outputs.
-                                 Assume InputDevice is source.
-                             */}
+                {/* VB 矩阵以输入到输出的方向建模，输入设备作为信号源。 */}
               </select>
             </div>
             <div>
@@ -421,7 +416,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
               </select>
             </div>
             <div>
-              {/* Connection ID selection? Usually VB has only one or few. Default 'default'? */}
+              {/* VB 连接 ID 默认保留为现有值。 */}
               <label>Connection:</label>
               <input
                 value={condition.connectionId}
@@ -437,7 +432,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
     }
   };
 
-  // --- Action Form --- (Similar structure)
+  // 动作表单。
   const handleActionModuleChange = (module: TriggerModule) => {
     switch (module) {
       case "mixer":
@@ -776,33 +771,21 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.8)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
+    <EditorDialogFrame
+      title={initialTrigger.id ? "Edit Trigger" : "New Trigger"}
+      onCancel={onCancel}
+      onSave={() =>
+        onSave({
+          ...initialTrigger,
+          name,
+          delay,
+          enabled,
+          condition,
+          action,
+        })
+      }
     >
-      <div
-        style={{
-          backgroundColor: "#333",
-          padding: 20,
-          borderRadius: 8,
-          width: 600,
-          maxHeight: "90vh",
-          overflowY: "auto",
-        }}
-      >
-        <h2>{initialTrigger.id ? "Edit Trigger" : "New Trigger"}</h2>
-
-        <div style={{ marginBottom: 15 }}>
+        <div className="seamer-editor-section">
           <label>Name</label>
           <input
             type="text"
@@ -812,15 +795,8 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
           />
         </div>
 
-        <div
-          style={{
-            marginBottom: 15,
-            border: "1px solid #555",
-            padding: 10,
-            borderRadius: 4,
-          }}
-        >
-          <h4 style={{ marginTop: 0 }}>Trigger Condition (When...)</h4>
+        <div className="seamer-editor-section">
+          <h3>When</h3>
           {renderModuleSelect(
             condition.module,
             handleConditionModuleChange,
@@ -829,15 +805,8 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
           {renderConditionForm()}
         </div>
 
-        <div
-          style={{
-            marginBottom: 15,
-            border: "1px solid #555",
-            padding: 10,
-            borderRadius: 4,
-          }}
-        >
-          <h4 style={{ marginTop: 0 }}>Trigger Action (Then...)</h4>
+        <div className="seamer-editor-section">
+          <h3>Then</h3>
           {renderModuleSelect(
             action.module,
             handleActionModuleChange,
@@ -846,7 +815,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
           {renderActionForm()}
         </div>
 
-        <div style={{ marginBottom: 15, display: "flex", gap: 20 }}>
+        <div className="seamer-inline-controls">
           <div>
             <label>Delay (ms):</label>
             <input
@@ -868,37 +837,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
           </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button
-            onClick={onCancel}
-            style={{ padding: "8px 16px", cursor: "pointer" }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() =>
-              onSave({
-                ...initialTrigger,
-                name,
-                delay,
-                enabled,
-                condition,
-                action,
-              })
-            }
-            style={{
-              padding: "8px 16px",
-              cursor: "pointer",
-              background: "#4CAF50",
-              color: "white",
-              border: "none",
-            }}
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
+    </EditorDialogFrame>
   );
 };
 

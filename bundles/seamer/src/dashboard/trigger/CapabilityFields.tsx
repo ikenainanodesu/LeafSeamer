@@ -48,7 +48,7 @@ const CapabilityFields: React.FC<CapabilityFieldsProps> = ({
   values,
   onChange,
 }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+  <div className="seamer-fields-grid">
     {schema.map((parameter) => {
       const update = (value: string) =>
         onChange({
@@ -57,7 +57,7 @@ const CapabilityFields: React.FC<CapabilityFieldsProps> = ({
         });
 
       return (
-        <label key={parameter.id} style={{ display: "grid", gap: 5 }}>
+        <label key={parameter.id} className="seamer-field">
           <span>{parameter.displayName}</span>
           {parameter.type === "boolean" ? (
             <select

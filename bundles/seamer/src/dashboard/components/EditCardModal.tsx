@@ -17,7 +17,10 @@ import {
   OBSState,
   SeamerIntegrations,
 } from "../../types/seamer.types";
+import { Plus, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { Button, IconButton } from "../_leaf-ui/components";
+import { EditorDialogFrame } from "./EditorDialogFrame";
 
 interface EditCardModalProps {
   initialCard: SeamerCard;
@@ -66,7 +69,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
     setLocalCard((prev: SeamerCard) => {
       const newActions = prev.actions.map((a: SeamerAction) => {
         if (a.id === id) {
-          // Create new action based on type
+          // 按类型创建新的动作。
           if (type === "mixer-fader") {
             return {
               id,
@@ -89,7 +92,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
               functionType: "macro",
             } as AtemControlAction;
           } else {
-            // OBS Action default
+            // OBS 动作默认值。
             return {
               id,
               type: "obs-action",
@@ -117,8 +120,8 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
     const [localVal, setLocalVal] = useState<string | null>(null);
 
     React.useEffect(() => {
-      // Whenever parent value changes, reset local override UNLESS strictly equal
-      // This allows external updates but keeps local typing if result matches
+      // 父级值变化时重置本地覆盖值。
+      // 这允许外部更新，同时保留匹配时的本地输入。
       setLocalVal(null);
     }, [value]);
 
@@ -126,8 +129,8 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
       const raw = e.target.value;
       setLocalVal(raw);
 
-      // Only propagate valid numbers
-      // Allow "-" or empty string to exist locally without pushing NaN to parent
+      // 仅向上游传递有效数字。
+      // 允许本地暂存 "-" 或空字符串，避免将 NaN 写入父级。
       if (raw === "" || raw === "-") {
         return;
       }
@@ -139,7 +142,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
     };
 
     const handleBlur = () => {
-      // On blur, revert to the actual parent value
+      // 失焦时恢复父级实际值。
       setLocalVal(null);
     };
 
@@ -158,14 +161,14 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
   const renderActionDetails = (action: SeamerAction) => {
     if (action.type === "mixer-fader") {
       const mixerChs = mixerState?.channels || [];
-      const mixerOuts = mixerState?.outputs || []; // Need outputs for Sends
+      const mixerOuts = mixerState?.outputs || []; // 发送控制需要输出列表。
 
-      // Default subFunction to 'fader' if missing (backward compat)
+      // 缺失时默认使用 fader，以兼容旧数据。
       const subFunc = (action as MixerControlAction).subFunction || "fader";
 
       return (
         <div style={{ marginTop: "5px" }}>
-          {/* Sub Function Selector */}
+          {/* 子功能选择器 */}
           <div style={{ marginBottom: "5px" }}>
             <label style={{ marginRight: "10px" }}>Function:</label>
             <select
@@ -212,7 +215,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             <div
               style={{ display: "flex", flexDirection: "column", gap: "5px" }}
             >
-              {/* Input Select */}
+              {/* 输入选择器 */}
               <div style={{ display: "flex", alignItems: "center" }}>
                 <label style={{ width: "60px" }}>Input:</label>
                 <select
@@ -233,7 +236,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 </select>
               </div>
 
-              {/* Output Select */}
+              {/* 输出选择器 */}
               <div style={{ display: "flex", alignItems: "center" }}>
                 <label style={{ width: "60px" }}>Output:</label>
                 <select
@@ -254,7 +257,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 </select>
               </div>
 
-              {/* Controls Row 1: Gain, On/Off */}
+              {/* 第一行控制：增益和开关 */}
               <div
                 style={{ display: "flex", gap: "10px", alignItems: "center" }}
               >
@@ -281,7 +284,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 />
               </div>
 
-              {/* Controls Row 2: Pre/Post, Pan */}
+              {/* 第二行控制：前后置和声像 */}
               <div
                 style={{ display: "flex", gap: "10px", alignItems: "center" }}
               >
@@ -353,7 +356,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             ))}
           </select>
 
-          {/* Scene Selector */}
+          {/* 场景选择器 */}
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <label style={{ minWidth: "70px" }}>Scene:</label>
             <select
@@ -372,7 +375,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             </select>
           </div>
 
-          {/* Transition Selector */}
+          {/* 转场选择器 */}
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <label style={{ minWidth: "70px" }}>Transition:</label>
             <select
@@ -399,10 +402,9 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
       const macros = state?.macros || {};
       const sources = state?.sources || {};
 
-      // Filter Sources for Dropdown
+      // 过滤下拉框的信号源。
       const sourceOptions = Object.entries(sources).filter(([id, name]) => {
-        // Simple filter if needed, similar to AtemPanel
-        // For dropdowns usually we show mos, maybe filter 'dir' if undesired
+        // 与 AtemPanel 保持一致，隐藏目录类信号源。
         return !name.toLowerCase().includes("dir");
       });
 
@@ -415,7 +417,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             gap: 5,
           }}
         >
-          {/* Switcher Select */}
+          {/* 切换台选择器 */}
           <select
             value={atemAction.switcherIp}
             onChange={(e) =>
@@ -430,7 +432,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
             ))}
           </select>
 
-          {/* Function Type */}
+          {/* 功能类型 */}
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <label>Function:</label>
             <select
@@ -473,7 +475,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
 
           {atemAction.functionType === "source" && (
             <>
-              {/* Target */}
+              {/* 目标 */}
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <label>Target:</label>
                 <select
@@ -491,7 +493,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 </select>
               </div>
 
-              {/* Source Selection */}
+              {/* 信号源选择 */}
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <label>Source:</label>
                 <select
@@ -513,7 +515,7 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 </select>
               </div>
 
-              {/* Transition (Only for PGM) */}
+              {/* 仅在节目输出时显示转场 */}
               {atemAction.target === "program" && (
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <label>Transition:</label>
@@ -555,32 +557,8 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.8)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          background: "#333",
-          padding: "20px",
-          borderRadius: "8px",
-          width: "500px",
-          maxHeight: "80vh",
-          overflowY: "auto",
-        }}
-      >
-        <h3>Edit Card</h3>
-        <div style={{ marginBottom: "15px" }}>
+    <EditorDialogFrame title="Edit Card" onCancel={onCancel} onSave={handleSave}>
+        <div className="seamer-editor-section">
           <label>Title</label>
           <input
             type="text"
@@ -595,17 +573,12 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
           />
         </div>
 
-        <div style={{ marginBottom: "15px" }}>
-          <h4>Actions</h4>
+        <div className="seamer-editor-section">
+          <h3>Actions</h3>
           {localCard.actions.map((action: SeamerAction, idx: number) => (
             <div
               key={action.id}
-              style={{
-                border: "1px solid #555",
-                padding: "10px",
-                marginBottom: "10px",
-                position: "relative",
-              }}
+              className="seamer-action-row"
             >
               <div
                 style={{
@@ -615,12 +588,12 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
                 }}
               >
                 <span>Action #{idx + 1}</span>
-                <button
+                <IconButton
+                  label="Remove action"
+                  tone="danger"
+                  icon={<Trash2 size={16} aria-hidden="true" />}
                   onClick={() => removeAction(action.id)}
-                  style={{ color: "red" }}
-                >
-                  Remove
-                </button>
+                />
               </div>
               <select
                 value={action.type}
@@ -648,19 +621,12 @@ const EditCardModal: React.FC<EditCardModalProps> = ({
               {renderActionDetails(action)}
             </div>
           ))}
-          <button onClick={addNewAction}>+ Add Action</button>
+          <Button onClick={addNewAction}>
+            <Plus size={16} aria-hidden="true" />
+            Add Action
+          </Button>
         </div>
-
-        <div
-          style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}
-        >
-          <button onClick={onCancel}>Cancel</button>
-          <button onClick={handleSave} style={{ fontWeight: "bold" }}>
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
+    </EditorDialogFrame>
   );
 };
 
