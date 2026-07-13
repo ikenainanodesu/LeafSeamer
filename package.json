@@ -8,6 +8,8 @@
     "start": "nodecg start",
     "dev": "nodecg start",
     "build": "ts-node scripts/build-bundles.ts",
+    "core:sync": "ts-node scripts/sync-bundle-core.ts",
+    "core:check": "ts-node scripts/sync-bundle-core.ts --check",
     "watch": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },

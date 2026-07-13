@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "sourceHash": "0862d5d3e333c562016bf482fe807691f0a1259d745de7ed13a7a967fbd6929f",
+  "files": [
+    "integration/schema.ts",
+    "integration/types.ts",
+    "security/authenticated-command-client.ts",
+    "security/authenticated-command.ts",
+    "security/command-gateway.ts",
+    "security/nodecg-command.ts",
+    "security/redaction.ts",
+    "security/secret-manager.ts"
+  ]
+}
