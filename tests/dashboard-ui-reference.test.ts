@@ -420,19 +420,115 @@ const receiverOriginatesFromAuthenticatedPatch = (receiver: ts.Expression): bool
   return receiverOriginatesFromAuthenticatedPatch(receiver.expression.expression);
 };
 
+const isNestedExecutableBody = (node: ts.Node): boolean =>
+  ts.isArrowFunction(node) ||
+  ts.isFunctionExpression(node) ||
+  ts.isFunctionDeclaration(node) ||
+  ts.isMethodDeclaration(node) ||
+  ts.isClassDeclaration(node) ||
+  ts.isClassExpression(node);
+
+const hasDirectlyReachableNode = (
+  root: ts.Node,
+  predicate: (node: ts.Node) => boolean
+): boolean => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found || (node !== root && isNestedExecutableBody(node))) {
+      return;
+    }
+    if (predicate(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+};
+
+const isDangerToastCall = (node: ts.Node): boolean =>
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  node.expression.text === "pushToast" &&
+  node.arguments.length >= 2 &&
+  stringLiteralValue(node.arguments[1]) === "danger";
+
 const handlerCallsDangerToast = (handler: ts.Expression): boolean => {
   if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) {
     return false;
   }
-  return [handler.body, ...descendants(handler.body)].some(
-    (node) =>
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "pushToast" &&
-      node.arguments.length >= 2 &&
-      stringLiteralValue(node.arguments[1]) === "danger"
+  return hasDirectlyReachableNode(handler.body, isDangerToastCall);
+};
+
+const isNextFromCurrentStatement = (statement: ts.Statement): boolean => {
+  if (!ts.isVariableStatement(statement)) {
+    return false;
+  }
+  return statement.declarationList.declarations.some((declaration) => {
+    const initializer = declaration.initializer;
+    return (
+      ts.isIdentifier(declaration.name) &&
+      declaration.name.text === "next" &&
+      initializer !== undefined &&
+      ts.isNewExpression(initializer) &&
+      ts.isIdentifier(initializer.expression) &&
+      initializer.expression.text === "Set" &&
+      initializer.arguments?.length === 1 &&
+      ts.isIdentifier(initializer.arguments[0]) &&
+      initializer.arguments[0].text === "current"
+    );
+  });
+};
+
+const isNextDeleteKeyStatement = (statement: ts.Statement): boolean => {
+  if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+    return false;
+  }
+  const call = statement.expression;
+  return (
+    ts.isPropertyAccessExpression(call.expression) &&
+    ts.isIdentifier(call.expression.expression) &&
+    call.expression.expression.text === "next" &&
+    call.expression.name.text === "delete" &&
+    call.arguments.length === 1 &&
+    ts.isIdentifier(call.arguments[0]) &&
+    call.arguments[0].text === "key"
   );
 };
+
+const isReturnNextStatement = (statement: ts.Statement): boolean =>
+  ts.isReturnStatement(statement) &&
+  statement.expression !== undefined &&
+  ts.isIdentifier(statement.expression) &&
+  statement.expression.text === "next";
+
+const hasPendingKeysUpdaterContract = (handler: ts.Expression): boolean =>
+  hasDirectlyReachableNode(handler, (node) => {
+    if (
+      !ts.isCallExpression(node) ||
+      !ts.isIdentifier(node.expression) ||
+      node.expression.text !== "setPendingKeys" ||
+      node.arguments.length !== 1
+    ) {
+      return false;
+    }
+    const updater = node.arguments[0];
+    if (
+      (!ts.isArrowFunction(updater) && !ts.isFunctionExpression(updater)) ||
+      updater.parameters.length !== 1 ||
+      !ts.isIdentifier(updater.parameters[0].name) ||
+      updater.parameters[0].name.text !== "current" ||
+      !ts.isBlock(updater.body)
+    ) {
+      return false;
+    }
+    const statements = updater.body.statements;
+    const nextIndex = statements.findIndex(isNextFromCurrentStatement);
+    const deleteIndex = statements.findIndex(isNextDeleteKeyStatement);
+    const returnIndex = statements.findIndex(isReturnNextStatement);
+    return nextIndex >= 0 && deleteIndex > nextIndex && returnIndex > deleteIndex;
+  });
 
 const hasAuthenticatedCatchToastContract = (source: ts.SourceFile): boolean =>
   descendants(source).some(
@@ -492,21 +588,7 @@ const hasPromiseScopedPendingContract = (source: ts.SourceFile): boolean => {
   if (!ts.isArrowFunction(finallyHandler) && !ts.isFunctionExpression(finallyHandler)) {
     return false;
   }
-  return descendants(finallyHandler.body).some(
-    (node) =>
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "delete" &&
-      node.arguments.length === 1 &&
-      ts.isIdentifier(node.arguments[0]) &&
-      node.arguments[0].text === "key" &&
-      descendants(finallyHandler.body).some(
-        (child) =>
-          ts.isCallExpression(child) &&
-          ts.isIdentifier(child.expression) &&
-          child.expression.text === "setPendingKeys"
-      )
-  );
+  return hasPendingKeysUpdaterContract(finallyHandler);
 };
 
 const hasWindowAlert = (source: ts.SourceFile): boolean =>
@@ -682,6 +764,27 @@ test("VB matrix promise and toast fixtures reject unrelated callbacks", () => {
     !hasPromiseScopedPendingContract(
       matrixPromiseFixture(
         'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")); sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).finally(() => { setPendingKeys((current) => { const next = current; next.delete(key); return next; }); });'
+      )
+    )
+  );
+  ok(
+    !hasAuthenticatedCatchToastContract(
+      toastFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch(() => { const unused = () => pushToast("x", "danger"); });'
+      )
+    )
+  );
+  ok(
+    !hasPromiseScopedPendingContract(
+      matrixPromiseFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")).finally(() => { setPendingKeys((current) => {}); new Set().delete(key); });'
+      )
+    )
+  );
+  ok(
+    !hasPromiseScopedPendingContract(
+      matrixPromiseFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")).finally(() => { setPendingKeys((current) => { const unused = () => { const next = new Set(current); next.delete(key); return next; }; }); });'
       )
     )
   );
