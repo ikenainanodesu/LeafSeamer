@@ -507,13 +507,6 @@ const isPropertyAccess = (
   isIdentifierNamed(expression.expression, objectName) &&
   expression.name.text === propertyName;
 
-const isStrictLocalComparison = (
-  expression: ts.Expression
-): expression is ts.BinaryExpression =>
-  ts.isBinaryExpression(expression) &&
-  expression.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
-  stringLiteralValue(expression.right) === "local";
-
 const isBareReturn = (statement: ts.Statement): boolean =>
   ts.isReturnStatement(statement) && statement.expression === undefined;
 
@@ -529,6 +522,20 @@ const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
     ? unwrapParentheses(expression.expression)
     : expression;
 
+const isLocalComparison = (
+  expression: ts.Expression,
+  operator: ts.SyntaxKind.EqualsEqualsEqualsToken | ts.SyntaxKind.ExclamationEqualsEqualsToken,
+  matchesTarget: (candidate: ts.Expression) => boolean
+): boolean => {
+  const comparison = unwrapParentheses(expression);
+  return (
+    ts.isBinaryExpression(comparison) &&
+    comparison.operatorToken.kind === operator &&
+    ((matchesTarget(comparison.left) && stringLiteralValue(comparison.right) === "local") ||
+      (stringLiteralValue(comparison.left) === "local" && matchesTarget(comparison.right)))
+  );
+};
+
 const isExactFilterCallback = (expression: ts.Expression): boolean => {
   if (!ts.isArrowFunction(expression) || expression.parameters.length !== 1) {
     return false;
@@ -538,10 +545,11 @@ const isExactFilterCallback = (expression: ts.Expression): boolean => {
   return (
     parameterName !== undefined &&
     body !== undefined &&
-    ts.isBinaryExpression(body) &&
-    body.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
-    isPropertyAccess(body.left, parameterName, "sourceId") &&
-    stringLiteralValue(body.right) === "local"
+    isLocalComparison(
+      body,
+      ts.SyntaxKind.EqualsEqualsEqualsToken,
+      (candidate) => isPropertyAccess(candidate, parameterName, "sourceId")
+    )
   );
 };
 
@@ -652,11 +660,15 @@ const isScheduleIndexSourceId = (expression: ts.Expression, indexName: string): 
   isIdentifierNamed(expression.expression.argumentExpression, indexName);
 
 const isExactIndexedLocalGuard = (statement: ts.Statement, indexName: string): boolean => {
-  if (!ts.isIfStatement(statement) || !isStrictLocalComparison(statement.expression)) {
+  if (!ts.isIfStatement(statement)) {
     return false;
   }
   return (
-    isScheduleIndexSourceId(statement.expression.left, indexName) &&
+    isLocalComparison(
+      statement.expression,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken,
+      (candidate) => isScheduleIndexSourceId(candidate, indexName)
+    ) &&
     isReturnOnly(statement.thenStatement)
   );
 };
@@ -729,11 +741,15 @@ const hasRemoveLocalGuard = (source: ts.SourceFile): boolean => {
     return false;
   }
   const guard = handler.body.statements[0];
-  if (!ts.isIfStatement(guard) || !isStrictLocalComparison(guard.expression)) {
+  if (!ts.isIfStatement(guard)) {
     return false;
   }
   return (
-    isExactFindSourceId(guard.expression.left, idName) &&
+    isLocalComparison(
+      guard.expression,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken,
+      (candidate) => isExactFindSourceId(candidate, idName)
+    ) &&
     isReturnOnly(guard.thenStatement) &&
     hasPersistenceAfterGuard(handler)
   );
@@ -754,6 +770,24 @@ const jsxAttributeExpression = (
   );
   return attribute?.initializer && ts.isJsxExpression(attribute.initializer)
     ? attribute.initializer.expression
+    : undefined;
+};
+
+const jsxStringAttributeValue = (
+  node: ts.JsxElement | ts.JsxSelfClosingElement,
+  name: string
+): string | undefined => {
+  const attributes = ts.isJsxElement(node)
+    ? node.openingElement.attributes.properties
+    : node.attributes.properties;
+  const attribute = attributes.find(
+    (candidate): candidate is ts.JsxAttribute =>
+      ts.isJsxAttribute(candidate) &&
+      ts.isIdentifier(candidate.name) &&
+      candidate.name.text === name
+  );
+  return attribute?.initializer && ts.isStringLiteral(attribute.initializer)
+    ? attribute.initializer.text
     : undefined;
 };
 
@@ -884,52 +918,88 @@ const hasExactRestoreFunction = (source: ts.SourceFile): boolean => {
   );
 };
 
-const hasExactTriggerCapture = (source: ts.SourceFile): boolean =>
-  descendants(source).some((node) => {
-    if (!isJsxComponent(node, "IconButton")) {
-      return false;
-    }
-    const onClick = jsxAttributeExpression(node, "onClick");
+const scheduleMapCallbacks = (source: ts.SourceFile): ts.ArrowFunction[] =>
+  descendants(source).flatMap((node) => {
     if (
-      !onClick ||
-      !ts.isArrowFunction(onClick) ||
-      onClick.parameters.length !== 1 ||
-      !ts.isBlock(onClick.body) ||
-      onClick.body.statements.length !== 2
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression) ||
+      node.expression.name.text !== "map" ||
+      !isIdentifierNamed(node.expression.expression, "schedule") ||
+      node.arguments.length !== 1 ||
+      !ts.isArrowFunction(node.arguments[0])
     ) {
-      return false;
+      return [];
     }
-    const eventName = requiredIdentifierParameter(onClick, 0);
-    const capture = onClick.body.statements[0];
-    return (
-      eventName !== undefined &&
-      ts.isExpressionStatement(capture) &&
-      ts.isBinaryExpression(capture.expression) &&
-      capture.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      isPropertyAccess(capture.expression.left, "removalTriggerRef", "current") &&
-      isPropertyAccess(capture.expression.right, eventName, "currentTarget") &&
-      ts.isExpressionStatement(onClick.body.statements[1]) &&
-      isDirectCall(onClick.body.statements[1].expression, "setPendingRemovalId", 1)
-    );
+    return [node.arguments[0]];
   });
 
-const hasExactFocusDialogContract = (source: ts.SourceFile): boolean =>
-  descendants(source).some((node) => {
-    if (!isJsxComponent(node, "ConfirmDialog")) {
-      return false;
-    }
-    const open = jsxAttributeExpression(node, "open");
-    const onCancel = jsxAttributeExpression(node, "onCancel");
-    const onConfirm = jsxAttributeExpression(node, "onConfirm");
-    return (
-      open !== undefined &&
-      onCancel !== undefined &&
-      onConfirm !== undefined &&
-      isPendingRemovalNonNullCheck(open) &&
-      isExactCancelHandler(onCancel) &&
-      isExactConfirmHandler(onConfirm)
-    );
-  });
+const isExactDeleteTriggerCapture = (
+  expression: ts.Expression,
+  itemName: string
+): boolean => {
+  if (
+    !ts.isArrowFunction(expression) ||
+    expression.parameters.length !== 1 ||
+    !ts.isBlock(expression.body) ||
+    expression.body.statements.length !== 2
+  ) {
+    return false;
+  }
+  const eventName = requiredIdentifierParameter(expression, 0);
+  const capture = expression.body.statements[0];
+  const setPending = expression.body.statements[1];
+  return (
+    eventName !== undefined &&
+    ts.isExpressionStatement(capture) &&
+    ts.isBinaryExpression(capture.expression) &&
+    capture.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    isPropertyAccess(capture.expression.left, "removalTriggerRef", "current") &&
+    isPropertyAccess(capture.expression.right, eventName, "currentTarget") &&
+    ts.isExpressionStatement(setPending) &&
+    isDirectCall(setPending.expression, "setPendingRemovalId", 1) &&
+    isPropertyAccess(setPending.expression.arguments[0], itemName, "id")
+  );
+};
+
+// 删除入口、对话框和焦点恢复必须属于同一条 schedule item 操作链。
+const hasDeletionFocusRestore = (source: ts.SourceFile): boolean => {
+  const deleteButtons = descendants(source).filter(
+    (node): node is ts.JsxElement | ts.JsxSelfClosingElement =>
+      isJsxComponent(node, "IconButton") &&
+      jsxStringAttributeValue(node, "label") === "Delete schedule item"
+  );
+  const dialogs = descendants(source).filter(
+    (node): node is ts.JsxElement | ts.JsxSelfClosingElement =>
+      isJsxComponent(node, "ConfirmDialog")
+  );
+  if (deleteButtons.length !== 1 || dialogs.length !== 1) {
+    return false;
+  }
+  const deleteButton = deleteButtons[0];
+  const itemCallbacks = scheduleMapCallbacks(source).filter((callback) =>
+    descendants(callback).includes(deleteButton)
+  );
+  const itemName = itemCallbacks.length === 1
+    ? requiredIdentifierParameter(itemCallbacks[0], 0)
+    : undefined;
+  const onClick = jsxAttributeExpression(deleteButton, "onClick");
+  const dialog = dialogs[0];
+  const open = jsxAttributeExpression(dialog, "open");
+  const onCancel = jsxAttributeExpression(dialog, "onCancel");
+  const onConfirm = jsxAttributeExpression(dialog, "onConfirm");
+  return (
+    itemName !== undefined &&
+    onClick !== undefined &&
+    isExactDeleteTriggerCapture(onClick, itemName) &&
+    open !== undefined &&
+    isPendingRemovalNonNullCheck(open) &&
+    onCancel !== undefined &&
+    isExactCancelHandler(onCancel) &&
+    onConfirm !== undefined &&
+    isExactConfirmHandler(onConfirm) &&
+    hasExactRestoreFunction(source)
+  );
+};
 
 const scheduleBehaviorContractFailures = (source: ts.SourceFile): string[] => {
   const failures: string[] = [];
@@ -945,11 +1015,8 @@ const scheduleBehaviorContractFailures = (source: ts.SourceFile): string[] => {
   if (!hasRemoveLocalGuard(source)) {
     failures.push("removeItem 缺少基于 id 参数的 local 守卫");
   }
-  if (!hasExactFocusDialogContract(source)) {
-    failures.push("删除确认未按顺序清理 pending 与触发器引用");
-  }
-  if (!hasExactRestoreFunction(source) || !hasExactTriggerCapture(source)) {
-    failures.push("删除焦点恢复未绑定到真实 DOM 数据流");
+  if (!hasDeletionFocusRestore(source)) {
+    failures.push("删除焦点恢复未绑定到同一 schedule item 操作链");
   }
   return failures;
 };
@@ -1000,9 +1067,12 @@ type ScheduleFixtureOverrides = {
   filterExpression?: string;
   mapPayload?: string;
   toggleGuardExpression?: string;
+  updateGuardExpression?: string;
   removeGuardExpression?: string;
   confirmStatements?: string;
   restoreDefinition?: string;
+  deleteOnClickStatements?: string;
+  extraControls?: string;
 };
 
 const scheduleFixture = (overrides: ScheduleFixtureOverrides = {}): string => `
@@ -1025,7 +1095,7 @@ const toggleActive = (index: number) => {
   persistLocalItems(schedule);
 };
 const updateItem = (index: number) => {
-  if (schedule[index]?.sourceId !== "local") return;
+  if (${overrides.updateGuardExpression ?? 'schedule[index]?.sourceId !== "local"'}) return;
   persistLocalItems(schedule);
 };
 const removeItem = (id: string) => {
@@ -1043,7 +1113,7 @@ ${overrides.restoreDefinition ?? `const restoreRemovalFocus = () => {
   });
 };`}
 const removalTriggerRef = useRef<HTMLButtonElement | null>(null);
-const controls = <><IconButton onClick={(event) => { removalTriggerRef.current = event.currentTarget; setPendingRemovalId("item"); }} /><ConfirmDialog open={pendingRemovalId !== null} onCancel={() => { setPendingRemovalId(null); restoreRemovalFocus(); }} onConfirm={() => { ${overrides.confirmStatements ?? "if (pendingRemovalId !== null) { removeItem(pendingRemovalId); } removalTriggerRef.current = null; setPendingRemovalId(null); restoreRemovalFocus();"} }} /></>;
+const controls = <>{schedule.map((item) => <IconButton label="Delete schedule item" onClick={(event) => { ${overrides.deleteOnClickStatements ?? "removalTriggerRef.current = event.currentTarget; setPendingRemovalId(item.id);"} }} />)}<ConfirmDialog open={pendingRemovalId !== null} onCancel={() => { setPendingRemovalId(null); restoreRemovalFocus(); }} onConfirm={() => { ${overrides.confirmStatements ?? "if (pendingRemovalId !== null) { removeItem(pendingRemovalId); } removalTriggerRef.current = null; setPendingRemovalId(null); restoreRemovalFocus();"} }} />${overrides.extraControls ?? ""}</>;
 `;
 
 // 三个 Operations 入口必须绑定本地 UI、真实错误边界、createRoot 和唯一渲染结构。
@@ -1215,6 +1285,23 @@ test("Operations 合同夹具拒绝伪造绑定", () => {
   );
   ok(scheduleBehaviorContractFailures(validSchedule).length === 0);
 
+  const parenthesizedFilter = compileFixture(
+    "operations-parenthesized-filter-fixture.tsx",
+    scheduleFixture({ filterExpression: '(item.sourceId === "local")' })
+  );
+  ok(scheduleBehaviorContractFailures(parenthesizedFilter).length === 0);
+
+  const reversedLocalComparisons = compileFixture(
+    "operations-reversed-local-comparisons-fixture.tsx",
+    scheduleFixture({
+      filterExpression: '"local" === item.sourceId',
+      toggleGuardExpression: '"local" !== schedule[index]?.sourceId',
+      updateGuardExpression: '"local" !== schedule[index]?.sourceId',
+      removeGuardExpression: '"local" !== schedule.find((item) => item.id === id)?.sourceId',
+    })
+  );
+  ok(scheduleBehaviorContractFailures(reversedLocalComparisons).length === 0);
+
   const fixedSourceFilter = compileFixture(
     "operations-fixed-source-filter-fixture.tsx",
     scheduleFixture({ filterExpression: 'fixed.sourceId === "local"' })
@@ -1256,7 +1343,7 @@ test("Operations 合同夹具拒绝伪造绑定", () => {
     })
   );
   ok(scheduleBehaviorContractFailures(missingPendingClear).some((failure) =>
-    failure.includes("删除确认")
+    failure.includes("同一 schedule item")
   ));
 
   const textOnlyFocus = compileFixture(
@@ -1267,5 +1354,16 @@ test("Operations 合同夹具拒绝伪造绑定", () => {
   );
   ok(scheduleBehaviorContractFailures(textOnlyFocus).some((failure) =>
     failure.includes("焦点恢复")
+  ));
+
+  const decoyFocusControls = compileFixture(
+    "operations-decoy-focus-controls-fixture.tsx",
+    scheduleFixture({
+      deleteOnClickStatements: 'removalTriggerRef.current = event.currentTarget; setPendingRemovalId("wrong");',
+      extraControls: '<IconButton onClick={(event) => { removalTriggerRef.current = event.currentTarget; setPendingRemovalId("other"); }} /><ConfirmDialog open={pendingRemovalId !== null} onCancel={() => { setPendingRemovalId(null); restoreRemovalFocus(); }} onConfirm={() => { if (pendingRemovalId !== null) { removeItem(pendingRemovalId); } removalTriggerRef.current = null; setPendingRemovalId(null); restoreRemovalFocus(); }} />',
+    })
+  );
+  ok(scheduleBehaviorContractFailures(decoyFocusControls).some((failure) =>
+    failure.includes("同一 schedule item")
   ));
 });
