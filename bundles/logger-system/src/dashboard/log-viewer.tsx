@@ -5,6 +5,13 @@ import {
 } from "../types/logger.types";
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Search, X } from "lucide-react";
+import {
+  IconButton,
+  PanelErrorBoundary,
+  PanelHeader,
+} from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
 import "./log-viewer.css";
 
 type LogLevel = "info" | "warn" | "error";
@@ -101,7 +108,7 @@ const LogViewer = () => {
       return;
     }
 
-    // 先更新界面，再由持久化 Replicant 同步到后端执行清理。
+    // 先更新界面，再由持久化共享状态同步到后端执行清理。
     setCleanupPeriodMs(value);
     nodecg.Replicant<LogCleanupPeriodMs>("logCleanupPeriodMs").value = value;
   };
@@ -169,41 +176,34 @@ const LogViewer = () => {
 
   return (
     <main className="log-viewer">
-      <header className="viewer-header">
-        <div>
-          <h1 className="viewer-title">Runtime logs</h1>
-          <p className="viewer-subtitle">
-            <span className="live-indicator" aria-hidden="true" />
-            Live feed
-            <span className="viewer-subtitle-divider" aria-hidden="true">
-              /
+      <PanelHeader
+        kicker="Logger System"
+        title="Runtime Logs"
+        target={`${logs.length} events`}
+        status="Live"
+        statusTone="success"
+        actions={
+          <div className="level-summary" aria-label="Log level summary">
+            <span data-tone="neutral">
+              <strong>{levelCounts.info}</strong> Info
             </span>
-            {logs.length} events
-          </p>
-        </div>
-
-        <div className="level-summary" aria-label="Log level summary">
-          <span className="summary-item summary-item--info">
-            <strong>{levelCounts.info}</strong>
-            Info
-          </span>
-          <span className="summary-item summary-item--warn">
-            <strong>{levelCounts.warn}</strong>
-            Warn
-          </span>
-          <span className="summary-item summary-item--error">
-            <strong>{levelCounts.error}</strong>
-            Error
-          </span>
-        </div>
-      </header>
+            <span data-tone="warning">
+              <strong>{levelCounts.warn}</strong> Warn
+            </span>
+            <span data-tone="danger">
+              <strong>{levelCounts.error}</strong> Error
+            </span>
+          </div>
+        }
+      />
 
       <section className="viewer-tools" aria-label="Log filters">
         <div className="filter-primary-row">
           <div className="search-control">
-            <label className="sr-only" htmlFor="log-search">
+            <label className="leaf-sr-only" htmlFor="log-search">
               Search logs
             </label>
+            <Search size={14} aria-hidden="true" />
             <input
               id="log-search"
               className="search-input"
@@ -213,19 +213,18 @@ const LogViewer = () => {
               onChange={(event) => setQuery(event.target.value)}
             />
             {query.length > 0 ? (
-              <button
-                className="search-clear"
-                type="button"
+              <IconButton
                 onClick={() => setQuery("")}
-                aria-label="Clear search"
-              >
-                Clear
-              </button>
-            ) : null}
+                label="Clear search"
+                icon={<X size={14} aria-hidden="true" />}
+              />
+            ) : (
+              <span aria-hidden="true" />
+            )}
           </div>
 
           <div className="bundle-filter-control">
-            <label className="sr-only" htmlFor="bundle-filter">
+            <label className="leaf-sr-only" htmlFor="bundle-filter">
               Filter by bundle
             </label>
             <select
@@ -244,7 +243,7 @@ const LogViewer = () => {
           </div>
 
           <div className="cleanup-filter-control">
-            <label className="sr-only" htmlFor="cleanup-period">
+            <label className="leaf-sr-only" htmlFor="cleanup-period">
               Automatic cleanup period
             </label>
             <select
@@ -366,4 +365,8 @@ if (!rootElement) {
 }
 
 const root = createRoot(rootElement);
-root.render(<LogViewer />);
+root.render(
+  <PanelErrorBoundary>
+    <LogViewer />
+  </PanelErrorBoundary>
+);
