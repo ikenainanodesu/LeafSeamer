@@ -73,7 +73,7 @@ flowchart LR
 
 ### 5.2 本地快照
 
-同步脚本把权威源生成到 `bundles/<bundle>/src/dashboard/_leaf-ui/`。每份快照包含可直接导入的 CSS、组件源码和 `manifest.json`。Manifest 至少记录 UI 版本、源内容哈希和生成时间。生成文件头部使用中文注释说明来源以及禁止手工修改。
+同步脚本把权威源生成到 `bundles/<bundle>/src/dashboard/_leaf-ui/`。每份快照包含可直接导入的 CSS、组件源码和 `manifest.json`。Manifest 记录 UI 版本、源内容哈希和排序后的文件清单；生成时间由 Git 提交记录提供，避免时间戳破坏确定性输出。生成文件头部使用中文注释说明来源以及禁止手工修改。
 
 ### 5.3 同步与检查
 
@@ -92,6 +92,12 @@ flowchart LR
 3. 通过自己的 `package.json` 安装全部前端依赖。
 4. 通过自己的 Vite 配置完成 Dashboard 与 extension 构建。
 5. 浏览器运行时只加载该 bundle 自己输出的 HTML、JS 和 CSS。
+
+### 5.5 当前前置差距
+
+仓库盘点确认，部分 bundle 源码仍直接导入根目录 `shared/security` 与 `shared/integration`；现有 `standalone-bundles` CI 也在完整 workspace 中执行，不能证明单独复制源码后仍可构建。构建后的 bundle 可独立运行，但源码级独立尚未达到本设计的完成标准。
+
+实施 UI 前先执行 `docs/superpowers/plans/2026-07-13-bundle-source-independence-prerequisite.md`：把所需共享核心代码同步为各 bundle 的本地版本化快照，改用本地导入，并在不包含仓库根 `shared/` 的临时目录中完成安装和构建。
 
 ## 6. 改造范围
 
@@ -192,20 +198,23 @@ flowchart LR
 
 - 常驻：搜索、Bundle、Level 和自动清理周期。
 - 主工作区：日志列表和新日志提示。
-- 工具区：导出和清空；清空需要确认。
+- 底部状态：当前显示数量和最近一次自动清理状态。
+- 本次不新增当前代码中不存在的导出或清空命令。
 
 ### 9.6 Schedule Manager
 
-- 常驻：同步状态、当前条目、下一条目和可用于 Seamer 的触发字段。
-- 主工作区：完整播单、筛选和选中状态。
-- 折叠：外部数据源状态、字段映射和同步详情。
+- 常驻：条目总数、本地条目数、外部条目数和 Add Item。
+- 主工作区：当前 `scheduleData` 条目、来源、状态和 Active 设置。
+- 本地条目保持可编辑，外部 adapter 条目保持只读。
+- 本次不伪造尚无 Replicant 支持的同步状态、当前/下一条状态或筛选功能。
 
 ### 9.7 Seamer
 
-- 常驻：运行状态、启停状态和当前流程。
-- 主工作区：流程卡和 Trigger 列表。
+- 常驻：Workspace/Triggers 视图、Card 数量和已注册 integration 数量。
+- 主工作区：Card 和 Trigger 列表。
 - 编辑器：能力参数按 When 和 Then 分组。
 - 删除 Trigger 或流程必须确认。
+- 本次不显示当前代码没有提供的全局运行或启停状态。
 
 ### 9.8 Backup System
 
@@ -217,7 +226,7 @@ flowchart LR
 
 ### 10.1 命令状态
 
-设备命令点击后进入 pending，并在等待回执期间阻止重复提交。只有消息回执或 Replicant 更新后才显示成功；失败时恢复为最后确认状态并在操作附近呈现错误。不得用纯前端乐观状态伪造设备成功。
+具有 callback、Promise ack 或可关联 Replicant 更新的设备命令，点击后进入 pending，并在等待确认期间阻止重复提交。只有消息回执或 Replicant 更新后才显示成功；失败时恢复为最后确认状态并在操作附近呈现错误。现有 fire-and-forget 消息在本次纯 UI 改造中保持协议不变，不伪造成功或 pending；为其补充回执需要另立协议任务。
 
 ### 10.2 错误层级
 
@@ -270,8 +279,8 @@ Playwright 在 320、480 和 768px 宽度生成截图，并检查：
 - ATEM 与 Mixer 连接和控制。
 - OBS Scene、Source、Streaming 与 Recording。
 - VB Matrix 点击 patch/de-patch、单点控制和 preset。
-- Log Viewer 搜索、Bundle/Level 筛选、自动清理、导出和清空。
-- Schedule 同步、筛选与 Seamer 触发字段选择。
+- Log Viewer 搜索、Bundle/Level 筛选和自动清理。
+- Schedule 本地条目编辑、外部条目只读和 Active 切换。
 - Seamer 流程与 Trigger 编辑。
 - Backup 敏感度选择、Secret 确认和备份历史。
 
@@ -281,12 +290,13 @@ CI 在临时目录中只复制一个目标 bundle，安装其 `package.json` 声
 
 ## 13. 实施顺序
 
-1. 建立权威源、同步脚本、快照检查和基础组件。
-2. 以 Logger System 和 VB Matrix Control 作为参考实现并校准视觉规范。
-3. 改造 ATEM、Mixer 和 OBS 设备控制面板。
-4. 改造 Schedule Manager、Seamer 和 Backup System。
-5. 完成逐 bundle 构建、Playwright 检查、独立性检查和手动播控回归。
-6. 更新开发日志、README 和相关手册，明确 UI 同步与独立构建方法。
+1. 完成源码独立性前置计划和真正的隔离构建验证。
+2. 建立权威源、同步脚本、快照检查和基础组件。
+3. 以 Logger System 和 VB Matrix Control 作为参考实现并校准视觉规范。
+4. 改造 ATEM、Mixer 和 OBS 设备控制面板。
+5. 改造 Schedule Manager、Seamer 和 Backup System。
+6. 完成逐 bundle 构建、Playwright 检查、独立性检查和手动播控回归。
+7. 更新开发日志、README 和相关手册，明确 UI 同步与独立构建方法。
 
 ## 14. 风险与缓解
 
