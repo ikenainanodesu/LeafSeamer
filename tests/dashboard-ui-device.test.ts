@@ -5,23 +5,52 @@ import { ok, test } from "./test-harness";
 
 const projectRoot = path.resolve(__dirname, "..");
 
-const entries = [
-  "bundles/atem-control/src/dashboard/atem-connection.tsx",
-  "bundles/atem-control/src/dashboard/atem-control.tsx",
-  "bundles/mixer-control/src/dashboard/mixer-connection.tsx",
-  "bundles/mixer-control/src/dashboard/mixer-panel.tsx",
-  "bundles/obs-control/src/dashboard/obs-connection.tsx",
-  "bundles/obs-control/src/dashboard/obs-control-panel.tsx",
+type DashboardEntry = {
+  relative: string;
+  component: string;
+};
+
+const entries: DashboardEntry[] = [
+  {
+    relative: "bundles/atem-control/src/dashboard/atem-connection.tsx",
+    component: "AtemConnection",
+  },
+  {
+    relative: "bundles/atem-control/src/dashboard/atem-control.tsx",
+    component: "AtemControl",
+  },
+  {
+    relative: "bundles/mixer-control/src/dashboard/mixer-connection.tsx",
+    component: "MixerConnection",
+  },
+  {
+    relative: "bundles/mixer-control/src/dashboard/mixer-panel.tsx",
+    component: "MixerPanel",
+  },
+  {
+    relative: "bundles/obs-control/src/dashboard/obs-connection.tsx",
+    component: "ObsConnection",
+  },
+  {
+    relative: "bundles/obs-control/src/dashboard/obs-control-panel.tsx",
+    component: "ObsControlPanel",
+  },
 ];
 
-const parseSource = (relative: string): ts.SourceFile =>
+const parseText = (fileName: string, text: string): ts.SourceFile =>
   ts.createSourceFile(
-    relative,
-    fs.readFileSync(path.join(projectRoot, relative), "utf8"),
+    fileName,
+    text,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX
   );
+
+const readSourceText = (relative: string): string =>
+  fs.readFileSync(path.join(projectRoot, relative), "utf8");
+
+const parseSource = (relative: string): ts.SourceFile =>
+  parseText(relative, readSourceText(relative));
 
 const descendants = (node: ts.Node): ts.Node[] => {
   const result: ts.Node[] = [];
@@ -35,6 +64,119 @@ const descendants = (node: ts.Node): ts.Node[] => {
 
 const stringLiteralValue = (node: ts.Expression | undefined): string | undefined =>
   node && ts.isStringLiteralLike(node) ? node.text : undefined;
+
+const bindingNameIncludes = (name: ts.BindingName, expected: string): boolean => {
+  if (ts.isIdentifier(name)) {
+    return name.text === expected;
+  }
+  return name.elements.some((element) => {
+    if (ts.isBindingElement(element)) {
+      return bindingNameIncludes(element.name, expected);
+    }
+    return false;
+  });
+};
+
+// 收集变量、参数、函数、类、导入和捕获变量的真实绑定所有者。
+const bindingOwners = (source: ts.SourceFile, name: string): ts.Node[] => {
+  const owners = new Set<ts.Node>();
+  const addBinding = (node: ts.Node, bindingName: ts.BindingName | undefined): void => {
+    if (bindingName && bindingNameIncludes(bindingName, name)) {
+      owners.add(node);
+    }
+  };
+
+  for (const node of descendants(source)) {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      addBinding(node, node.name);
+    } else if (
+      (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) &&
+      node.name?.text === name
+    ) {
+      owners.add(node);
+    } else if (
+      (ts.isClassDeclaration(node) || ts.isClassExpression(node)) &&
+      node.name?.text === name
+    ) {
+      owners.add(node);
+    } else if (ts.isCatchClause(node)) {
+      addBinding(node.variableDeclaration ?? node, node.variableDeclaration?.name);
+    } else if (ts.isImportClause(node) && node.name?.text === name) {
+      owners.add(node);
+    } else if (
+      (ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) &&
+      node.name.text === name
+    ) {
+      owners.add(node);
+    }
+  }
+  return [...owners];
+};
+
+const hasDeclareModifierInAncestors = (node: ts.Node): boolean => {
+  let current: ts.Node | undefined = node;
+  while (current) {
+    if (
+      ts.isVariableStatement(current) &&
+      current.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword
+      )
+    ) {
+      return true;
+    }
+    if (
+      ts.isModuleDeclaration(current) &&
+      current.name.getText() === "global" &&
+      current.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword
+      )
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
+const isAmbientNodecgOwner = (node: ts.Node): boolean =>
+  ts.isVariableDeclaration(node) &&
+  ts.isIdentifier(node.name) &&
+  node.name.text === "nodecg" &&
+  hasDeclareModifierInAncestors(node);
+
+const hasUniqueAmbientNodecgBinding = (source: ts.SourceFile): boolean => {
+  const owners = bindingOwners(source, "nodecg");
+  return owners.length === 1 && isAmbientNodecgOwner(owners[0]);
+};
+
+const importSpecifierModule = (node: ts.Node): string | undefined => {
+  if (!ts.isImportSpecifier(node) || !ts.isNamedImports(node.parent)) {
+    return undefined;
+  }
+  const importClause = node.parent.parent;
+  if (!ts.isImportClause(importClause) || !ts.isImportDeclaration(importClause.parent)) {
+    return undefined;
+  }
+  return stringLiteralValue(importClause.parent.moduleSpecifier);
+};
+
+const importedSymbolName = (node: ts.ImportSpecifier): string =>
+  node.propertyName?.text ?? node.name.text;
+
+const hasUniqueExactNamedImport = (
+  source: ts.SourceFile,
+  name: string,
+  moduleSpecifier: string
+): boolean => {
+  const owners = bindingOwners(source, name);
+  return (
+    owners.length === 1 &&
+    ts.isImportSpecifier(owners[0]) &&
+    owners[0].name.text === name &&
+    importedSymbolName(owners[0]) === name &&
+    importSpecifierModule(owners[0]) === moduleSpecifier
+  );
+};
 
 const jsxTagName = (node: ts.JsxTagNameExpression): string | undefined => {
   if (ts.isIdentifier(node)) {
@@ -54,46 +196,40 @@ const isPanelErrorBoundary = (node: ts.Node): node is ts.JsxElement | ts.JsxSelf
   return jsxTagName(tagName) === "PanelErrorBoundary";
 };
 
-const isApplicationComponent = (node: ts.Node): node is ts.JsxElement | ts.JsxSelfClosingElement => {
+const isExpectedComponent = (node: ts.Node, component: string): boolean => {
   if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) {
     return false;
   }
   const tagName = ts.isJsxElement(node) ? node.openingElement.tagName : node.tagName;
-  const name = jsxTagName(tagName);
-  return Boolean(name && /^[A-Z]/.test(name.split(".").pop() ?? ""));
+  return jsxTagName(tagName) === component;
 };
 
-const boundaryWrapsApplication = (renderArgument: ts.Expression): boolean =>
+const boundaryWrapsComponent = (
+  renderArgument: ts.Expression,
+  component: string
+): boolean =>
   [renderArgument, ...descendants(renderArgument)].some(
     (node) =>
       isPanelErrorBoundary(node) &&
       descendants(node).some(
-        (child) => child !== node && isApplicationComponent(child)
+        (child) => child !== node && isExpectedComponent(child, component)
       )
   );
 
-const renderArgumentFromFixture = (text: string): ts.Expression => {
-  const source = ts.createSourceFile(
-    "device-boundary-fixture.tsx",
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX
-  );
-  const renderCall = descendants(source).find(
-    (node): node is ts.CallExpression =>
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "root" &&
-      node.expression.name.text === "render" &&
-      node.arguments.length > 0
-  );
-  if (!renderCall) {
-    throw new Error("夹具缺少 root.render 调用");
-  }
-  return renderCall.arguments[0];
-};
+const isCreateRootInitializer = (node: ts.Node): node is ts.VariableDeclaration =>
+  ts.isVariableDeclaration(node) &&
+  ts.isIdentifier(node.name) &&
+  node.initializer !== undefined &&
+  ts.isCallExpression(node.initializer) &&
+  ts.isIdentifier(node.initializer.expression) &&
+  node.initializer.expression.text === "createRoot";
+
+const isRootRenderCall = (node: ts.Node): node is ts.CallExpression =>
+  ts.isCallExpression(node) &&
+  ts.isPropertyAccessExpression(node.expression) &&
+  ts.isIdentifier(node.expression.expression) &&
+  node.expression.expression.text === "root" &&
+  node.expression.name.text === "render";
 
 const hasLocalCssImport = (source: ts.SourceFile): boolean =>
   source.statements.some(
@@ -103,52 +239,76 @@ const hasLocalCssImport = (source: ts.SourceFile): boolean =>
       stringLiteralValue(statement.moduleSpecifier) === "./_leaf-ui/index.css"
   );
 
-const hasPanelErrorBoundaryImport = (source: ts.SourceFile): boolean =>
-  source.statements.some((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      stringLiteralValue(statement.moduleSpecifier) !== "./_leaf-ui/components"
-    ) {
-      return false;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    return (
-      bindings !== undefined &&
-      ts.isNamedImports(bindings) &&
-      bindings.elements.some((element) => element.name.text === "PanelErrorBoundary")
-    );
-  });
-
-const hasProtectedRootRender = (source: ts.SourceFile): boolean =>
-  descendants(source).some(
-    (node) =>
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "root" &&
-      node.expression.name.text === "render" &&
-      node.arguments.length > 0 &&
-      boundaryWrapsApplication(node.arguments[0])
-  );
-
-const entryContractFailures = (relative: string): string[] => {
-  const source = parseSource(relative);
+const entryContractFailures = (
+  source: ts.SourceFile,
+  entry: DashboardEntry
+): string[] => {
   const failures: string[] = [];
   if (!hasLocalCssImport(source)) {
     failures.push("未从本地导入 ./_leaf-ui/index.css");
   }
-  if (!hasPanelErrorBoundaryImport(source)) {
-    failures.push("未从本地组件导入 PanelErrorBoundary");
+  if (
+    !hasUniqueExactNamedImport(
+      source,
+      "PanelErrorBoundary",
+      "./_leaf-ui/components"
+    )
+  ) {
+    failures.push("PanelErrorBoundary 不是本地模块中的同名精确命名导入");
   }
-  if (!hasProtectedRootRender(source)) {
-    failures.push("root.render 未由边界真实包裹应用组件");
+  if (!hasUniqueExactNamedImport(source, "createRoot", "react-dom/client")) {
+    failures.push("createRoot 不是 react-dom/client 中无遮蔽的精确命名导入");
+  }
+
+  const rootOwners = bindingOwners(source, "root");
+  const createRootVariables = descendants(source).filter(isCreateRootInitializer);
+  const rootVariable = rootOwners.length === 1 ? rootOwners[0] : undefined;
+  if (
+    createRootVariables.length !== 1 ||
+    rootVariable !== createRootVariables[0] ||
+    !ts.isVariableDeclaration(rootVariable) ||
+    !ts.isIdentifier(rootVariable.name) ||
+    rootVariable.name.text !== "root"
+  ) {
+    failures.push("root 不是唯一由 createRoot(...) initializer 建立的变量");
+  }
+
+  const rootRenderCalls = descendants(source).filter(isRootRenderCall);
+  if (rootRenderCalls.length !== 1) {
+    failures.push("root.render 不是唯一渲染调用");
+  } else if (
+    rootRenderCalls[0].arguments.length === 0 ||
+    !boundaryWrapsComponent(rootRenderCalls[0].arguments[0], entry.component)
+  ) {
+    failures.push(`root.render 未由边界精确包裹 ${entry.component}`);
   }
   return failures;
 };
 
+const ambientDeclarationText = (relative: string): string => {
+  const sourceDirectory = path.resolve(
+    projectRoot,
+    path.dirname(relative),
+    ".."
+  );
+  const globalFile = path.join(sourceDirectory, "global.d.ts");
+  return fs.existsSync(globalFile) ? fs.readFileSync(globalFile, "utf8") : "";
+};
+
+const parseCommandSource = (relative: string): ts.SourceFile => {
+  const source = parseSource(relative);
+  if (hasUniqueAmbientNodecgBinding(source)) {
+    return source;
+  }
+  return parseText(
+    relative,
+    `${readSourceText(relative)}\n${ambientDeclarationText(relative)}`
+  );
+};
+
 type CommandContract = {
   relative: string;
-  receiver?: string;
+  receiver?: "nodecg";
   callee: string;
   argumentIndex: number;
   command: string;
@@ -218,8 +378,20 @@ const commandContracts: CommandContract[] = [
   },
 ];
 
-const hasCommandCall = (source: ts.SourceFile, contract: CommandContract): boolean =>
-  descendants(source).some((node) => {
+const hasCommandBinding = (source: ts.SourceFile, contract: CommandContract): boolean =>
+  contract.receiver === "nodecg"
+    ? hasUniqueAmbientNodecgBinding(source)
+    : hasUniqueExactNamedImport(
+        source,
+        "sendAuthenticatedCommand",
+        "../_leaf-core/security/authenticated-command-client"
+      );
+
+const hasCommandCall = (source: ts.SourceFile, contract: CommandContract): boolean => {
+  if (!hasCommandBinding(source, contract)) {
+    return false;
+  }
+  return descendants(source).some((node) => {
     if (!ts.isCallExpression(node)) {
       return false;
     }
@@ -237,73 +409,173 @@ const hasCommandCall = (source: ts.SourceFile, contract: CommandContract): boole
     }
     return stringLiteralValue(node.arguments[contract.argumentIndex]) === contract.command;
   });
+};
 
-const commandFixture = (): ts.SourceFile =>
-  ts.createSourceFile(
-    "device-command-fixture.tsx",
-    `// nodecg.sendMessage("atem:cut");
-const text = "atem:cut";
-const fake = () => "nodecg.sendMessage(\\\"atem:cut\\\")";`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX
+const compileFixture = (fileName: string, text: string): ts.SourceFile => {
+  const result = ts.transpileModule(text, {
+    fileName,
+    reportDiagnostics: true,
+    compilerOptions: {
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  const errors = (result.diagnostics ?? []).filter(
+    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error
   );
+  if (errors.length > 0) {
+    throw new Error(
+      `${fileName} fixture 编译失败: ${errors
+        .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "))
+        .join("; ")}`
+    );
+  }
+  return parseText(fileName, text);
+};
 
-// 设备入口必须使用各自 bundle 的 UI 快照，并在真实渲染树中设置错误边界。
-test("设备 Dashboard 入口使用本地 UI 快照和错误边界", () => {
-  const failures = entries.flatMap((relative) =>
-    entryContractFailures(relative).map((failure) => `${relative}: ${failure}`)
+const entryFixture = (body: string, setup = ""): string => `
+import { createRoot } from "react-dom/client";
+import { PanelErrorBoundary } from "./_leaf-ui/components";
+import "./_leaf-ui/index.css";
+const AtemConnection = () => <div />;
+const Button = () => <button />;
+${setup}
+${body}
+`;
+
+const commandFixture = (body: string): string => `
+declare const nodecg: { sendMessage: (command: string, payload: { ip: string }) => void };
+${body}
+`;
+
+const authenticatedCommandFixture = (body: string): string => `
+import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
+${body}
+`;
+
+// 设备入口必须锁定真实组件、错误边界、createRoot 和唯一 root.render 结构。
+test("设备 Dashboard 入口绑定真实入口组件和渲染 API", () => {
+  const failures = entries.flatMap((entry) =>
+    entryContractFailures(parseSource(entry.relative), entry).map(
+      (failure) => `${entry.relative}: ${failure}`
+    )
   );
   if (failures.length > 0) {
     throw new Error(failures.join("; "));
   }
 });
 
-// 关键命令必须来自指定调用节点的真实字符串字面量参数。
-test("设备 UI 改造保留关键设备命令名称", () => {
+// 关键命令必须绑定到 ambient nodecg 或本 bundle 的认证命令导入。
+test("设备 UI 改造保留绑定到真实 API 的关键命令", () => {
   const failures = commandContracts
-    .filter((contract) => !hasCommandCall(parseSource(contract.relative), contract))
-    .map((contract) => `${contract.relative}: 缺少 ${contract.command}`);
+    .filter((contract) => !hasCommandCall(parseCommandSource(contract.relative), contract))
+    .map((contract) => `${contract.relative}: 缺少真实绑定的 ${contract.command}`);
   if (failures.length > 0) {
     throw new Error(failures.join("; "));
   }
 });
 
-// 夹具反例确保注释、字符串、空边界和伪造命令不会满足 AST 合同。
-test("设备合同夹具拒绝注释字符串和空边界", () => {
-  ok(
-    boundaryWrapsApplication(
-      renderArgumentFromFixture(
-        "root.render(<PanelErrorBoundary><Panel /></PanelErrorBoundary>);"
-      )
+// 可编译夹具覆盖伪造组件、伪 root、多次 render、错误导入和局部遮蔽。
+test("设备合同夹具拒绝伪造入口和 API 绑定", () => {
+  const valid = compileFixture(
+    "valid-entry-fixture.tsx",
+    entryFixture(
+      "const root = createRoot(document.getElementById(\"root\")!); root.render(<PanelErrorBoundary><AtemConnection /></PanelErrorBoundary>);"
+    )
+  );
+  ok(entryContractFailures(valid, entries[0]).length === 0);
+
+  const buttonChild = compileFixture(
+    "button-child-fixture.tsx",
+    entryFixture(
+      "const root = createRoot(document.getElementById(\"root\")!); root.render(<PanelErrorBoundary><Button /></PanelErrorBoundary>);"
+    )
+  );
+  ok(entryContractFailures(buttonChild, entries[0]).length > 0);
+
+  const aliasedBoundary = compileFixture(
+    "aliased-boundary-fixture.tsx",
+    entryFixture(
+      "const root = createRoot(document.getElementById(\"root\")!); root.render(<PanelErrorBoundary><AtemConnection /></PanelErrorBoundary>);"
+    ).replace(
+      'import { PanelErrorBoundary } from "./_leaf-ui/components";',
+      'import { Button as PanelErrorBoundary } from "./_leaf-ui/components";'
+    )
+  );
+  ok(entryContractFailures(aliasedBoundary, entries[0]).length > 0);
+
+  const pseudoRoot = compileFixture(
+    "pseudo-root-fixture.tsx",
+    entryFixture(
+      "const fakeRoot = { render: (_value: unknown) => {} }; const root = fakeRoot; root.render(<PanelErrorBoundary><AtemConnection /></PanelErrorBoundary>);"
+    ).replace(
+      'const AtemConnection = () => <div />;\n',
+      'const AtemConnection = () => <div />;\n'
+    )
+  );
+  ok(entryContractFailures(pseudoRoot, entries[0]).length > 0);
+
+  const duplicateRender = compileFixture(
+    "duplicate-render-fixture.tsx",
+    entryFixture(
+      "const root = createRoot(document.getElementById(\"root\")!); root.render(<PanelErrorBoundary><AtemConnection /></PanelErrorBoundary>); root.render(<AtemConnection />);"
+    )
+  );
+  ok(entryContractFailures(duplicateRender, entries[0]).length > 0);
+
+  const shadowedCreateRoot = compileFixture(
+    "shadowed-create-root-fixture.tsx",
+    entryFixture(
+      "const makeRoot = () => { const createRoot = () => ({ render: (_value: unknown) => {} }); return createRoot; }; const root = createRoot(document.getElementById(\"root\")!); root.render(<PanelErrorBoundary><AtemConnection /></PanelErrorBoundary>);"
+    )
+  );
+  ok(entryContractFailures(shadowedCreateRoot, entries[0]).length > 0);
+
+  const shadowedNodecg = compileFixture(
+    "shadowed-nodecg-fixture.tsx",
+    commandFixture(
+      "const useLocalNodecg = () => { const nodecg = { sendMessage: (_command: string, _payload: { ip: string }) => {} }; nodecg.sendMessage(\"atem:cut\", { ip: \"127.0.0.1\" }); };"
     )
   );
   ok(
-    !boundaryWrapsApplication(
-      renderArgumentFromFixture(
-        "root.render(<PanelErrorBoundary>{/* <Panel /> */}</PanelErrorBoundary>);"
-      )
-    )
-  );
-  ok(
-    !boundaryWrapsApplication(
-      renderArgumentFromFixture(
-        'root.render(<PanelErrorBoundary>{"<Panel />"}</PanelErrorBoundary>);'
-      )
-    )
-  );
-  ok(
-    !boundaryWrapsApplication(
-      renderArgumentFromFixture("root.render(<PanelErrorBoundary />);")
-    )
-  );
-  ok(
-    !hasCommandCall(commandFixture(), {
+    !hasCommandCall(shadowedNodecg, {
+      relative: "fixture",
       receiver: "nodecg",
       callee: "sendMessage",
       argumentIndex: 0,
       command: "atem:cut",
+    })
+  );
+
+  const shadowedAuthenticatedCommand = compileFixture(
+    "shadowed-authenticated-command-fixture.tsx",
+    authenticatedCommandFixture(
+      "const useLocalCommand = () => { const sendAuthenticatedCommand = (_bundle: string, _command: string) => {}; sendAuthenticatedCommand(\"obs-control\", \"obs.startStreaming\"); };"
+    )
+  );
+  ok(
+    !hasCommandCall(shadowedAuthenticatedCommand, {
       relative: "fixture",
+      callee: "sendAuthenticatedCommand",
+      argumentIndex: 1,
+      command: "obs.startStreaming",
+    })
+  );
+
+  const commentAndString = compileFixture(
+    "comment-and-string-fixture.tsx",
+    commandFixture(
+      '// 注释中的 nodecg.sendMessage("atem:cut");\nconst text = "atem:cut"; const fake = () => "nodecg.sendMessage(\\\"atem:cut\\\")";'
+    )
+  );
+  ok(
+    !hasCommandCall(commentAndString, {
+      relative: "fixture",
+      receiver: "nodecg",
+      callee: "sendMessage",
+      argumentIndex: 0,
+      command: "atem:cut",
     })
   );
 });
