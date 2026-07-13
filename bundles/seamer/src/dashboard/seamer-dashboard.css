@@ -202,7 +202,8 @@
 }
 
 .seamer-condition-action-grid,
-.seamer-fields-grid {
+.seamer-fields-grid,
+.seamer-legacy-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -234,7 +235,8 @@
   .seamer-card-grid,
   .seamer-trigger-grid,
   .seamer-condition-action-grid,
-  .seamer-fields-grid {
+  .seamer-fields-grid,
+  .seamer-legacy-grid {
     grid-template-columns: 1fr;
   }
 

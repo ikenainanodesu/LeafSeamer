@@ -13,10 +13,10 @@ import Card from "./components/Card";
 import EditCardModal from "./components/EditCardModal";
 import TriggerPage from "./trigger/TriggerPage";
 
+type SeamerTab = "workspace" | "triggers";
+
 const App = () => {
-  const [activeTab, setActiveTab] = useState<"workspace" | "triggers">(
-    "workspace"
-  );
+  const [activeTab, setActiveTab] = useState<SeamerTab>("workspace");
   const [cards, setCards] = useState<SeamerCard[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [currentCard, setCurrentCard] = useState<SeamerCard | null>(null);
@@ -24,6 +24,8 @@ const App = () => {
   const [integrations, setIntegrations] = useState<SeamerIntegrations>({});
   const cardDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const addCardRef = useRef<HTMLSpanElement | null>(null);
+  const workspaceTabRef = useRef<HTMLButtonElement | null>(null);
+  const triggersTabRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     // 监听 Seamer 卡片 Replicant。
@@ -83,6 +85,31 @@ const App = () => {
     setIsEditing(true);
   };
 
+  const activateTab = useCallback((tab: SeamerTab, focus = false) => {
+    setActiveTab(tab);
+    if (!focus) return;
+    requestAnimationFrame(() => {
+      (tab === "workspace" ? workspaceTabRef.current : triggersTabRef.current)?.focus();
+    });
+  }, []);
+
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    let nextTab: SeamerTab | null = null;
+    if (event.key === "ArrowLeft") {
+      nextTab = activeTab === "workspace" ? "triggers" : "workspace";
+    } else if (event.key === "ArrowRight") {
+      nextTab = activeTab === "workspace" ? "triggers" : "workspace";
+    } else if (event.key === "Home") {
+      nextTab = "workspace";
+    } else if (event.key === "End") {
+      nextTab = "triggers";
+    }
+    if (nextTab !== null) {
+      event.preventDefault();
+      activateTab(nextTab, true);
+    }
+  };
+
   const restoreCardDeleteFocus = useCallback(() => {
     requestAnimationFrame(() => {
       const trigger = cardDeleteTriggerRef.current;
@@ -140,7 +167,11 @@ const App = () => {
         actions={
           activeTab === "workspace" ? (
             <span ref={addCardRef}>
-              <Button tone="primary" onClick={createEmptyCard}>
+              <Button
+                className="seamer-add-card"
+                tone="primary"
+                onClick={createEmptyCard}
+              >
                 Add Card
               </Button>
             </span>
@@ -150,27 +181,43 @@ const App = () => {
 
       <div className="seamer-tabs" role="tablist" aria-label="Seamer views">
         <button
+          ref={workspaceTabRef}
+          id="seamer-workspace-tab"
           type="button"
           className="seamer-tab"
           role="tab"
           aria-selected={activeTab === "workspace"}
-          onClick={() => setActiveTab("workspace")}
+          aria-controls="seamer-workspace-panel"
+          tabIndex={activeTab === "workspace" ? 0 : -1}
+          onClick={() => activateTab("workspace")}
+          onKeyDown={handleTabKeyDown}
         >
           Workspace
         </button>
         <button
+          ref={triggersTabRef}
+          id="seamer-triggers-tab"
           type="button"
           className="seamer-tab"
           role="tab"
           aria-selected={activeTab === "triggers"}
-          onClick={() => setActiveTab("triggers")}
+          aria-controls="seamer-triggers-panel"
+          tabIndex={activeTab === "triggers" ? 0 : -1}
+          onClick={() => activateTab("triggers")}
+          onKeyDown={handleTabKeyDown}
         >
           Triggers
         </button>
       </div>
 
       {activeTab === "workspace" ? (
-        <main className="seamer-card-grid" role="tabpanel">
+        <main
+          id="seamer-workspace-panel"
+          className="seamer-card-grid"
+          role="tabpanel"
+          aria-labelledby="seamer-workspace-tab"
+          tabIndex={0}
+        >
           {cards.map((card) => (
             <Card
               key={card.id}
@@ -193,14 +240,21 @@ const App = () => {
           ) : null}
         </main>
       ) : (
-        <TriggerPage
-          mixerState={mixerState}
-          obsConnections={obsConnections}
-          obsStates={obsStates}
-          vbDevices={vbDevices}
-          atemSwitchers={atemSwitchers}
-          integrations={integrations}
-        />
+        <section
+          id="seamer-triggers-panel"
+          role="tabpanel"
+          aria-labelledby="seamer-triggers-tab"
+          tabIndex={0}
+        >
+          <TriggerPage
+            mixerState={mixerState}
+            obsConnections={obsConnections}
+            obsStates={obsStates}
+            vbDevices={vbDevices}
+            atemSwitchers={atemSwitchers}
+            integrations={integrations}
+          />
+        </section>
       )}
 
       {isEditing && currentCard && activeTab === "workspace" ? (

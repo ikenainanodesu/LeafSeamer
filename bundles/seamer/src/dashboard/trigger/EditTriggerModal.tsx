@@ -123,9 +123,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
     switch (condition.module) {
       case "mixer":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Channel:</label>
               <select
@@ -218,9 +216,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         );
       case "atem":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Switcher IP:</label>
               <select
@@ -253,9 +249,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         );
       case "obs":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Connection:</label>
               <select
@@ -330,9 +324,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         );
       case "vb":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Input Device:</label>
               <select
@@ -477,9 +469,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
     switch (action.module) {
       case "mixer":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Channel:</label>
               <select
@@ -537,9 +527,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         );
       case "atem":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>IP:</label>
               <select
@@ -598,9 +586,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         );
       case "obs":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Connection:</label>
               <select
@@ -672,9 +658,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
         );
       case "vb":
         return (
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}
-          >
+          <div className="seamer-legacy-grid">
             <div>
               <label>Connection:</label>
               <input
