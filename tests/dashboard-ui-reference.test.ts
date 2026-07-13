@@ -398,6 +398,68 @@ const hasToastBinding = (source: ts.SourceFile): boolean => {
   return usesToast && rendersToastRegion;
 };
 
+const isPromiseMethodCall = (
+  node: ts.Node,
+  method: "catch" | "finally"
+): node is ts.CallExpression & { expression: ts.PropertyAccessExpression } =>
+  ts.isCallExpression(node) &&
+  ts.isPropertyAccessExpression(node.expression) &&
+  node.expression.name.text === method;
+
+const receiverOriginatesFromAuthenticatedPatch = (receiver: ts.Expression): boolean => {
+  if (isAuthenticatedPatchCall(receiver)) {
+    return true;
+  }
+  if (
+    !ts.isCallExpression(receiver) ||
+    !ts.isPropertyAccessExpression(receiver.expression) ||
+    (receiver.expression.name.text !== "catch" && receiver.expression.name.text !== "finally")
+  ) {
+    return false;
+  }
+  return receiverOriginatesFromAuthenticatedPatch(receiver.expression.expression);
+};
+
+const handlerCallsDangerToast = (handler: ts.Expression): boolean => {
+  if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) {
+    return false;
+  }
+  return [handler.body, ...descendants(handler.body)].some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "pushToast" &&
+      node.arguments.length >= 2 &&
+      stringLiteralValue(node.arguments[1]) === "danger"
+  );
+};
+
+const hasAuthenticatedCatchToastContract = (source: ts.SourceFile): boolean =>
+  descendants(source).some(
+    (node) =>
+      isPromiseMethodCall(node, "catch") &&
+      node.arguments.length === 1 &&
+      receiverOriginatesFromAuthenticatedPatch(node.expression.expression) &&
+      handlerCallsDangerToast(node.arguments[0])
+  );
+
+const receiverChainHasAuthenticatedCatchToast = (receiver: ts.Expression): boolean => {
+  if (!ts.isCallExpression(receiver) || !ts.isPropertyAccessExpression(receiver.expression)) {
+    return false;
+  }
+  if (receiver.expression.name.text === "catch") {
+    return (
+      receiver.arguments.length === 1 &&
+      receiverOriginatesFromAuthenticatedPatch(receiver.expression.expression) &&
+      handlerCallsDangerToast(receiver.arguments[0])
+    );
+  }
+  if (receiver.expression.name.text !== "finally") {
+    return false;
+  }
+  return receiverChainHasAuthenticatedCatchToast(receiver.expression.expression);
+};
+
 const hasPromiseScopedPendingContract = (source: ts.SourceFile): boolean => {
   const toggleBody = descendants(source)
     .map(functionBody)
@@ -414,14 +476,16 @@ const hasPromiseScopedPendingContract = (source: ts.SourceFile): boolean => {
       node.expression.name.text === "setTimeout"
   );
   const finallyCall = descendants(toggleBody).find(
-    (node): node is ts.CallExpression =>
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "finally" &&
+    (node): node is ts.CallExpression & { expression: ts.PropertyAccessExpression } =>
+      isPromiseMethodCall(node, "finally") &&
       node.arguments.length === 1 &&
       (ts.isArrowFunction(node.arguments[0]) || ts.isFunctionExpression(node.arguments[0]))
   );
-  if (!finallyCall || hasTimer || !descendants(finallyCall).some(isAuthenticatedPatchCall)) {
+  if (
+    !finallyCall ||
+    hasTimer ||
+    !receiverChainHasAuthenticatedCatchToast(finallyCall.expression.expression)
+  ) {
     return false;
   }
   const finallyHandler = finallyCall.arguments[0];
@@ -456,16 +520,20 @@ const hasWindowAlert = (source: ts.SourceFile): boolean =>
   );
 
 const cssDeclarations = (css: string, selector: string): Map<string, string> => {
-  const selectorStart = css.indexOf(selector);
-  const blockStart = selectorStart >= 0 ? css.indexOf("{", selectorStart) : -1;
-  const blockEnd = blockStart >= 0 ? css.indexOf("}", blockStart) : -1;
-  const block = blockStart >= 0 && blockEnd >= 0 ? css.slice(blockStart + 1, blockEnd) : "";
-  return new Map(
-    [...block.matchAll(/([a-z-]+)\s*:\s*([^;]+);/g)].map((declaration) => [
-      declaration[1],
-      declaration[2].trim(),
-    ])
-  );
+  const uncommented = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const rule of uncommented.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = rule[1].split(",").map((current) => current.trim());
+    if (!selectors.includes(selector)) {
+      continue;
+    }
+    return new Map(
+      [...rule[2].matchAll(/([a-z-]+)\s*:\s*([^;]+);/g)].map((declaration) => [
+        declaration[1],
+        declaration[2].trim(),
+      ])
+    );
+  }
+  return new Map();
 };
 
 const hasNetworkRemovalConfirmationContract = (source: ts.SourceFile): boolean =>
@@ -524,6 +592,24 @@ const networkRemovalFixture = (statement: string): ts.SourceFile =>
     ts.ScriptKind.TSX
   );
 
+const matrixPromiseFixture = (body: string): ts.SourceFile =>
+  ts.createSourceFile(
+    "matrix-promise-fixture.tsx",
+    `const togglePoint = () => { const key = "point"; const patch = {}; ${body} };`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  );
+
+const toastFixture = (command: string): ts.SourceFile =>
+  ts.createSourceFile(
+    "toast-fixture.tsx",
+    `const { items: toasts, pushToast } = useToast(); const view = <ToastRegion items={toasts} />; ${command}`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  );
+
 // 固定参考面板必须满足真实的本地 UI 导入、错误边界包裹和渲染结构。
 test("reference dashboards use the local UI snapshot and error boundary", () => {
   for (const relative of entries) {
@@ -557,6 +643,7 @@ test("VB matrix uses toast feedback and promise-scoped pending state", () => {
   ok(hasNamedImports(source, "../_leaf-ui/components", ["ToastRegion", "useToast", "IconButton"]));
   ok(hasNamedImports(source, "lucide-react", ["RefreshCw"]));
   ok(hasToastBinding(source));
+  ok(hasAuthenticatedCatchToastContract(source));
   ok(hasPromiseScopedPendingContract(source));
   ok(!hasWindowAlert(source));
   ok(hasJsxAttribute(source, "matrix-cell", "aria-busy"));
@@ -569,9 +656,35 @@ test("VB patch and preset controls use local toast and Lucide affordances", () =
   const bankSlot = parseSource("bundles/vb-matrix-control/src/dashboard/components/BankSlot.tsx");
   ok(hasNamedImports(patchStatus, "../_leaf-ui/components", ["ToastRegion", "useToast"]));
   ok(hasToastBinding(patchStatus));
+  ok(hasAuthenticatedCatchToastContract(patchStatus));
   ok(!hasWindowAlert(patchStatus));
   ok(hasNamedImports(bankSlot, "../_leaf-ui/components", ["IconButton"]));
   ok(hasNamedImports(bankSlot, "lucide-react", ["Trash2"]));
+});
+
+// 认证调用必须位于同一 Promise receiver 链中，Toast 也必须位于其 catch 回调中。
+test("VB matrix promise and toast fixtures reject unrelated callbacks", () => {
+  ok(
+    !hasPromiseScopedPendingContract(
+      matrixPromiseFixture(
+        'Promise.resolve().finally(() => { sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch); setPendingKeys((current) => { const next = current; next.delete(key); return next; }); });'
+      )
+    )
+  );
+  ok(
+    !hasAuthenticatedCatchToastContract(
+      toastFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => console.error(error)); Promise.resolve().catch((error) => pushToast(String(error), "danger"));'
+      )
+    )
+  );
+  ok(
+    !hasPromiseScopedPendingContract(
+      matrixPromiseFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")); sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).finally(() => { setPendingKeys((current) => { const next = current; next.delete(key); return next; }); });'
+      )
+    )
+  );
 });
 
 // Matrix 在窄面板中以固定点击尺寸和自身滚动区呈现，避免压缩整个页面。
@@ -593,6 +706,17 @@ test("VB matrix CSS keeps fixed cells inside an internal scroll viewport", () =>
   ok(cell.get("width") === "28px" && cell.get("height") === "28px" && cell.get("min-width") === "28px");
   ok(outputHeader.get("position") === "sticky" && outputHeader.get("top") === "0");
   ok(inputHeader.get("position") === "sticky" && inputHeader.get("left") === "0");
+});
+
+// CSS 解析必须忽略注释并精确匹配选择器，不能把前缀选择器当成目标规则。
+test("VB matrix CSS fixture rejects comments and selector prefixes", () => {
+  const misleadingCss = `
+    /* .matrix-cell { width: 28px; height: 28px; } */
+    .matrix-cellular { width: 28px; height: 28px; }
+  `;
+  const selectorListCss = ".matrix-cellular, .matrix-cell { width: 28px; }";
+  ok(cssDeclarations(misleadingCss, ".matrix-cell").size === 0);
+  ok(cssDeclarations(selectorListCss, ".matrix-cell").get("width") === "28px");
 });
 
 // 删除状态以 null 表示无待删除项，空字符串 ID 也必须在确认后传给原删除逻辑。

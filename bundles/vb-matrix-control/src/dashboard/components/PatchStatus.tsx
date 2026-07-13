@@ -42,7 +42,12 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
   };
 
   if (!status || !status.inputDevice || !status.outputDevice) {
-    return <><div className="empty-inline">Please select device</div><ToastRegion items={toasts} /></>;
+    return (
+      <>
+        <div className="empty-inline">Please select device</div>
+        <ToastRegion items={toasts} />
+      </>
+    );
   }
 
   const isPatched = status.exists && status.gain > -144;
@@ -51,26 +56,26 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
     <>
       <div className="patch-status">
         <button
-        type="button"
-        onClick={toggleConnection}
-        className={`connection-toggle ${
-          isPatched ? "is-patched" : "is-unpatched"
-        } ${status.mute ? "is-muted" : ""}`}
-      >
-        {isPatched ? (
-          <>
-            <span className="toggle-value">
-              {status.mute ? "MUTED" : `${status.gain.toFixed(1)} dB`}
-            </span>
-            <span className="toggle-hint">Click to unpatch</span>
-          </>
-        ) : (
-          <>
-            <span className="toggle-value">UNPATCHED</span>
-            <span className="toggle-hint">Click to patch</span>
-          </>
-        )}
-      </button>
+          type="button"
+          onClick={toggleConnection}
+          className={`connection-toggle ${
+            isPatched ? "is-patched" : "is-unpatched"
+          } ${status.mute ? "is-muted" : ""}`}
+        >
+          {isPatched ? (
+            <>
+              <span className="toggle-value">
+                {status.mute ? "MUTED" : `${status.gain.toFixed(1)} dB`}
+              </span>
+              <span className="toggle-hint">Click to unpatch</span>
+            </>
+          ) : (
+            <>
+              <span className="toggle-value">UNPATCHED</span>
+              <span className="toggle-hint">Click to patch</span>
+            </>
+          )}
+        </button>
 
         {isPatched && (
           <div className="status-actions">
