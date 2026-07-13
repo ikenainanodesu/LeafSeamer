@@ -1,6 +1,6 @@
 import React from "react";
 import { CurrentPatchStatus } from "../../types";
-import { sendAuthenticatedCommand } from "../../../../../shared/security/authenticated-command-client";
+import { sendAuthenticatedCommand } from "../../_leaf-core/security/authenticated-command-client";
 
 const updatePatch = (patch: CurrentPatchStatus) =>
   sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch(

@@ -1,7 +1,7 @@
 import type {
   CapabilityManifest,
   CapabilityReference,
-} from "../../../../shared/integration/types";
+} from "../_leaf-core/integration/types";
 
 export type SeamerActionType =
   | "mixer-fader"

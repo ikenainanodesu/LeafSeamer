@@ -5,15 +5,15 @@ import { SourceManager } from "./source-manager";
 import { createLogger } from "./logger";
 import { OBSConnectionSettings } from "../src/types/obs.types";
 import { ensureOptionalLogCapture } from "./optional-log-capture";
-import { CommandGateway } from "../../../shared/security/command-gateway";
-import { createOptionalAuditWriter } from "../../../shared/security/nodecg-command";
+import { CommandGateway } from "../src/_leaf-core/security/command-gateway";
+import { createOptionalAuditWriter } from "../src/_leaf-core/security/nodecg-command";
 import path from "node:path";
-import { createSecretManagerFromEnvironment } from "../../../shared/security/secret-manager";
+import { createSecretManagerFromEnvironment } from "../src/_leaf-core/security/secret-manager";
 import { OBSSecretSettings } from "./secret-settings";
 import {
   installAuthenticatedCommandSocket,
-} from "../../../shared/security/authenticated-command";
-import type { CommandEnvelope } from "../../../shared/integration/types";
+} from "../src/_leaf-core/security/authenticated-command";
+import type { CommandEnvelope } from "../src/_leaf-core/integration/types";
 
 export interface OBSControlApi {
   executeCommand: (envelope: CommandEnvelope) => ReturnType<CommandGateway["execute"]>;

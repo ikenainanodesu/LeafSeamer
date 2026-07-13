@@ -11,9 +11,9 @@ import {
   MatrixPointAddress,
   MatrixPointStatus,
 } from "../src/types";
-import { CommandGateway } from "../../../shared/security/command-gateway";
-import { createLegacyCommandEnvelope } from "../../../shared/security/nodecg-command";
-import { allowsLegacyPrivilegedMessages } from "../../../shared/security/authenticated-command";
+import { CommandGateway } from "../src/_leaf-core/security/command-gateway";
+import { createLegacyCommandEnvelope } from "../src/_leaf-core/security/nodecg-command";
+import { allowsLegacyPrivilegedMessages } from "../src/_leaf-core/security/authenticated-command";
 
 export class MatrixManager {
   private nodecg: NodeCG.ServerAPI;

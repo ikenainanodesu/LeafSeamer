@@ -6,16 +6,16 @@ import {
   DiscoveredSwitcher,
 } from "../src/types/atem.types";
 import { ensureOptionalLogCapture } from "./optional-log-capture";
-import { CommandGateway } from "../../../shared/security/command-gateway";
+import { CommandGateway } from "../src/_leaf-core/security/command-gateway";
 import {
   createLegacyCommandEnvelope,
   createOptionalAuditWriter,
-} from "../../../shared/security/nodecg-command";
+} from "../src/_leaf-core/security/nodecg-command";
 import {
   allowsLegacyPrivilegedMessages,
   installAuthenticatedCommandSocket,
-} from "../../../shared/security/authenticated-command";
-import type { CommandEnvelope } from "../../../shared/integration/types";
+} from "../src/_leaf-core/security/authenticated-command";
+import type { CommandEnvelope } from "../src/_leaf-core/integration/types";
 
 export interface AtemControlApi {
   executeCommand: (envelope: CommandEnvelope) => ReturnType<CommandGateway["execute"]>;

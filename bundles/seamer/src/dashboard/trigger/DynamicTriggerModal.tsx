@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import type { CapabilityDefinition } from "../../../../../shared/integration/types";
+import type { CapabilityDefinition } from "../../_leaf-core/integration/types";
 import type {
   DynamicSeamerTrigger,
   SeamerIntegrations,

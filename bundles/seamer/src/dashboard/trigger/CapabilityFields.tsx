@@ -1,5 +1,5 @@
 import React from "react";
-import type { CapabilityParameter } from "../../../../../shared/integration/types";
+import type { CapabilityParameter } from "../../_leaf-core/integration/types";
 
 export const createDefaultParameters = (
   schema: CapabilityParameter[]

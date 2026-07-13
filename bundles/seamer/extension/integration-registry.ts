@@ -1,6 +1,6 @@
 import NodeCG from "nodecg/types";
-import { validateCapabilityManifest } from "../../../shared/integration/schema";
-import type { CapabilityManifest } from "../../../shared/integration/types";
+import { validateCapabilityManifest } from "../src/_leaf-core/integration/schema";
+import type { CapabilityManifest } from "../src/_leaf-core/integration/types";
 import type {
   DynamicSeamerIntegrationProvider,
   SeamerAction,

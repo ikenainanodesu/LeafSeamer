@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { AtemSwitcherInfo, AtemState } from "../types/atem.types";
-import { sendAuthenticatedCommand } from "../../../../shared/security/authenticated-command-client";
+import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
 
 declare const nodecg: any;
 

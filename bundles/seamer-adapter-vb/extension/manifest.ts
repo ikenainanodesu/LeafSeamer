@@ -1,4 +1,4 @@
-import type { CapabilityManifest } from "../../../shared/integration/types";
+import type { CapabilityManifest } from "../src/_leaf-core/integration/types";
 
 const patchParameters = [
   { id: "connectionId", displayName: "Connection ID", type: "string" as const, required: true },

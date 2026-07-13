@@ -1,7 +1,7 @@
 import {
   MemorySecretStorage,
   SecretManager,
-} from "../shared/security/secret-manager";
+} from "../bundles/obs-control/src/_leaf-core/security/secret-manager";
 import { OBSSecretSettings } from "../bundles/obs-control/extension/secret-settings";
 import { deepEqual, equal, rejects, test } from "./test-harness";
 

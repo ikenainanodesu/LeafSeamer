@@ -1,4 +1,4 @@
-import type { EventEnvelope } from "../../../../shared/integration/types";
+import type { EventEnvelope } from "../_leaf-core/integration/types";
 
 export type ScheduleScalar = string | number | boolean | null;
 

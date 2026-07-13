@@ -1,6 +1,6 @@
 import NodeCG from "nodecg/types";
 import { Storage, type CleanupResult } from "./storage";
-import { redactString } from "../../../shared/security/redaction";
+import { redactString } from "../src/_leaf-core/security/redaction";
 
 export type LogLevel = "info" | "warn" | "error";
 

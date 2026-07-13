@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { redactValue } from "../../../shared/security/redaction";
+import { redactValue } from "../src/_leaf-core/security/redaction";
 
 type SQLiteValue = string | number | null;
 

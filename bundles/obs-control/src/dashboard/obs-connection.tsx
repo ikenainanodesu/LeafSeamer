@@ -8,7 +8,7 @@ import {
 } from "../types/obs.types";
 import { v4 as uuidv4 } from "uuid";
 import "./obs-connection.css";
-import { sendAuthenticatedCommand } from "../../../../shared/security/authenticated-command-client";
+import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
 
 const ObsConnection = () => {
   const [connections, setConnections] = useState<OBSConnectionDraft[]>([]);

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { sendAuthenticatedCommand } from "../../../../../shared/security/authenticated-command-client";
+import { sendAuthenticatedCommand } from "../../_leaf-core/security/authenticated-command-client";
 import {
   CurrentPatchStatus,
   DeviceInfo,

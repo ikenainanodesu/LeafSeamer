@@ -9,10 +9,10 @@ import {
   OBSStreamSettings,
   OBSStreamSettingsDraft,
 } from "../src/types/obs.types";
-import { CommandGateway } from "../../../shared/security/command-gateway";
-import { createLegacyCommandEnvelope } from "../../../shared/security/nodecg-command";
+import { CommandGateway } from "../src/_leaf-core/security/command-gateway";
+import { createLegacyCommandEnvelope } from "../src/_leaf-core/security/nodecg-command";
 import { OBSSecretSettings } from "./secret-settings";
-import { allowsLegacyPrivilegedMessages } from "../../../shared/security/authenticated-command";
+import { allowsLegacyPrivilegedMessages } from "../src/_leaf-core/security/authenticated-command";
 
 interface SetStreamSettingsPayload {
   id: string;

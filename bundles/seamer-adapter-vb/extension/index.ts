@@ -10,7 +10,7 @@ import type {
 } from "../../seamer/src/types/seamer.types";
 import { vbManifest } from "./manifest";
 import type { VBMatrixControlApi } from "../../vb-matrix-control/extension/index";
-import { createServiceCommandEnvelope } from "../../../shared/security/nodecg-command";
+import { createServiceCommandEnvelope } from "../src/_leaf-core/security/nodecg-command";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
   const seamer = nodecg.extensions["seamer"] as SeamerExtensionApi;

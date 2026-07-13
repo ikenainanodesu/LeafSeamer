@@ -11,7 +11,7 @@ import {
   OBSStreamSettingsDraft,
 } from "../types/obs.types";
 import "./obs-control-panel.css";
-import { sendAuthenticatedCommand } from "../../../../shared/security/authenticated-command-client";
+import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
 
 // ===== 工具函数 =====
 

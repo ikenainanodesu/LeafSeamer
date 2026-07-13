@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SecretManager } from "../../../shared/security/secret-manager";
+import type { SecretManager } from "../src/_leaf-core/security/secret-manager";
 
 const NAMESPACE = "obs-control";
 
