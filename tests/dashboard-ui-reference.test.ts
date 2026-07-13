@@ -285,15 +285,38 @@ const hasNetworkRemovalConfirmationContract = (source: ts.SourceFile): boolean =
       return false;
     }
     return descendants(handler.body).some(
-      (child) =>
-        ts.isIfStatement(child) &&
-        ts.isBinaryExpression(child.expression) &&
-        child.expression.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
-        ts.isIdentifier(child.expression.left) &&
-        child.expression.left.text === "pendingRemovalId" &&
-        child.expression.right.kind === ts.SyntaxKind.NullKeyword
+      (child) => {
+        if (
+          !ts.isIfStatement(child) ||
+          !ts.isBinaryExpression(child.expression) ||
+          child.expression.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+          !ts.isIdentifier(child.expression.left) ||
+          child.expression.left.text !== "pendingRemovalId" ||
+          child.expression.right.kind !== ts.SyntaxKind.NullKeyword
+        ) {
+          return false;
+        }
+        return descendants(child.thenStatement).some(
+          (statement) =>
+            ts.isCallExpression(statement) &&
+            ts.isIdentifier(statement.expression) &&
+            statement.expression.text === "handleRemove" &&
+            statement.arguments.length === 1 &&
+            ts.isIdentifier(statement.arguments[0]) &&
+            statement.arguments[0].text === "pendingRemovalId"
+        );
+      }
     );
   });
+
+const networkRemovalFixture = (statement: string): ts.SourceFile =>
+  ts.createSourceFile(
+    "network-removal-fixture.tsx",
+    `const pendingRemovalId = null; const handleRemove = (_id: string) => {}; const view = <ConfirmDialog onConfirm={() => { ${statement} }} />;`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  );
 
 // 固定参考面板必须满足真实的本地 UI 导入、错误边界包裹和渲染结构。
 test("reference dashboards use the local UI snapshot and error boundary", () => {
@@ -316,6 +339,20 @@ test("VB network removal confirmation preserves empty-string ids", () => {
   ok(
     hasNetworkRemovalConfirmationContract(
       parseSource("bundles/vb-matrix-control/src/dashboard/components/NetworkConfigList.tsx")
+    )
+  );
+});
+
+// 守卫必须直接保护带有原始待删除 ID 的删除调用，空分支或错误实参不能通过合同。
+test("VB network removal confirmation AST fixture rejects incomplete deletion", () => {
+  ok(
+    !hasNetworkRemovalConfirmationContract(
+      networkRemovalFixture("if (pendingRemovalId !== null) {}")
+    )
+  );
+  ok(
+    !hasNetworkRemovalConfirmationContract(
+      networkRemovalFixture('if (pendingRemovalId !== null) handleRemove("other-id");')
     )
   );
 });
