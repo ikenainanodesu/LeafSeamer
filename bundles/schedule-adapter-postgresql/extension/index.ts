@@ -1,13 +1,14 @@
 import NodeCG from "nodecg/types";
 import type { ScheduleManagerApi } from "../../schedule-manager/extension/schedule-service";
 import { transformPostgresRows, type PostgresScheduleRow } from "./transform";
-
-interface QueryResult<T> {
-  rows: T[];
-}
+import {
+  executeReadOnlyScheduleQuery,
+  validateReadOnlyScheduleQuery,
+  type ReadOnlyQueryClient,
+} from "./read-only-query";
 
 interface PostgresPool {
-  query<T>(query: string): Promise<QueryResult<T>>;
+  connect(): Promise<ReadOnlyQueryClient>;
 }
 
 interface PostgresPoolConstructor {
@@ -22,6 +23,7 @@ interface PostgresConfig {
   query: string;
   sourceId?: string;
   pollIntervalMs?: number;
+  statementTimeoutMs?: number;
 }
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
@@ -31,8 +33,9 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     nodecg.log.warn("[ScheduleAdapterPostgreSQL] Configuration missing");
     return;
   }
-  if (!/^\s*select\b/i.test(config.query) || config.query.includes(";")) {
-    nodecg.log.error("[ScheduleAdapterPostgreSQL] Query must be one SELECT statement");
+  const queryError = validateReadOnlyScheduleQuery(config.query);
+  if (queryError) {
+    nodecg.log.error("[ScheduleAdapterPostgreSQL] %s", queryError);
     return;
   }
   const connectionString = process.env[config.connectionStringEnv];
@@ -44,16 +47,20 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     return;
   }
 
-  const scheduleManager = nodecg.extension[
+  const scheduleManager = nodecg.extensions[
     "schedule-manager"
   ] as ScheduleManagerApi;
   const pool = new Pool({ connectionString });
   const sourceId = config.sourceId || "postgresql";
   const poll = async () => {
     try {
-      const result = await pool.query<PostgresScheduleRow>(config.query);
+      const rows = await executeReadOnlyScheduleQuery<PostgresScheduleRow>(
+        pool,
+        config.query,
+        config.statementTimeoutMs || 10_000
+      );
       const fetchedAt = Date.now();
-      const batch = transformPostgresRows(result.rows, {
+      const batch = transformPostgresRows(rows, {
         sourceId,
         sourceRevision: String(fetchedAt),
         fetchedAt,

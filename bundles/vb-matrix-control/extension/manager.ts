@@ -13,6 +13,7 @@ import {
 } from "../src/types";
 import { CommandGateway } from "../../../shared/security/command-gateway";
 import { createLegacyCommandEnvelope } from "../../../shared/security/nodecg-command";
+import { allowsLegacyPrivilegedMessages } from "../../../shared/security/authenticated-command";
 
 export class MatrixManager {
   private nodecg: NodeCG.ServerAPI;
@@ -168,7 +169,7 @@ export class MatrixManager {
 
     this.commandGateway.register<MatrixPointAddress, void>({
       command: "vb.toggleMatrixPoint",
-      roles: ["audio"],
+      roles: ["audio", "superuser"],
       validate: validatePoint,
       resolveTarget: (point) => point.connectionId,
       isTargetAllowed: (target) => this.connections.has(target),
@@ -179,7 +180,7 @@ export class MatrixManager {
 
     this.commandGateway.register<CurrentPatchStatus, void>({
       command: "vb.updatePatch",
-      roles: ["audio"],
+      roles: ["audio", "superuser"],
       validate: (patch) => {
         const errors = validatePoint(patch);
         if (!patch?.id || typeof patch.id !== "string") {
@@ -342,6 +343,7 @@ export class MatrixManager {
     this.nodecg.listenFor(
       "updatePatch",
       async (patch: CurrentPatchStatus, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
         const result = await this.commandGateway.execute(
           createLegacyCommandEnvelope("vb.updatePatch", patch, ["audio"])
         );
@@ -367,6 +369,7 @@ export class MatrixManager {
     this.nodecg.listenFor(
       "toggleMatrixPoint",
       async (point: MatrixPointAddress, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
         const result = await this.commandGateway.execute(
           createLegacyCommandEnvelope("vb.toggleMatrixPoint", point, ["audio"])
         );
@@ -611,6 +614,18 @@ export class MatrixManager {
 
   private getPointDeviceSuid(slotSuid: string): string {
     return slotSuid.replace(/\.(IN|OUT)$/i, "");
+  }
+
+  private acceptLegacyPrivilegedMessage(ack: any): boolean {
+    if (allowsLegacyPrivilegedMessages(this.nodecg.bundleConfig)) return true;
+    if (ack && !ack.handled) {
+      ack(
+        new Error(
+          "Legacy privileged messages are disabled; use the authenticated command channel"
+        )
+      );
+    }
+    return false;
   }
 
   private getPatchIdForMatrixPoint(point: MatrixPointAddress): string {

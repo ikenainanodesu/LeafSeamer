@@ -17,7 +17,34 @@ interface EncryptedSecret {
 export interface SecretStorage {
   read(namespace: string, key: string): Promise<string | null>;
   write(namespace: string, key: string, value: string): Promise<void>;
+  delete(namespace: string, key: string): Promise<void>;
 }
+
+export const SECRET_MASTER_KEY_ENV = "LEAFSEAMER_SECRET_MASTER_KEY";
+
+export const decodeSecretMasterKey = (encoded: string): Buffer => {
+  const value = encoded.trim();
+  const isHex = /^[a-f0-9]{64}$/i.test(value);
+  const isBase64 = /^[A-Za-z0-9+/]{43}=?$/.test(value);
+  if (!isHex && !isBase64) {
+    throw new Error(
+      `${SECRET_MASTER_KEY_ENV} must use canonical base64 or hexadecimal encoding`
+    );
+  }
+  const key = Buffer.from(value, isHex ? "hex" : "base64");
+  if (
+    !isHex &&
+    key.toString("base64").replace(/=+$/, "") !== value.replace(/=+$/, "")
+  ) {
+    throw new Error(`${SECRET_MASTER_KEY_ENV} contains invalid base64 data`);
+  }
+  if (key.length !== 32) {
+    throw new Error(
+      `${SECRET_MASTER_KEY_ENV} must encode exactly 32 bytes as base64 or hexadecimal`
+    );
+  }
+  return key;
+};
 
 const validateSegment = (value: string): void => {
   if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
@@ -34,6 +61,10 @@ export class MemorySecretStorage implements SecretStorage {
 
   async write(namespace: string, key: string, value: string): Promise<void> {
     this.values.set(`${namespace}:${key}`, value);
+  }
+
+  async delete(namespace: string, key: string): Promise<void> {
+    this.values.delete(`${namespace}:${key}`);
   }
 }
 
@@ -54,6 +85,15 @@ export class FileSecretStorage implements SecretStorage {
     const filePath = this.resolve(namespace, key);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, value, { encoding: "utf8", mode: 0o600 });
+  }
+
+  async delete(namespace: string, key: string): Promise<void> {
+    const filePath = this.resolve(namespace, key);
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
 
   private resolve(namespace: string, key: string): string {
@@ -112,4 +152,22 @@ export class SecretManager {
       decipher.final(),
     ]).toString("utf8");
   }
+
+  async delete(namespace: string, key: string): Promise<void> {
+    validateSegment(namespace);
+    validateSegment(key);
+    await this.storage.delete(namespace, key);
+  }
 }
+
+export const createSecretManagerFromEnvironment = (
+  rootDirectory: string,
+  environment: NodeJS.ProcessEnv = process.env
+): SecretManager | null => {
+  const encodedKey = environment[SECRET_MASTER_KEY_ENV];
+  if (!encodedKey) return null;
+  return new SecretManager(
+    decodeSecretMasterKey(encodedKey),
+    new FileSecretStorage(rootDirectory)
+  );
+};

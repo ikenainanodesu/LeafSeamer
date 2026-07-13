@@ -96,7 +96,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   // 所有扩展加载完成后发布完整 bundle 清单，供前端下拉筛选。
   nodecg.on("extensionsLoaded", () => {
-    logger.setAvailableBundles(Object.keys(nodecg.extension));
+    logger.setAvailableBundles(Object.keys(nodecg.extensions));
   });
 
   process.on("warning", (warning) => {

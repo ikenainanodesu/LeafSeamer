@@ -505,3 +505,63 @@ decisions, or release-readiness status changes.
 - 解决 Logger 可能持久化常见 secret 模式的问题：Replicant 与文件写入前统一 redaction。
 - 解决普通日志清理误删审计历史的架构风险：审计改用独立 SQLite + WAL 存储。
 - 解决 PostgreSQL Adapter 依赖与构建阻塞：安装 `pg`、更新 lockfile，并完成 17 个 Bundle 全量构建。
+
+## 2026-07-13 剩余安全与外部验收工作
+
+### 需求变化
+
+- 完成上一阶段遗留的 OBS Secret 迁移、可信身份注入、依赖审计和外部集成验收准备。
+- 高风险 Dashboard 命令不得继续信任客户端自报身份；Seamer 自动化仍需在 legacy 默认关闭时工作。
+- PostgreSQL Adapter 除只读账号外，还需在会话层强制只读事务和超时。
+
+### 代码变动
+
+- SecretManager 新增删除、严格 32-byte base64/hex master key 解码和环境变量工厂。
+- 新增 `OBSSecretSettings`，将 WebSocket password、stream key 和 stream auth password 保存为 `cfg/secrets/obs-control/*.encrypted-secret.json`。
+- `obsConnections` 与 `obsStreamSettings` 只发布非敏感字段和 configured 状态；旧 Replicant 明文会在扩展启动时抓取后立即清洗并迁移。
+- OBS Dashboard 的 secret 输入改为本地一次性草稿，空值表示沿用，显式 clear 才删除。
+- 新增 NodeCG authenticated Socket command channel；identity 仅由 `socket.request.user` 构造，客户端提交的 identity 被忽略。
+- OBS、ATEM Macro、VB Matrix patch Dashboard 改用认证命令；对应 legacy 高风险消息默认拒绝。
+- 三个 Seamer Adapter 改为调用目标 Bundle `executeCommand` API，并使用可审计的 service identity。
+- PostgreSQL 查询新增只读事务、statement timeout、rollback/release 和危险 SQL 结构拒绝。
+- CI 新增生产依赖 audit 门和 PostgreSQL 17 live service 测试。
+- 新增 localhost 与 authenticated NodeCG 配置模板，以及三个 legacy 安全开关模板。
+- 在不使用 `--force` 的前提下更新 workspace lockfile；NodeCG 随兼容范围升级至 2.8.0，Vite 升至 6.4.3，并将跨 Bundle API 访问迁移到 `nodecg.extensions`。
+
+### 功能增减
+
+- 新增 OBS Secret 加密迁移、configured/masked UI 状态和 connection 删除时 Secret 级联清理。
+- 新增可信用户命令与 Adapter service command 两条身份路径。
+- 新增 PostgreSQL live E2E 测试入口；本机无 URL 时保持普通测试无外部依赖。
+- 高风险 legacy 消息由默认允许改为默认拒绝；只有部署配置显式 opt-in 才恢复。
+
+### 功能实现路径
+
+- `LEAFSEAMER_SECRET_MASTER_KEY` 只从 NodeCG 进程环境读取，密钥不进入 cfg、Replicant、日志或备份。
+- Dashboard request 只含 command、correlationId 和 payload；服务端从 NodeCG session 读取 subject/roles 后创建 CommandEnvelope。
+- NodeCG local authenticated user 的 `superuser` role 可执行控制；自定义角色可使用 `broadcast` 或 `audio`。
+- Seamer Adapter 不经过浏览器会话，直接调用声明依赖的目标 Bundle API，身份记录为 `service:seamer-adapter-*`。
+- PostgreSQL 每次 poll 获取独立 client，执行 `BEGIN TRANSACTION READ ONLY`、`SET LOCAL statement_timeout`、SELECT、COMMIT，并在失败时 ROLLBACK。
+
+### 已知 Bug
+
+- 当前机器没有 PostgreSQL/OBS/ATEM/VBAN/Mixer 目标，也没有 Docker；真实设备和本地 PostgreSQL live test 无法执行。
+- 2026-07-13 联网审计在兼容升级后仍有 11 个中危、0 个高危和 0 个严重漏洞；剩余项来自 NodeCG 上游 OpenTelemetry/TypeORM、旧 Google API 依赖树及 UUID，npm 仅给出 NodeCG 降级或跨主版本升级方案，暂不执行破坏性 `--force` 修复。
+- `node:sqlite` 在当前 Node 24 测试中仍输出 experimental warning。
+
+### 预期解决方法
+
+- 推送分支后由 CI PostgreSQL 17 service 产生真实数据库测试证据，并检查生产依赖 audit 门。
+- 在现场提供目标地址和测试窗口后执行 OBS、ATEM、VB Matrix、Mixer 只读/可回滚验收清单。
+- 跟踪 NodeCG 与 Google APIs 的上游修复；在独立升级分支评估跨主版本迁移，不直接执行 `npm audit fix --force`。
+
+### 已解决 Bug 以及解决方法
+
+- 解决 OBS secret 进入 Replicant：启动迁移旧值，公开状态只保留 configured 标记，后续 secret 只写加密存储。
+- 解决 Dashboard 可伪造 identity：客户端不再提交 identity，服务端只接受 NodeCG authenticated session。
+- 解决 legacy 默认绕过 CommandGateway：高风险旧消息默认拒绝，Adapter 改用 service identity API。
+- 解决 OBS 设备同步空 secret 被误当作“沿用旧值”：设备 capture 与 Dashboard draft 使用不同语义。
+- 解决 PostgreSQL 查询只靠字符串前缀判断：增加数据库只读事务、超时、回滚和 client 释放。
+- 解决依赖树 20 个高危公告命中：联网审计后执行兼容 lockfile 更新，将完整与生产依赖结果均降至 11 个中危、0 个高危、0 个严重。
+- 解决 NodeCG 2.8 类型与运行时 API 变化：将 logger、Schedule Adapter、Seamer Adapter 和共享审计入口统一改用 `nodecg.extensions`。
+- 最新源码已通过 47 项测试、全仓 TypeScript 检查和 17 Bundle 全量生产构建。

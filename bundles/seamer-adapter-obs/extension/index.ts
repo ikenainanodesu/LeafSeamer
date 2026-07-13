@@ -8,9 +8,12 @@ import type {
   SeamerExtensionApi,
 } from "../../seamer/src/types/seamer.types";
 import { obsManifest } from "./manifest";
+import type { OBSControlApi } from "../../obs-control/extension/index";
+import { createServiceCommandEnvelope } from "../../../shared/security/nodecg-command";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const seamer = nodecg.extension["seamer"] as SeamerExtensionApi;
+  const seamer = nodecg.extensions["seamer"] as SeamerExtensionApi;
+  const obsControl = nodecg.extensions["obs-control"] as OBSControlApi;
   const connectionsRep = nodecg.Replicant<OBSConnectionSettings[]>(
     "obsConnections",
     "obs-control"
@@ -29,12 +32,19 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
       id: connectionId,
       scene,
     });
-  const setStreaming = (connectionId: string, isStreaming: boolean) =>
-    nodecg.sendMessageToBundle(
-      isStreaming ? "startStreaming" : "stopStreaming",
-      "obs-control",
-      { id: connectionId }
+  const setStreaming = async (connectionId: string, isStreaming: boolean) => {
+    const result = await obsControl.executeCommand(
+      createServiceCommandEnvelope(
+        isStreaming ? "obs.startStreaming" : "obs.stopStreaming",
+        { id: connectionId },
+        "seamer-adapter-obs",
+        ["broadcast"]
+      )
     );
+    if (!result.ok) {
+      throw new Error(result.error?.message ?? "OBS streaming command failed");
+    }
+  };
 
   seamer.registerIntegration({
     manifest: obsManifest,

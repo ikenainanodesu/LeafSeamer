@@ -7,8 +7,11 @@ import {
   OBSSceneItem,
   OBSMediaState,
   OBSPlaylistItem,
+  OBSStreamSettings,
+  OBSStreamSettingsDraft,
 } from "../types/obs.types";
 import "./obs-control-panel.css";
+import { sendAuthenticatedCommand } from "../../../../shared/security/authenticated-command-client";
 
 // ===== 工具函数 =====
 
@@ -568,13 +571,11 @@ const SingleObsControl = ({
   name,
   obsState,
   streamSettings,
-  onStreamSettingChange,
 }: {
   id: string;
   name: string;
   obsState: OBSState;
-  streamSettings: any;
-  onStreamSettingChange: (id: string, newSettings: any) => void;
+  streamSettings?: OBSStreamSettings;
 }) => {
   const {
     connected,
@@ -600,18 +601,30 @@ const SingleObsControl = ({
   const dragIndexRef = useRef<number | null>(null);
 
   // 推流设置本地状态
-  const [localSettings, setLocalSettings] = useState(
-    streamSettings || {
+  const [localSettings, setLocalSettings] = useState<OBSStreamSettingsDraft>(
+    streamSettings
+      ? { ...streamSettings, key: "", password: "" }
+      : {
       server: "",
       key: "",
       useAuth: false,
       username: "",
       password: "",
-    },
+      keyConfigured: false,
+      passwordConfigured: false,
+    }
   );
 
   useEffect(() => {
-    if (streamSettings) setLocalSettings(streamSettings);
+    if (streamSettings) {
+      setLocalSettings({
+        ...streamSettings,
+        key: "",
+        password: "",
+        clearKey: false,
+        clearPassword: false,
+      });
+    }
   }, [streamSettings]);
 
   // 点击Scene：选中预览（黄色），展开Source列表，但不直接切换PGM
@@ -767,24 +780,38 @@ const SingleObsControl = ({
 
   const handleLocalSettingChange = (field: string, value: any) => {
     const newSettings = { ...localSettings, [field]: value };
+    if (field === "key" && typeof value === "string" && value.length > 0) {
+      newSettings.clearKey = false;
+    }
+    if (
+      field === "password" &&
+      typeof value === "string" &&
+      value.length > 0
+    ) {
+      newSettings.clearPassword = false;
+    }
     setLocalSettings(newSettings);
-    onStreamSettingChange(id, newSettings);
   };
 
   const toggleStreaming = () => {
     if (isStreaming) {
-      nodecg.sendMessageToBundle("stopStreaming", "obs-control", { id });
+      void sendAuthenticatedCommand("obs-control", "obs.stopStreaming", {
+        id,
+      }).catch((error) =>
+        window.alert(error instanceof Error ? error.message : String(error))
+      );
     } else {
-      nodecg
-        .sendMessageToBundle("setStreamSettings", "obs-control", {
+      sendAuthenticatedCommand("obs-control", "obs.setStreamSettings", {
           id,
           settings: localSettings,
         })
         .then(() =>
-          nodecg.sendMessageToBundle("startStreaming", "obs-control", { id }),
+          sendAuthenticatedCommand("obs-control", "obs.startStreaming", {
+            id,
+          })
         )
-        .catch((err: any) =>
-          console.error(`[${name}] Failed to start stream`, err),
+        .catch((error) =>
+          window.alert(error instanceof Error ? error.message : String(error))
         );
     }
   };
@@ -849,8 +876,12 @@ const SingleObsControl = ({
             <input
               type={showKey ? "text" : "password"}
               title="Stream key"
-              placeholder="Stream key"
-              value={localSettings.key}
+              placeholder={
+                localSettings.keyConfigured
+                  ? "Stream key configured; leave blank to keep"
+                  : "Stream key"
+              }
+              value={localSettings.key ?? ""}
               onChange={(e) => handleLocalSettingChange("key", e.target.value)}
               disabled={isStreaming}
               className="obs-text-input--flex"
@@ -862,6 +893,19 @@ const SingleObsControl = ({
               {showKey ? "Hide" : "Show"}
             </button>
           </div>
+          {localSettings.keyConfigured && (
+            <label className="obs-secret-clear">
+              <input
+                type="checkbox"
+                checked={localSettings.clearKey === true}
+                onChange={(event) =>
+                  handleLocalSettingChange("clearKey", event.target.checked)
+                }
+                disabled={isStreaming}
+              />
+              Clear saved stream key
+            </label>
+          )}
         </div>
         <div className="obs-field-group">
           <label>
@@ -898,8 +942,12 @@ const SingleObsControl = ({
                 <input
                   type={showPass ? "text" : "password"}
                   title="Password"
-                  placeholder="Password"
-                  value={localSettings.password}
+                  placeholder={
+                    localSettings.passwordConfigured
+                      ? "Password configured; leave blank to keep"
+                      : "Password"
+                  }
+                  value={localSettings.password ?? ""}
                   onChange={(e) =>
                     handleLocalSettingChange("password", e.target.value)
                   }
@@ -913,6 +961,22 @@ const SingleObsControl = ({
                   {showPass ? "Hide" : "Show"}
                 </button>
               </div>
+              {localSettings.passwordConfigured && (
+                <label className="obs-secret-clear">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.clearPassword === true}
+                    onChange={(event) =>
+                      handleLocalSettingChange(
+                        "clearPassword",
+                        event.target.checked
+                      )
+                    }
+                    disabled={isStreaming}
+                  />
+                  Clear saved authentication password
+                </label>
+              )}
             </div>
           </>
         )}
@@ -1049,7 +1113,7 @@ const ObsControlPanel = () => {
   const [connections, setConnections] = useState<OBSConnectionSettings[]>([]);
   const [obsStates, setObsStates] = useState<Record<string, OBSState>>({});
   const [allStreamSettings, setAllStreamSettings] = useState<
-    Record<string, any>
+    Record<string, OBSStreamSettings>
   >({});
 
   useEffect(() => {
@@ -1061,7 +1125,7 @@ const ObsControlPanel = () => {
       "obsStates",
       { defaultValue: {} },
     );
-    const streamSettingsRep = nodecg.Replicant<Record<string, any>>(
+    const streamSettingsRep = nodecg.Replicant<Record<string, OBSStreamSettings>>(
       "obsStreamSettings",
       { defaultValue: {} },
     );
@@ -1072,18 +1136,10 @@ const ObsControlPanel = () => {
     obsStatesRep.on("change", (newVal: Record<string, OBSState>) => {
       if (newVal) setObsStates(JSON.parse(JSON.stringify(newVal)));
     });
-    streamSettingsRep.on("change", (newVal: Record<string, any>) => {
+    streamSettingsRep.on("change", (newVal: Record<string, OBSStreamSettings>) => {
       if (newVal) setAllStreamSettings(JSON.parse(JSON.stringify(newVal)));
     });
   }, []);
-
-  const handleStreamSettingChange = (id: string, newSettings: any) => {
-    const newAllSettings = { ...allStreamSettings, [id]: newSettings };
-    setAllStreamSettings(newAllSettings);
-    nodecg.Replicant<Record<string, any>>("obsStreamSettings", {
-      defaultValue: {},
-    }).value = newAllSettings;
-  };
 
   return (
     <div className="obs-panel-root">
@@ -1097,7 +1153,6 @@ const ObsControlPanel = () => {
           name={conn.name || "Unknown OBS"}
           obsState={obsStates[conn.id] || { connected: false }}
           streamSettings={allStreamSettings[conn.id]}
-          onStreamSettingChange={handleStreamSettingChange}
         />
       ))}
     </div>

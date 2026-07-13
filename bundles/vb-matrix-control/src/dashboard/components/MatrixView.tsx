@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { sendAuthenticatedCommand } from "../../../../../shared/security/authenticated-command-client";
 import {
   CurrentPatchStatus,
   DeviceInfo,
@@ -135,7 +136,13 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
       exists: !isPatched,
     };
 
-    nodecg.sendMessage("updatePatch", patch);
+    void sendAuthenticatedCommand(
+      "vb-matrix-control",
+      "vb.updatePatch",
+      patch
+    ).catch((error) =>
+      window.alert(error instanceof Error ? error.message : String(error))
+    );
     window.setTimeout(() => {
       setPendingKeys((current) => {
         const next = new Set(current);

@@ -2,17 +2,22 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   OBSState,
+  OBSConnectionDraft,
   OBSConnectionSettings,
   OBSConnectionStatus,
 } from "../types/obs.types";
 import { v4 as uuidv4 } from "uuid";
 import "./obs-connection.css";
+import { sendAuthenticatedCommand } from "../../../../shared/security/authenticated-command-client";
 
 const ObsConnection = () => {
-  const [connections, setConnections] = useState<OBSConnectionSettings[]>([]);
+  const [connections, setConnections] = useState<OBSConnectionDraft[]>([]);
   const [statuses, setStatuses] = useState<Record<string, OBSConnectionStatus>>(
     {},
   );
+  const showCommandError = (error: unknown) => {
+    window.alert(error instanceof Error ? error.message : String(error));
+  };
 
   useEffect(() => {
     const obsConnectionsRep = nodecg.Replicant<OBSConnectionSettings[]>(
@@ -45,7 +50,16 @@ const ObsConnection = () => {
       "change",
       (newVal: OBSConnectionSettings[] | undefined) => {
         if (newVal) {
-          setConnections(JSON.parse(JSON.stringify(newVal)));
+          setConnections((current) =>
+            newVal.map((connection) => {
+              const draft = current.find((item) => item.id === connection.id);
+              return {
+                ...connection,
+                password: draft?.password ?? "",
+                clearPassword: draft?.clearPassword ?? false,
+              };
+            })
+          );
         }
       },
     );
@@ -53,44 +67,65 @@ const ObsConnection = () => {
 
   const updateSetting = (
     index: number,
-    key: keyof OBSConnectionSettings,
-    value: string,
+    key: keyof OBSConnectionDraft,
+    value: string | boolean,
   ) => {
-    const newConnections = [...connections];
-    newConnections[index] = { ...newConnections[index], [key]: value };
-    setConnections(newConnections);
-    nodecg.Replicant("obsConnections").value = newConnections;
+    setConnections((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], [key]: value };
+      return next;
+    });
   };
 
-  const handleConnect = (conn: OBSConnectionSettings) => {
-    nodecg.sendMessageToBundle("connectOBS", "obs-control", conn);
+  const handleSave = async (conn: OBSConnectionDraft) => {
+    await sendAuthenticatedCommand<OBSConnectionSettings>(
+      "obs-control",
+      "obs.saveConnection",
+      conn
+    );
+    setConnections((current) =>
+      current.map((item) =>
+        item.id === conn.id
+          ? { ...item, password: "", clearPassword: false }
+          : item
+      )
+    );
   };
 
-  const handleDisconnect = (id: string) => {
-    nodecg.sendMessageToBundle("disconnectOBS", "obs-control", { id });
+  const handleConnect = async (conn: OBSConnectionDraft) => {
+    await handleSave(conn);
+    await sendAuthenticatedCommand("obs-control", "obs.connect", {
+      id: conn.id,
+    });
   };
+
+  const handleDisconnect = (id: string) =>
+    sendAuthenticatedCommand("obs-control", "obs.disconnect", { id });
 
   const addConnection = () => {
-    const newConn: OBSConnectionSettings = {
+    const newConn: OBSConnectionDraft = {
       id: uuidv4(),
       name: `OBS ${connections.length + 1}`,
       host: "localhost",
       port: "4455",
       password: "",
+      passwordConfigured: false,
     };
     const newConnections = [...connections, newConn];
     setConnections(newConnections);
-    nodecg.Replicant("obsConnections").value = newConnections;
   };
 
   const removeConnection = (index: number) => {
     const connToRemove = connections[index];
-    // Disconnect first if connected
-    handleDisconnect(connToRemove.id);
-
-    const newConnections = connections.filter((_, i) => i !== index);
-    setConnections(newConnections);
-    nodecg.Replicant("obsConnections").value = newConnections;
+    void sendAuthenticatedCommand("obs-control", "obs.removeConnection", {
+        id: connToRemove.id,
+      })
+      .then(() => {
+        setConnections((current) =>
+          current.filter((item) => item.id !== connToRemove.id)
+        );
+      })
+      .catch(showCommandError);
   };
 
   return (
@@ -162,17 +197,48 @@ const ObsConnection = () => {
             </div>
             <input
               type="password"
-              placeholder="Password"
+              placeholder={
+                conn.passwordConfigured
+                  ? "Password configured; leave blank to keep"
+                  : "Password"
+              }
               value={conn.password || ""}
-              onChange={(e) => updateSetting(index, "password", e.target.value)}
+              onChange={(event) => {
+                updateSetting(index, "password", event.target.value);
+                if (event.target.value.length > 0) {
+                  updateSetting(index, "clearPassword", false);
+                }
+              }}
               disabled={isConnected || isConnecting}
               className="obs-conn-input obs-conn-input--full"
             />
+            {conn.passwordConfigured && (
+              <label className="obs-conn-secret-clear">
+                <input
+                  type="checkbox"
+                  checked={conn.clearPassword === true}
+                  onChange={(event) =>
+                    updateSetting(
+                      index,
+                      "clearPassword",
+                      event.target.checked
+                    )
+                  }
+                />
+                Clear saved password
+              </label>
+            )}
 
             <div className="obs-conn-actions">
+              <button
+                onClick={() => void handleSave(conn).catch(showCommandError)}
+                className="obs-conn-save-btn"
+              >
+                Save
+              </button>
               {!isConnected ? (
                 <button
-                  onClick={() => handleConnect(conn)}
+                  onClick={() => void handleConnect(conn).catch(showCommandError)}
                   disabled={isConnecting}
                   className={`obs-conn-connect-btn ${
                     isConnecting
@@ -184,7 +250,9 @@ const ObsConnection = () => {
                 </button>
               ) : (
                 <button
-                  onClick={() => handleDisconnect(conn.id)}
+                  onClick={() =>
+                    void handleDisconnect(conn.id).catch(showCommandError)
+                  }
                   className="obs-conn-disconnect-btn"
                 >
                   Disconnect

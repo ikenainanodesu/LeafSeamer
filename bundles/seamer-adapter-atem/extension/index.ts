@@ -8,9 +8,12 @@ import type {
   SeamerExtensionApi,
 } from "../../seamer/src/types/seamer.types";
 import { atemManifest } from "./manifest";
+import type { AtemControlApi } from "../../atem-control/extension/index";
+import { createServiceCommandEnvelope } from "../../../shared/security/nodecg-command";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const seamer = nodecg.extension["seamer"] as SeamerExtensionApi;
+  const seamer = nodecg.extensions["seamer"] as SeamerExtensionApi;
+  const atemControl = nodecg.extensions["atem-control"] as AtemControlApi;
   const switchersRep = nodecg.Replicant<AtemSwitcherInfo[]>(
     "atem:switchers",
     "atem-control"
@@ -22,6 +25,19 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     states: { ...states },
   });
   const publish = () => seamer.updateIntegrationState("atem", getState());
+  const runMacro = async (ip: string, macroIndex: number) => {
+    const result = await atemControl.executeCommand(
+      createServiceCommandEnvelope(
+        "atem.runMacro",
+        { ip, macroIndex },
+        "seamer-adapter-atem",
+        ["broadcast"]
+      )
+    );
+    if (!result.ok) {
+      throw new Error(result.error?.message ?? "ATEM macro command failed");
+    }
+  };
 
   const setSource = (
     switcherIp: string,
@@ -74,10 +90,10 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
     },
     executeAction: async (capabilityId, parameters) => {
       if (capabilityId === "macro.run") {
-        await nodecg.sendMessageToBundle("atem:runMacro", "atem-control", {
-          ip: String(parameters.switcherIp),
-          macroIndex: Number(parameters.macroIndex),
-        });
+        await runMacro(
+          String(parameters.switcherIp),
+          Number(parameters.macroIndex)
+        );
         return;
       }
       if (capabilityId === "source.set") {
@@ -104,10 +120,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
       const action = payload as AtemControlAction;
       if (action.functionType === "macro") {
         if (action.macroIndex !== undefined) {
-          await nodecg.sendMessageToBundle("atem:runMacro", "atem-control", {
-            ip: action.switcherIp,
-            macroIndex: action.macroIndex,
-          });
+          await runMacro(action.switcherIp, action.macroIndex);
         }
         return;
       }

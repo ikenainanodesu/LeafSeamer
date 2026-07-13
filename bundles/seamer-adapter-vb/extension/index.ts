@@ -9,9 +9,12 @@ import type {
   VBTriggerAction,
 } from "../../seamer/src/types/seamer.types";
 import { vbManifest } from "./manifest";
+import type { VBMatrixControlApi } from "../../vb-matrix-control/extension/index";
+import { createServiceCommandEnvelope } from "../../../shared/security/nodecg-command";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const seamer = nodecg.extension["seamer"] as SeamerExtensionApi;
+  const seamer = nodecg.extensions["seamer"] as SeamerExtensionApi;
+  const vbControl = nodecg.extensions["vb-matrix-control"] as VBMatrixControlApi;
   const presetsRep = nodecg.Replicant<Preset[]>("presets", "vb-matrix-control");
   const devicesRep = nodecg.Replicant<DeviceInfo[]>(
     "availableDevices",
@@ -53,7 +56,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
           ? false
           : !exists;
 
-    await nodecg.sendMessageToBundle("updatePatch", "vb-matrix-control", {
+    const patch = {
       id: current?.id || Math.random().toString(36).slice(2, 11),
       connectionId: String(parameters.connectionId),
       inputDevice: String(parameters.inputDevice),
@@ -63,7 +66,18 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
       exists: shouldExist,
       gain: shouldExist && current?.gain === undefined ? 0 : current?.gain,
       mute: current?.mute || false,
-    });
+    };
+    const result = await vbControl.executeCommand(
+      createServiceCommandEnvelope(
+        "vb.updatePatch",
+        patch,
+        "seamer-adapter-vb",
+        ["audio"]
+      )
+    );
+    if (!result.ok) {
+      throw new Error(result.error?.message ?? "VB patch command failed");
+    }
   };
 
   seamer.registerIntegration({

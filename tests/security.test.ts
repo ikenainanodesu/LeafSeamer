@@ -3,12 +3,13 @@ import {
   type CommandRegistration,
 } from "../shared/security/command-gateway";
 import {
+  decodeSecretMasterKey,
   MemorySecretStorage,
   SecretManager,
 } from "../shared/security/secret-manager";
 import { redactString, redactValue } from "../shared/security/redaction";
 import type { CommandEnvelope } from "../shared/integration/types";
-import { deepEqual, equal, rejects, test } from "./test-harness";
+import { deepEqual, equal, rejects, test, throws } from "./test-harness";
 
 test("encrypts namespaced secrets without storing plaintext", async () => {
   const storage = new MemorySecretStorage();
@@ -25,6 +26,21 @@ test("rejects secret decryption with the wrong key", async () => {
   await rejects(() =>
     new SecretManager(Buffer.alloc(32, 2), storage).get("obs", "password")
   );
+});
+
+test("deletes encrypted secrets without leaving a readable value", async () => {
+  const storage = new MemorySecretStorage();
+  const manager = new SecretManager(Buffer.alloc(32, 3), storage);
+  await manager.set("obs", "password", "temporary-secret");
+  await manager.delete("obs", "password");
+  equal(await manager.get("obs", "password"), null);
+});
+
+test("decodes only 32-byte base64 or hexadecimal master keys", () => {
+  deepEqual(decodeSecretMasterKey(Buffer.alloc(32, 9).toString("base64")), Buffer.alloc(32, 9));
+  deepEqual(decodeSecretMasterKey(Buffer.alloc(32, 8).toString("hex")), Buffer.alloc(32, 8));
+  throws(() => decodeSecretMasterKey("too-short"));
+  throws(() => decodeSecretMasterKey(`!!!!${"A".repeat(43)}=`));
 });
 
 test("redacts structured fields and sensitive string patterns", () => {

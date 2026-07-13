@@ -9,7 +9,7 @@ interface SyncStatus {
 }
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const scheduleManager = nodecg.extension[
+  const scheduleManager = nodecg.extensions[
     "schedule-manager"
   ] as ScheduleManagerApi;
   const sheetDataRep = nodecg.Replicant<Record<string, unknown[][]>>(

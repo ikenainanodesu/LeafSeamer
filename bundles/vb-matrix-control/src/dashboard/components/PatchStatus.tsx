@@ -1,5 +1,12 @@
 import React from "react";
 import { CurrentPatchStatus } from "../../types";
+import { sendAuthenticatedCommand } from "../../../../../shared/security/authenticated-command-client";
+
+const updatePatch = (patch: CurrentPatchStatus) =>
+  sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch(
+    (error) =>
+      window.alert(error instanceof Error ? error.message : String(error))
+  );
 
 export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
   status,
@@ -8,22 +15,22 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
 
   const updateGain = (delta: number) => {
     if (!status || !status.exists) return;
-    nodecg.sendMessage("updatePatch", { ...status, gain: status.gain + delta });
+    void updatePatch({ ...status, gain: status.gain + delta });
   };
 
   const toggleMute = () => {
     if (!status || !status.exists) return;
-    nodecg.sendMessage("updatePatch", { ...status, mute: !status.mute });
+    void updatePatch({ ...status, mute: !status.mute });
   };
 
   const toggleConnection = () => {
     if (!status) return;
     if (status.exists && status.gain > -144) {
       // Disconnect (Remove point)
-      nodecg.sendMessage("updatePatch", { ...status, exists: false });
+      void updatePatch({ ...status, exists: false });
     } else {
       // Connect (Create point at 0dB)
-      nodecg.sendMessage("updatePatch", {
+      void updatePatch({
         ...status,
         exists: true,
         gain: 0,

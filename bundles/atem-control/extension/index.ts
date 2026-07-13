@@ -11,6 +11,15 @@ import {
   createLegacyCommandEnvelope,
   createOptionalAuditWriter,
 } from "../../../shared/security/nodecg-command";
+import {
+  allowsLegacyPrivilegedMessages,
+  installAuthenticatedCommandSocket,
+} from "../../../shared/security/authenticated-command";
+import type { CommandEnvelope } from "../../../shared/integration/types";
+
+export interface AtemControlApi {
+  executeCommand: (envelope: CommandEnvelope) => ReturnType<CommandGateway["execute"]>;
+}
 
 // TODO: Use a proper discovery library if needed. For now simulating or basic IP.
 // 'atem-connection' checks availability but doesn't do mdns discovery itself directly without helper?
@@ -40,7 +49,7 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
 
   commandGateway.register<{ ip: string; macroIndex: number }, void>({
     command: "atem.runMacro",
-    roles: ["broadcast"],
+    roles: ["broadcast", "superuser"],
     validate: (payload) => {
       const errors: string[] = [];
       if (!payload || typeof payload.ip !== "string" || payload.ip.length === 0) {
@@ -324,6 +333,16 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
   nodecg.listenFor(
     "atem:runMacro",
     async (data: { ip: string; macroIndex: number }, cb: any) => {
+      if (!allowsLegacyPrivilegedMessages(nodecg.bundleConfig)) {
+        if (cb && !cb.handled) {
+          cb(
+            new Error(
+              "Legacy privileged messages are disabled; use the authenticated command channel"
+            )
+          );
+        }
+        return;
+      }
       const result = await commandGateway.execute(
         createLegacyCommandEnvelope("atem.runMacro", data, ["broadcast"])
       );
@@ -362,4 +381,10 @@ module.exports = function (nodecg: NodeCG.ServerAPI) {
       if (cb && !cb.handled) cb(null);
     }
   );
+
+  installAuthenticatedCommandSocket(nodecg, commandGateway, "atem-control");
+  return {
+    executeCommand: (envelope: CommandEnvelope) =>
+      commandGateway.execute(envelope),
+  } satisfies AtemControlApi;
 };

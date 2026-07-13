@@ -11,7 +11,7 @@ const matchesOptional = (expected: unknown, actual: unknown): boolean =>
   expected === undefined || expected === "" || String(expected) === String(actual);
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const seamer = nodecg.extension["seamer"] as SeamerExtensionApi;
+  const seamer = nodecg.extensions["seamer"] as SeamerExtensionApi;
   const eventsRep = nodecg.Replicant<ScheduleEvent[]>(
     "scheduleEvents",
     "schedule-manager"

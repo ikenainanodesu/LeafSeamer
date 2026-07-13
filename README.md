@@ -219,6 +219,9 @@ npm run dev
 
 # Type Check
 npm run typecheck
+
+# Contract and security tests
+npm test
 ```
 
 On Windows PowerShell, if script execution policy blocks `npm`, use `npm.cmd` for the same commands, for example `npm.cmd run build`.
@@ -226,8 +229,8 @@ On Windows PowerShell, if script execution policy blocks `npm`, use `npm.cmd` fo
 ### Source Deployment Flow
 
 ```bash
-# 1. Create local config files from templates
-cp cfg/nodecg.json.example cfg/nodecg.json
+# 1. Create authenticated control config and replace every placeholder
+cp cfg/nodecg.secure.json.example cfg/nodecg.json
 
 # Optional: only when using Google Sheets sync
 cp cfg/data-sync-service.json.example cfg/data-sync-service.json
@@ -270,11 +273,15 @@ Seamer now accepts versioned capability manifests from arbitrary adapter IDs. Mi
 
 Schedule Manager owns a source-isolated import, preview, commit, rollback, and event contract. Google Sheets and PostgreSQL use optional Node.js adapters that normalize rows into the same playlist model. The optional Seamer schedule adapter exposes only explicit `schedule.item_due` and configured `schedule.field_changed` triggers. Python sidecars are not used.
 
-Shared security code is packaged as libraries rather than a mandatory NodeCG bundle. CommandGateway currently protects OBS stream settings, VB Matrix point toggles, and ATEM macros with schema, role, target, correlationId, and optional audit handling. Legacy NodeCG messages remain compatible, but they carry a synthetic dashboard identity until an authenticated identity bridge is added.
+Shared security code is packaged as libraries rather than a mandatory NodeCG bundle. OBS, VB Matrix, and ATEM privileged Dashboard commands use a bundle-specific Socket.IO channel whose identity comes only from the authenticated NodeCG session. CommandGateway applies roles, schema, target checks, correlationId, and optional audit handling. Privileged legacy messages are disabled by default; Seamer Adapters call the target Bundle API with an explicit service identity.
+
+OBS WebSocket passwords, stream keys, and stream authentication passwords are encrypted by the server SecretManager and are no longer published through Replicants. Dashboard inputs are write-only and public state exposes only `passwordConfigured` / `keyConfigured`. Set `LEAFSEAMER_SECRET_MASTER_KEY` to an independently generated 32-byte base64 or hexadecimal key before saving secrets.
 
 Backup System supports selectable L0 Public, L1 Operational, L2 Confidential, and L3 Secret data. L3 is excluded by default and is written only as an AES-256-GCM encrypted payload protected by a separate passphrase. Logger applies redaction before persistence and stores command audit history in a separate SQLite/WAL database that is not affected by runtime-log cleanup.
 
 The PostgreSQL adapter and its `pg` dependency are included in the workspace lockfile. Use a read-only database account and expose the connection string only through the configured environment variable.
+
+The 2026-07-13 online dependency audit reports 0 high/critical findings after compatible lockfile updates. Eleven moderate transitive findings remain in NodeCG and Google API dependency trees; they require upstream fixes or separately tested major-version migrations, so this branch does not use `npm audit fix --force`.
 
 ### Access Addresses
 
@@ -286,9 +293,11 @@ After startup visit:
 ## Configuration
 
 - NodeCG Core Config: copy `cfg/nodecg.json.example` to `cfg/nodecg.json`
+- Authenticated Control Config: use `cfg/nodecg.secure.json.example`, replace every placeholder, and follow `cfg/README.md`
 - Business Module Config: Generally configured dynamically via Dashboard interface (Persisted in `db/`)
 - Google Sheets Config: copy `cfg/data-sync-service.json.example` to `cfg/data-sync-service.json` (Optional)
 - PostgreSQL Schedule Config: copy `cfg/schedule-adapter-postgresql.json.example` to its real config and provide the connection string through `LEAFSEAMER_SCHEDULE_POSTGRES_URL` (Optional)
+- OBS/ATEM/VB legacy privileged messages remain disabled unless the corresponding Bundle config explicitly sets `security.allowLegacyPrivilegedMessages` to `true`
 - Bundle configs are defined in their respective `package.json`
 - TypeScript Config: `tsconfig.json`
 - Vite Build Config: `vite.config.dashboard.ts` and `vite.config.extension.ts`
@@ -307,7 +316,7 @@ Real configuration files may contain local IP addresses or credentials, so `cfg/
 
 **Current Version**: 1.1.3
 **Release Date**: 2026-02-21
-**Last Update**: 2026-07-12
+**Last Update**: 2026-07-13
 
 ## License
 

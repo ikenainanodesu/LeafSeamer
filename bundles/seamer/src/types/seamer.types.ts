@@ -235,7 +235,7 @@ export interface OBSConnectionSettings {
   name?: string;
   host: string;
   port: string;
-  password?: string;
+  passwordConfigured: boolean;
 }
 
 export interface AtemSwitcherInfo {

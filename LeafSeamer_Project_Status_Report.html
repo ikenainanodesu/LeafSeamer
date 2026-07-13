@@ -354,7 +354,7 @@
         <div class="header-inner">
           <p class="eyebrow">Static audit / Bundle-based register</p>
           <h1>LeafSeamer 项目现状与风险报告</h1>
-          <p class="lede">报告按 Bundle 汇总功能、独立运行条件与问题。每个问题在同一处给出现状证据、风险、影响、缓解措施、长期改善、实施路径和验收标准。</p>
+          <p class="lede">报告按 Bundle 汇总功能、独立运行条件与问题。问题卡中的证据保留 2026-07-12 整改前基线，风险、验收标准与关联关系继续作为审计轨迹；当前实现事实以“当前执行状态”区块为准。</p>
           <div class="meta-grid">
             <div class="meta-item"><span class="meta-label">报告日期</span><span class="meta-value">2026-07-12</span></div>
             <div class="meta-item"><span class="meta-label">审计基线分支</span><span class="meta-value">independence_refiine</span></div>
@@ -373,7 +373,7 @@
             <div class="summary-item"><strong>后端与通信</strong><p>Node.js、NodeCG extension、Replicant、<code>listenFor</code> 和跨 Bundle message。</p></div>
             <div class="summary-item"><strong>架构</strong><p>核心 Bundle 独立运行，可选 Adapter 负责 Seamer、Schedule 与设备或数据源之间的桥接。</p></div>
             <div class="summary-item"><strong>构建 Workflow</strong><p><code>npm install</code> → <code>npm run typecheck</code> → <code>npm run build</code> → <code>npm start</code>。</p></div>
-            <div class="summary-item"><strong>关键工具</strong><p>NodeCG 2.6.4、TypeScript 5.7、GSAP、obs-websocket-js、atem-connection、node-osc、googleapis、archiver。</p></div>
+            <div class="summary-item"><strong>关键工具</strong><p>NodeCG 2.8.0、TypeScript 5.9、GSAP、obs-websocket-js、atem-connection、node-osc、googleapis、archiver。</p></div>
           </div>
           <div class="note" style="margin-top: 16px;"><p><strong>结论：</strong>核心 Bundle 已具备独立加载方向；当前主要缺口集中在安全边界、敏感数据、自动化独立性验证、设备能力探测和真实硬件验收。</p></div>
         </div>
@@ -594,7 +594,7 @@
       </section>
 
       <section class="report-section" id="implementation-status">
-        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Implementation snapshot · 2026-07-12</p><h2>当前执行状态</h2></div><p>本区块记录整改后的当前事实；前述问题卡保留为风险基线和剩余验收清单。</p></div><div class="summary-grid"><div class="summary-item"><strong>已实现 · Integration / Seamer</strong><p>Integration SDK、任意 ID Capability Registry、schema-driven Trigger UI、四个设备 Manifest 和 Schedule Manifest 已加入；旧配置保留兼容入口。</p></div><div class="summary-item"><strong>已实现 · Schedule Core</strong><p>标准 PlaylistItem、来源隔离的 preview/commit/rollback、到期去重和配置字段迁移事件已加入；Google Sheets Adapter 已改用统一 Batch。</p></div><div class="summary-item"><strong>已实现 · PostgreSQL Adapter</strong><p>只读 Node.js Adapter、单条 SELECT 限制、环境变量凭据和配置模板已加入；<code>pg</code> 与 lockfile 已更新并通过构建，真实数据库验收仍待执行。</p></div><div class="summary-item"><strong>已实现 · Security Gateway</strong><p>SecretManager Library、redaction 与 CommandGateway 已加入；OBS 推流设置、VB Matrix <code>updatePatch</code>/节点切换和 ATEM Macro 已接入。旧消息只有合成的 Dashboard 身份，真实用户鉴权仍需认证入口注入。</p></div><div class="summary-item"><strong>已实现 · Backup / Audit</strong><p>Backup 支持 L0-L3 选择、SHA-256 manifest 与独立口令保护的 AES-256-GCM L3 载荷；Logger 写入前脱敏，Audit Store 使用独立 SQLite + WAL。</p></div><div class="summary-item"><strong>验证边界</strong><p>29 项测试、全仓 TypeScript 检查、报告检查与 17 个 Bundle 全量构建通过；真实 OBS/ATEM/Mixer/VB Matrix 和 PostgreSQL 端到端测试仍待完成。</p></div></div></div>
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Implementation snapshot · 2026-07-13</p><h2>当前执行状态</h2></div><p>本区块记录整改后的当前事实；前述问题卡保留为风险基线和现场验收清单。</p></div><div class="summary-grid"><div class="summary-item"><strong>已实现 · Integration / Seamer</strong><p>Integration SDK、任意 ID Capability Registry、schema-driven Trigger UI、设备/Schedule Manifest 已加入；Seamer Adapter 使用目标 Bundle API 与可审计 service identity。</p></div><div class="summary-item"><strong>已实现 · Schedule / PostgreSQL</strong><p>来源隔离 preview/commit/rollback 与显式事件已加入；PostgreSQL 使用环境变量凭据、危险结构拒绝、只读事务、statement timeout 和失败 rollback；CI 配置 PostgreSQL 17 live test。</p></div><div class="summary-item"><strong>已实现 · OBS Secret</strong><p>WebSocket password、stream key 与 stream auth password 已从 Replicant 剥离并进入 AES-256-GCM SecretManager；Dashboard 只接收 configured 标记，旧明文启动时迁移。</p></div><div class="summary-item"><strong>已实现 · Trusted Command</strong><p>OBS、ATEM Macro 与 VB patch 使用 bundle 专属 authenticated Socket channel；身份仅来自 NodeCG session。高风险 legacy 默认拒绝，Adapter 使用 <code>service:seamer-adapter-*</code> 身份。</p></div><div class="summary-item"><strong>已实现 · Backup / Audit</strong><p>Backup 支持 L0-L3、SHA-256 manifest 与独立口令 AES-256-GCM L3 载荷；Logger 写入前脱敏，Audit Store 使用独立 SQLite + WAL。</p></div><div class="summary-item"><strong>验证边界</strong><p>最新源码已通过 47 项无外部服务测试、全仓 TypeScript 检查和 17 Bundle 全量构建。联网审计由 48 项（含 20 个高危）降至 11 个中危、0 个高危/严重；本机无数据库和真实设备目标，现场 E2E 仍待目标环境。</p></div></div></div>
       </section>
 
       <section class="report-section" id="roadmap">
@@ -602,8 +602,8 @@
       </section>
 
       <section class="report-section" id="appendix">
-        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Audit notes</p><h2>范围与附录</h2></div><p>结论来自静态源码、配置模板、构建脚本和文档阅读，不替代联网依赖审计与真实硬件测试。</p></div>
-          <div class="table-wrap"><table><tbody><tr><th>纳入</th><td>原始 199 文件静态审计，以及本轮新增的 Integration、Schedule、Security、Backup、Logger、Audit、测试与 CI 代码。</td></tr><tr><th>识别但不逐行</th><td><code>node_modules</code>、<code>db</code>、<code>logs</code>、<code>backups</code>、<code>assets</code> 等忽略目录。</td></tr><tr><th>已执行</th><td><code>npm test</code> 29 项通过；<code>npm run typecheck</code>、17 Bundle 全量构建与报告结构检查通过。</td></tr><tr><th>未执行</th><td>逐项 <code>npm audit</code> 漏洞分级修复，以及真实 OBS/ATEM/Mixer/VB Matrix/PostgreSQL 端到端验收。</td></tr><tr><th>事实边界</th><td>安装报告的 48 个漏洞包含开发依赖，尚未逐项确认生产可达性；“建议验证”不等于已确认缺陷。</td></tr></tbody></table></div>
+        <div class="section-inner"><div class="section-heading"><div><p class="eyebrow">Audit notes</p><h2>范围与附录</h2></div><p>结论来自静态源码、配置模板、构建脚本、联网依赖审计和本机验证；真实硬件验收仍需目标环境。</p></div>
+          <div class="table-wrap"><table><tbody><tr><th>纳入</th><td>原始静态审计及本轮 Integration、Schedule、Security、Backup、Logger、Audit、认证、Secret、依赖与 CI 增量。</td></tr><tr><th>识别但不逐行</th><td><code>node_modules</code>、<code>db</code>、<code>logs</code>、<code>backups</code>、<code>assets</code> 等忽略目录。</td></tr><tr><th>已执行</th><td>最新源码 <code>npm test</code> 47 项、<code>npm run typecheck</code>、17 Bundle <code>npm run build</code> 和联网 <code>npm audit</code> 均已执行；高危与严重漏洞为 0。</td></tr><tr><th>待外部证据</th><td>CI PostgreSQL 17 live test，以及真实 OBS/ATEM/Mixer/VB Matrix 验收。</td></tr><tr><th>事实边界</th><td>剩余 11 个中危来自 NodeCG 与 Google API 传递依赖，破坏性升级另行评估；没有目标设备时契约测试不等于硬件验收。</td></tr></tbody></table></div>
           <details><summary>展开原始 199 文件清单</summary><pre>
 AGENTS.MD
 bundles\atem-control\extension\index.ts

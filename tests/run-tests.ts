@@ -7,6 +7,9 @@ import "./schedule-adapters.test";
 import "./security.test";
 import "./backup-policy.test";
 import "./logger-security.test";
+import "./obs-secret-settings.test";
+import "./authenticated-command.test";
+import "./postgresql-live.test";
 import { runTests } from "./test-harness";
 
 void runTests();

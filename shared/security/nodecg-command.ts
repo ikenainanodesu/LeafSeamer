@@ -10,7 +10,7 @@ interface OptionalLoggerApi {
 export const createOptionalAuditWriter = (nodecg: NodeCG.ServerAPI) =>
   (event: CommandAuditEvent): void => {
     try {
-      const extensions = nodecg.extension as Record<string, OptionalLoggerApi | undefined>;
+      const extensions = nodecg.extensions as Record<string, OptionalLoggerApi | undefined>;
       extensions["logger-system"]?.audit?.(event);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -27,5 +27,18 @@ export const createLegacyCommandEnvelope = <T>(
   command,
   correlationId: randomUUID(),
   identity: { subject: "nodecg-dashboard", roles },
+  payload,
+});
+
+export const createServiceCommandEnvelope = <T>(
+  command: string,
+  payload: T,
+  service: string,
+  roles: string[]
+): CommandEnvelope<T> => ({
+  version: "1",
+  command,
+  correlationId: randomUUID(),
+  identity: { subject: `service:${service}`, roles },
   payload,
 });

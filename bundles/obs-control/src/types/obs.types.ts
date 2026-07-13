@@ -52,5 +52,31 @@ export interface OBSConnectionSettings {
   name?: string;
   host: string;
   port: string;
+  passwordConfigured: boolean;
+}
+
+export interface OBSConnectionDraft extends Omit<OBSConnectionSettings, "passwordConfigured"> {
   password?: string;
+  clearPassword?: boolean;
+  passwordConfigured?: boolean;
+}
+
+export interface OBSStreamSettings {
+  server: string;
+  useAuth: boolean;
+  username: string;
+  keyConfigured: boolean;
+  passwordConfigured: boolean;
+}
+
+export interface OBSStreamSettingsDraft extends Omit<
+  OBSStreamSettings,
+  "keyConfigured" | "passwordConfigured"
+> {
+  key?: string;
+  password?: string;
+  clearKey?: boolean;
+  clearPassword?: boolean;
+  keyConfigured?: boolean;
+  passwordConfigured?: boolean;
 }

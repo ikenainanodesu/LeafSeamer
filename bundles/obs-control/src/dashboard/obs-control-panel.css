@@ -299,6 +299,15 @@
   margin-top: 0;
 }
 
+.obs-secret-clear {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
 .obs-field-group {
   margin-bottom: 5px;
 }

@@ -7,14 +7,14 @@ This document provides complete installation and deployment instructions for Lea
 ### Minimum Requirements
 
 - **OS**: Windows 10/11, macOS 10.15+, Linux (Ubuntu 20.04+)
-- **Node.js**: v18.0.0 or higher
+- **Node.js**: v24.0.0 or higher
 - **NPM**: v9.0.0 or higher
 - **RAM**: 4GB
 - **Disk Space**: At least 1GB available space
 
 ### Recommended Configuration
 
-- **Node.js**: v20.0.0+
+- **Node.js**: v24 LTS
 - **RAM**: 8GB or more
 - **Network**: LAN environment for device communication
 
@@ -74,12 +74,25 @@ This command will:
 
 ### NodeCG Core Configuration
 
-Edit `cfg/nodecg.json` configuration file:
+Copy `cfg/nodecg.secure.json.example` to `cfg/nodecg.json`, replace every placeholder, and follow `cfg/README.md`. Privileged OBS, ATEM, and VB Matrix Dashboard commands require an authenticated NodeCG session.
 
 ```json
 {
-  "host": "0.0.0.0",
+  "host": "127.0.0.1",
   "port": 9090,
+  "login": {
+    "enabled": true,
+    "sessionSecret": "REPLACE_WITH_A_RANDOM_SESSION_SECRET",
+    "local": {
+      "enabled": true,
+      "allowedUsers": [
+        {
+          "username": "operator",
+          "password": "sha256:REPLACE_WITH_HMAC_SHA256_PASSWORD"
+        }
+      ]
+    }
+  },
   "logging": {
     "console": {
       "enabled": true,
@@ -91,13 +104,14 @@ Edit `cfg/nodecg.json` configuration file:
 
 **Configuration Items**:
 
-- `host`: Server listening address (`0.0.0.0` allows access from other devices)
+- `host`: Server listening interface. It does not restrict source subnets. Keep `127.0.0.1` behind a reverse proxy, or bind to the dedicated control interface and enforce source networks with firewall/VLAN ACL rules.
 - `port`: Dashboard access port (default 9090)
+- `login`: Required for privileged Dashboard commands. Generate the session secret and password digest as documented in `cfg/README.md`.
 - `logging`: Logging configuration
 
 ### Module Configuration
 
-LeafSeamer's core function modules (Mixer, OBS, Matrix Control) **do not** need configuration file editing. Please configure connections directly in the **Dashboard** interface, the system will automatically save your settings.
+Device connections are configured in the Dashboard. Before saving OBS passwords or stream credentials, set an independently generated 32-byte base64 or hexadecimal key as `LEAFSEAMER_SECRET_MASTER_KEY` in the NodeCG process environment. Public Replicants expose only configured state; encrypted Secret files are stored under `cfg/secrets/`.
 
 ### Google Sheets API Configuration (Optional)
 
@@ -144,7 +158,7 @@ Open in browser:
 http://localhost:9090
 ```
 
-If accessing from another device, use the server's IP address:
+For remote access, use an authenticated TLS reverse proxy or a dedicated control interface protected by firewall/VLAN ACL rules:
 
 ```
 http://[ServerIP]:9090
@@ -200,7 +214,7 @@ Ensure the following ports are open in the firewall (depending on your configura
 
 ```powershell
 # Allow NodeCG Inbound Connection
-New-NetFirewallRule -DisplayName "NodeCG Server" -Direction Inbound -LocalPort 9090 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "NodeCG Control VLAN" -Direction Inbound -LocalPort 9090 -Protocol TCP -RemoteAddress 192.168.50.0/24 -Action Allow
 ```
 
 ## Data Persistence
@@ -211,7 +225,7 @@ LeafSeamer uses NodeCG's Replicants system for data persistence:
 - **Backup Path**: `backups/` directory
 - **Log Path**: `logs/` directory
 
-> **Important**: Regularly backup `db/` directory to prevent data loss. Can use Backup System in Dashboard for manual or automatic backup.
+> **Important**: Use Backup System data levels instead of copying all runtime data blindly. L3 Secret data is excluded by default and requires a separate encryption passphrase. Never place the SecretManager master key in the same backup.
 
 ## .gitignore Explanation
 

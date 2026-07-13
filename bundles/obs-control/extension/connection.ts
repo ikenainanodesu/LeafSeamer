@@ -3,21 +3,20 @@ import NodeCG from "nodecg/types";
 import { SceneManager } from "./scene-manager";
 import { SourceManager } from "./source-manager";
 import { createLogger } from "./logger";
-import { OBSConnectionSettings } from "../src/types/obs.types";
+import {
+  OBSConnectionDraft,
+  OBSConnectionSettings,
+  OBSStreamSettings,
+  OBSStreamSettingsDraft,
+} from "../src/types/obs.types";
 import { CommandGateway } from "../../../shared/security/command-gateway";
 import { createLegacyCommandEnvelope } from "../../../shared/security/nodecg-command";
-
-interface OBSStreamSettings {
-  server: string;
-  key: string;
-  useAuth: boolean;
-  username?: string;
-  password?: string;
-}
+import { OBSSecretSettings } from "./secret-settings";
+import { allowsLegacyPrivilegedMessages } from "../../../shared/security/authenticated-command";
 
 interface SetStreamSettingsPayload {
   id: string;
-  settings: OBSStreamSettings;
+  settings: OBSStreamSettingsDraft;
 }
 
 export class ConnectionManager {
@@ -30,22 +29,24 @@ export class ConnectionManager {
   private statsIntervals: Map<string, NodeJS.Timeout> = new Map();
   private reconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
-  private obsConnectionsRep: any;
-
   constructor(
     nodecg: NodeCG.ServerAPI,
     sceneManager: SceneManager,
     sourceManager: SourceManager,
-    obsConnectionsRep: any,
+    private readonly obsConnectionsRep: NodeCG.ServerReplicant<
+      OBSConnectionSettings[]
+    >,
+    private readonly streamSettingsRep: NodeCG.ServerReplicant<
+      Record<string, OBSStreamSettings>
+    >,
     private readonly commandGateway: CommandGateway,
+    private readonly secretSettings: OBSSecretSettings,
   ) {
     this.nodecg = nodecg;
     this.logger.setNodeCG(nodecg);
     this.sceneManager = sceneManager;
     this.sourceManager = sourceManager;
     this.config = nodecg.bundleConfig;
-    this.obsConnectionsRep = obsConnectionsRep;
-
     this.registerCommands();
     this.setupMessageListeners();
   }
@@ -53,7 +54,7 @@ export class ConnectionManager {
   private registerCommands(): void {
     this.commandGateway.register<SetStreamSettingsPayload, void>({
       command: "obs.setStreamSettings",
-      roles: ["broadcast"],
+      roles: ["broadcast", "superuser"],
       validate: (payload) => {
         const errors: string[] = [];
         if (!payload || typeof payload.id !== "string" || payload.id.length === 0) {
@@ -62,18 +63,20 @@ export class ConnectionManager {
         if (!payload?.settings || typeof payload.settings.server !== "string") {
           errors.push("settings.server must be a string");
         }
-        if (typeof payload?.settings?.key !== "string") {
-          errors.push("settings.key must be a string");
+        if (
+          typeof payload?.settings?.key !== "undefined" &&
+          typeof payload.settings.key !== "string"
+        ) {
+          errors.push("settings.key must be a string when provided");
         }
         if (typeof payload?.settings?.useAuth !== "boolean") {
           errors.push("settings.useAuth must be a boolean");
         }
         if (
           payload?.settings?.useAuth &&
-          (typeof payload.settings.username !== "string" ||
-            typeof payload.settings.password !== "string")
+          typeof payload.settings.username !== "string"
         ) {
-          errors.push("authenticated streaming requires username and password");
+          errors.push("authenticated streaming requires a username");
         }
         return errors;
       },
@@ -83,14 +86,125 @@ export class ConnectionManager {
         await this.setStreamSettings(payload.id, payload.settings);
       },
     });
+
+    this.commandGateway.register<OBSConnectionDraft, OBSConnectionSettings>({
+      command: "obs.saveConnection",
+      roles: ["broadcast", "superuser"],
+      validate: (payload) => this.validateConnection(payload),
+      resolveTarget: (payload) => payload.id,
+      handler: async (payload) => this.saveConnection(payload),
+    });
+
+    this.commandGateway.register<{ id: string }, void>({
+      command: "obs.connect",
+      roles: ["broadcast", "superuser"],
+      validate: (payload) =>
+        payload && typeof payload.id === "string" && payload.id.length > 0
+          ? []
+          : ["id is required"],
+      resolveTarget: (payload) => payload.id,
+      isTargetAllowed: (target) => this.hasConnection(target),
+      handler: async (payload) => this.connectById(payload.id),
+    });
+
+    this.commandGateway.register<{ id: string }, void>({
+      command: "obs.removeConnection",
+      roles: ["broadcast", "superuser"],
+      validate: (payload) =>
+        payload && typeof payload.id === "string" && payload.id.length > 0
+          ? []
+          : ["id is required"],
+      resolveTarget: (payload) => payload.id,
+      isTargetAllowed: (target) => this.hasConnection(target),
+      handler: async (payload) => this.removeConnection(payload.id),
+    });
+
+    this.commandGateway.register<{ id: string }, void>({
+      command: "obs.disconnect",
+      roles: ["broadcast", "superuser"],
+      validate: (payload) =>
+        payload && typeof payload.id === "string" && payload.id.length > 0
+          ? []
+          : ["id is required"],
+      resolveTarget: (payload) => payload.id,
+      isTargetAllowed: (target) => this.hasConnection(target),
+      handler: async (payload) => this.disconnect(payload.id),
+    });
+
+    for (const [command, requestType] of [
+      ["obs.startStreaming", "StartStream"],
+      ["obs.stopStreaming", "StopStream"],
+    ] as const) {
+      this.commandGateway.register<{ id: string }, void>({
+        command,
+        roles: ["broadcast", "superuser"],
+        validate: (payload) =>
+          payload && typeof payload.id === "string" && payload.id.length > 0
+            ? []
+            : ["id is required"],
+        resolveTarget: (payload) => payload.id,
+        isTargetAllowed: (target) => this.obsInstances.has(target),
+        handler: async (payload) => {
+          const obs = this.getObs(payload.id);
+          if (!obs) throw new Error(`OBS instance ${payload.id} is unavailable`);
+          await obs.call(requestType);
+        },
+      });
+    }
   }
 
-  public connectAll() {
+  async initialize(
+    legacyConnections: Array<OBSConnectionDraft>,
+    legacyStreams: Record<string, OBSStreamSettingsDraft>
+  ): Promise<void> {
+    const publicConnections: OBSConnectionSettings[] = [];
+    for (const connection of legacyConnections) {
+      try {
+        const prepared = await this.secretSettings.prepareConnection(connection);
+        publicConnections.push(prepared.publicSettings);
+      } catch (error) {
+        this.logger.error(
+          `[${connection.id}] Failed to migrate OBS connection secret`,
+          error instanceof Error ? error.message : String(error)
+        );
+        publicConnections.push({
+          id: connection.id,
+          name: connection.name,
+          host: connection.host,
+          port: connection.port,
+          passwordConfigured: false,
+        });
+      }
+    }
+    this.obsConnectionsRep.value = publicConnections;
+
+    const publicStreams: Record<string, OBSStreamSettings> = {};
+    for (const [id, settings] of Object.entries(legacyStreams)) {
+      try {
+        const prepared = await this.secretSettings.prepareStream(id, settings);
+        publicStreams[id] = prepared.publicSettings;
+      } catch (error) {
+        this.logger.error(
+          `[${id}] Failed to migrate OBS stream secret`,
+          error instanceof Error ? error.message : String(error)
+        );
+        publicStreams[id] = {
+          server: settings.server ?? "",
+          useAuth: settings.useAuth === true,
+          username: settings.username ?? "",
+          keyConfigured: false,
+          passwordConfigured: false,
+        };
+      }
+    }
+    this.streamSettingsRep.value = publicStreams;
+
     this.logger.info("Auto-connecting to all defined OBS instances...");
-    const connections = this.obsConnectionsRep.value || [];
-    connections.forEach((conn: OBSConnectionSettings) => {
-      this.connect(conn);
-    });
+    await Promise.all(
+      publicConnections.map((connection) =>
+        this.connectById(connection.id).catch(() => undefined)
+      )
+    );
   }
 
   private setupMessageListeners() {
@@ -114,6 +228,7 @@ export class ConnectionManager {
     this.nodecg.listenFor(
       "startStreaming",
       async (data: { id: string }, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
         try {
           const obs = this.getObs(data.id);
           if (obs) await obs.call("StartStream");
@@ -127,6 +242,7 @@ export class ConnectionManager {
     this.nodecg.listenFor(
       "stopStreaming",
       async (data: { id: string }, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
         try {
           const obs = this.getObs(data.id);
           if (obs) await obs.call("StopStream");
@@ -140,6 +256,7 @@ export class ConnectionManager {
     this.nodecg.listenFor(
       "setStreamSettings",
       async (data: SetStreamSettingsPayload, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
         const result = await this.commandGateway.execute(
           createLegacyCommandEnvelope("obs.setStreamSettings", data, ["broadcast"])
         );
@@ -153,13 +270,71 @@ export class ConnectionManager {
       },
     );
 
-    this.nodecg.listenFor("connectOBS", (data: OBSConnectionSettings) => {
-      this.connect(data);
+    this.nodecg.listenFor(
+      "saveOBSConnection",
+      async (data: OBSConnectionDraft, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
+        const result = await this.commandGateway.execute(
+          createLegacyCommandEnvelope("obs.saveConnection", data, ["broadcast"])
+        );
+        if (ack && !ack.handled) {
+          ack(
+            result.ok
+              ? null
+              : new Error(result.error?.message ?? "Connection save failed"),
+            result.result
+          );
+        }
+      }
+    );
+
+    this.nodecg.listenFor(
+      "connectOBS",
+      async (data: OBSConnectionDraft | { id: string }, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
+        try {
+          if ("host" in data) await this.saveConnection(data);
+          const result = await this.commandGateway.execute(
+            createLegacyCommandEnvelope("obs.connect", { id: data.id }, [
+              "broadcast",
+            ])
+          );
+          if (ack && !ack.handled) {
+            ack(
+              result.ok
+                ? null
+                : new Error(result.error?.message ?? "OBS connection failed")
+            );
+          }
+        } catch (error) {
+          if (ack && !ack.handled) ack(error as Error);
+        }
+      }
+    );
+
+    this.nodecg.listenFor("disconnectOBS", (data: { id: string }, ack: any) => {
+      if (!this.acceptLegacyPrivilegedMessage(ack)) return;
+      void this.disconnect(data.id);
     });
 
-    this.nodecg.listenFor("disconnectOBS", (data: { id: string }) => {
-      this.disconnect(data.id);
-    });
+    this.nodecg.listenFor(
+      "removeOBSConnection",
+      async (data: { id: string }, ack: any) => {
+        if (!this.acceptLegacyPrivilegedMessage(ack)) return;
+        const result = await this.commandGateway.execute(
+          createLegacyCommandEnvelope("obs.removeConnection", data, [
+            "broadcast",
+          ])
+        );
+        if (ack && !ack.handled) {
+          ack(
+            result.ok
+              ? null
+              : new Error(result.error?.message ?? "Connection removal failed")
+          );
+        }
+      }
+    );
 
     this.nodecg.listenFor(
       "setOBSScene",
@@ -441,8 +616,68 @@ export class ConnectionManager {
     });
   }
 
-  async connect(settings: OBSConnectionSettings) {
-    const { id, host, port, password } = settings;
+  private validateConnection(settings: OBSConnectionDraft): string[] {
+    const errors: string[] = [];
+    if (!settings || !/^[A-Za-z0-9._-]+$/.test(settings.id ?? "")) {
+      errors.push("id contains unsupported characters");
+    }
+    if (!settings?.host || typeof settings.host !== "string") {
+      errors.push("host is required");
+    }
+    const port = Number(settings?.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      errors.push("port must be an integer between 1 and 65535");
+    }
+    return errors;
+  }
+
+  private acceptLegacyPrivilegedMessage(ack: any): boolean {
+    if (allowsLegacyPrivilegedMessages(this.nodecg.bundleConfig)) return true;
+    if (ack && !ack.handled) {
+      ack(
+        new Error(
+          "Legacy privileged messages are disabled; use the authenticated command channel"
+        )
+      );
+    }
+    return false;
+  }
+
+  private hasConnection(id: string): boolean {
+    return (this.obsConnectionsRep.value ?? []).some(
+      (connection) => connection.id === id
+    );
+  }
+
+  async saveConnection(
+    settings: OBSConnectionDraft
+  ): Promise<OBSConnectionSettings> {
+    const errors = this.validateConnection(settings);
+    if (errors.length > 0) throw new Error(errors.join("; "));
+    const prepared = await this.secretSettings.prepareConnection(settings);
+    const connections = [...(this.obsConnectionsRep.value ?? [])];
+    const index = connections.findIndex(
+      (connection) => connection.id === prepared.publicSettings.id
+    );
+    if (index >= 0) connections[index] = prepared.publicSettings;
+    else connections.push(prepared.publicSettings);
+    this.obsConnectionsRep.value = connections;
+    return prepared.publicSettings;
+  }
+
+  async connect(settings: OBSConnectionDraft): Promise<void> {
+    const saved = await this.saveConnection(settings);
+    await this.connectById(saved.id);
+  }
+
+  async connectById(id: string): Promise<void> {
+    const settings = (this.obsConnectionsRep.value ?? []).find(
+      (connection) => connection.id === id
+    );
+    if (!settings) throw new Error(`OBS connection ${id} is not configured`);
+    const prepared = await this.secretSettings.prepareConnection(settings);
+    const { host, port } = prepared.publicSettings;
+    const password = prepared.password;
 
     // If exists, might be reconnecting?
     let obs = this.obsInstances.get(id);
@@ -467,8 +702,7 @@ export class ConnectionManager {
     } catch (error: any) {
       this.logger.warn(`[${id}] Failed to connect: ${error.message}`);
       this.sceneManager.setStatus(id, "error");
-
-      // Retry logic? For now, no auto-retry loop to keep it simple, OR implement simple retry.
+      throw error;
     }
   }
 
@@ -495,6 +729,13 @@ export class ConnectionManager {
     await this.disconnect(id);
     this.obsInstances.delete(id);
     this.sceneManager.deleteState(id);
+    await this.secretSettings.deleteConnection(id);
+    this.obsConnectionsRep.value = (this.obsConnectionsRep.value ?? []).filter(
+      (connection) => connection.id !== id
+    );
+    const streams = { ...(this.streamSettingsRep.value ?? {}) };
+    delete streams[id];
+    this.streamSettingsRep.value = streams;
   }
 
   async setScene(id: string, sceneName: string) {
@@ -526,20 +767,22 @@ export class ConnectionManager {
 
   async setStreamSettings(
     id: string,
-    settings: OBSStreamSettings,
+    settings: OBSStreamSettingsDraft,
   ) {
     const obs = this.getObs(id);
     if (!obs) throw new Error(`OBS instance ${id} is not connected`);
     try {
+      const prepared = await this.secretSettings.prepareStream(id, settings);
+      const resolved = prepared.resolvedSettings;
       const streamSettings: any = {
-        server: settings.server,
-        key: settings.key,
+        server: resolved.server,
+        key: resolved.key,
       };
 
-      if (settings.useAuth) {
+      if (resolved.useAuth) {
         streamSettings.use_auth = true;
-        streamSettings.username = settings.username;
-        streamSettings.password = settings.password;
+        streamSettings.username = resolved.username;
+        streamSettings.password = resolved.password;
       } else {
         streamSettings.use_auth = false;
       }
@@ -548,6 +791,10 @@ export class ConnectionManager {
         streamServiceType: "rtmp_custom",
         streamServiceSettings: streamSettings,
       });
+      this.streamSettingsRep.value = {
+        ...(this.streamSettingsRep.value ?? {}),
+        [id]: prepared.publicSettings,
+      };
       this.logger.info(`[${id}] Stream settings updated`);
     } catch (error: any) {
       this.logger.error(`[${id}] Failed to set stream settings`, error.message);
@@ -557,29 +804,19 @@ export class ConnectionManager {
 
   async syncStreamSettings(id: string, obs: OBSWebSocket) {
     try {
-      // NOTE: We need to store settings PER ID in replicant.
-      // We need a new replicant structure for this.
-      // obsStreamSettings -> obsStreamSettingsMap: Record<string, settings>
-      // For now, let's assume the frontend will listen to a specific replicant or we pass it back?
-      // Let's use a Replicant `obsStreamSettings` as Record<string, Settings>
-
       const response = await obs.call("GetStreamServiceSettings");
       const settings = response.streamServiceSettings as any;
-
-      const newSettings = {
+      const publicSettings = await this.secretSettings.captureStream(id, {
         server: settings.server || "",
         key: settings.key || "",
         useAuth: settings.use_auth || false,
         username: settings.username || "",
         password: settings.password || "",
+      });
+      this.streamSettingsRep.value = {
+        ...(this.streamSettingsRep.value ?? {}),
+        [id]: publicSettings,
       };
-
-      const streamSettingsRep = this.nodecg.Replicant<Record<string, any>>(
-        "obsStreamSettings",
-        { defaultValue: {} },
-      );
-      if (!streamSettingsRep.value) streamSettingsRep.value = {}; // Type safety
-      streamSettingsRep.value[id] = newSettings;
 
       this.logger.info(`[${id}] Synced stream settings from OBS`);
     } catch (error: any) {

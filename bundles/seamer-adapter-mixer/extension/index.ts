@@ -9,7 +9,7 @@ import type {
 import { mixerManifest } from "./manifest";
 
 module.exports = function (nodecg: NodeCG.ServerAPI) {
-  const seamer = nodecg.extension["seamer"] as SeamerExtensionApi;
+  const seamer = nodecg.extensions["seamer"] as SeamerExtensionApi;
   const mixerStateRep = nodecg.Replicant<MixerState>(
     "mixerState",
     "mixer-control"

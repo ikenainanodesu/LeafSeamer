@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { AtemSwitcherInfo, AtemState } from "../types/atem.types";
+import { sendAuthenticatedCommand } from "../../../../shared/security/authenticated-command-client";
 
 declare const nodecg: any;
 
@@ -82,7 +83,12 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
 
   const handleRunMacro = (id: number) => {
     if (!selectedIp) return;
-    nodecg.sendMessage("atem:runMacro", { ip: selectedIp, macroIndex: id });
+    void sendAuthenticatedCommand("atem-control", "atem.runMacro", {
+      ip: selectedIp,
+      macroIndex: id,
+    }).catch((error) =>
+      window.alert(error instanceof Error ? error.message : String(error))
+    );
   };
 
   const onDragStart = (e: React.DragEvent, sourceId: number) => {
