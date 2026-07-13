@@ -16,10 +16,13 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
   const { items: toasts, pushToast } = useToast();
 
   useEffect(() => {
-    if (!selectedIp && switchers.length > 0) {
-      setSelectedIp(switchers[0].ip);
-    }
-  }, [selectedIp, switchers]);
+    setSelectedIp((current) => {
+      if (switchers.some((switcher) => switcher.ip === current)) {
+        return current;
+      }
+      return switchers[0]?.ip ?? "";
+    });
+  }, [switchers]);
 
   useEffect(() => {
     if (!selectedIp) {

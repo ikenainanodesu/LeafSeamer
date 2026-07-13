@@ -52,6 +52,7 @@ const AtemControl = () => {
             label="Add control page"
             icon={<Plus size={15} aria-hidden="true" />}
             onClick={addPage}
+            disabled={switchers.length === 0}
           />
         }
       />
