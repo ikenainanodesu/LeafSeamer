@@ -1,0 +1,25 @@
+/* LeafSeamer Dashboard UI 1.0.0 权威令牌。 */
+:root {
+  color-scheme: dark;
+  --leaf-bg: #0c0e11;
+  --leaf-surface: #14171b;
+  --leaf-surface-raised: #20242a;
+  --leaf-surface-deep: #090b0d;
+  --leaf-border: #2a3037;
+  --leaf-text: #f2f4f6;
+  --leaf-text-muted: #959da7;
+  --leaf-text-faint: #68717c;
+  --leaf-command: #61a9ff;
+  --leaf-success: #52d273;
+  --leaf-warning: #ffbd4a;
+  --leaf-danger: #ff626b;
+  --leaf-space-1: 4px;
+  --leaf-space-2: 8px;
+  --leaf-space-3: 12px;
+  --leaf-space-4: 16px;
+  --leaf-space-6: 24px;
+  --leaf-radius: 4px;
+  --leaf-font-ui: Inter, "Segoe UI", Arial, sans-serif;
+  --leaf-font-mono: "Cascadia Mono", Consolas, monospace;
+  --leaf-focus: 0 0 0 2px rgb(97 169 255 / 35%);
+}

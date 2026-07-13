@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "targets": [
+    "atem-control",
+    "backup-system",
+    "logger-system",
+    "mixer-control",
+    "obs-control",
+    "schedule-manager",
+    "seamer",
+    "vb-matrix-control"
+  ]
+}
