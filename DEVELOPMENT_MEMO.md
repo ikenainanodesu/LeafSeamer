@@ -750,3 +750,46 @@ decisions, or release-readiness status changes.
 - `npm.cmd test`：84/84 通过；仅有既有 `node:sqlite` experimental warning。
 - `npm.cmd run typecheck`：通过。
 - `npm.cmd run build --workspace atem-control`、`obs-control`、`vb-matrix-control`：通过；仅有既有 Vite `build.outDir` 警告。
+
+## 2026-07-14 F1 独立审查 Important 修复
+
+### 需求变化
+
+- 独立审查要求删除焦点恢复不得依赖未转义 CSS selector，组件卸载后不得在异步完成路径写入状态，并要求静态合同能拒绝诱饵实现。
+
+### 代码变动
+
+- VB Network 以稳定 Remove 按钮 ref map 替代 `querySelector`；rAF 在组件/依赖变更时可取消，目标按钮已消失或断连时回退 Add Configuration。
+- ATEM、OBS Streaming、OBS Connection、VB Patch 新增 mounted ref 生命周期保护；锁始终在 `finally` 无条件释放，异步后的 pending、保存成功状态与 toast 更新仅在挂载时执行。
+- OBS Scene 删除原生按钮上的手写 Enter/Space 处理，交由浏览器默认 click 行为。
+- Dashboard AST 合同改为验证真实 handler 的 guard、加锁、命令调用、同链 `finally`、mounted 状态保护与 pending 绑定，并加入多类负例夹具。
+
+### 功能增减
+
+- 未改变任何消息名、payload、bundle 名、Replicant 成功状态来源或 Graphics 内容。
+
+### 功能实现路径
+
+- 认证命令在同步锁写入后才进入真实命令/回调；`finally` 始终先释放锁，挂载检查只保护 React 状态与 toast。
+- 删除后焦点从 ref map 获取相邻 Remove，获取失败才回退新增按钮；取消路径仍由 ConfirmDialog 管理。
+
+### 已知 Bug
+
+- 没有真实设备与认证 NodeCG 会话，仍需现场验证快速双击和辅助技术焦点行为。
+
+### 预期解决方法
+
+- 后续浏览器任务补充真实双击与焦点测试，并在设备窗口执行端到端验收。
+
+### 已解决 Bug 以及解决方法
+
+- 解决相邻 Remove 在 rAF 前消失时可能丢失焦点：ref map 查找失败回退 Add Configuration，并清理待执行 rAF。
+- 解决异步结束后可能更新已卸载组件：mounted ref 守卫所有指定完成路径的状态更新。
+- 解决 Scene 键盘激活可能重复调用展开逻辑：移除手写键盘处理。
+
+### 阶段验证
+
+- 实现提交：`dd5d521`（`fix: harden dashboard review contracts`）。
+- 定向 RED：强化合同首次运行 6 项中 3 项失败，分别命中 mounted/真实锁链、Scene 手写键盘与 Network selector/ref map。
+- 定向 GREEN：6/6 通过。
+- `npm.cmd test`：83/83 通过；`npm.cmd run typecheck` 与 ATEM、OBS、VB 构建通过，仅有既有 warning。
