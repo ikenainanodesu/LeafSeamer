@@ -212,7 +212,7 @@
 
 ### 10.4 当前独立性前置条件
 
-截至 2026-07-13，源码独立性前置任务已经完成。17 个 bundle 使用版本化的本地 `src/_leaf-core/` 快照；`npm run core:check` 防止快照与 `shared/integration`、`shared/security` 权威源发生漂移。
+截至 2026-07-13，源码独立性前置任务已经完成。11 个需要共享核心的 bundle 使用版本化的本地 `src/_leaf-core/` 快照；`npm run core:check` 防止快照与 `shared/integration`、`shared/security` 权威源发生漂移。
 
 CI 已对 17 个 bundle 使用临时目录进行隔离安装与构建，验证复制 bundle 源码后的构建路径。开发者仍必须保留本节的同步、漂移检查与禁止跨 bundle 运行时导入约束；UI 快照和 core 快照都不得手工修改。
 

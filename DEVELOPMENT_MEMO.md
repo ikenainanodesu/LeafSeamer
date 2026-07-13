@@ -662,7 +662,7 @@ decisions, or release-readiness status changes.
 
 ### 代码变动
 
-- 更新 UI 设计规范的源码独立性状态：17 个 bundle 已使用版本化 `_leaf-core` 快照，`core:check` 防止漂移，CI 已具备 17 bundle 临时目录隔离安装与构建能力。
+- 更新 UI 设计规范的源码独立性状态：11 个需要共享核心的 bundle 已使用版本化 `_leaf-core` 快照，`core:check` 防止漂移；CI 已具备全部 17 个 bundle 的临时目录隔离安装与构建能力。
 - 补充 Playwright 验收说明：12 个非 Graphics Dashboard 在 320、480、768px 下有 36 张 Windows Chromium 视觉基线，并保留 4 个关键交互流程。
 - 补充 ConfirmDialog 的可访问性合同：`aria-labelledby` 绑定标题，`aria-describedby` 绑定说明正文。
 - `.gitignore` 继续忽略 `playwright-report/` 与 `test-results/`，并明确 UI 规范、本地 `_leaf-ui` 快照和 Playwright snapshot PNG 受版本控制。
@@ -675,7 +675,7 @@ decisions, or release-readiness status changes.
 ### 功能实现路径
 
 - 开发者在 `shared/dashboard-ui/` 修改权威 UI 源，执行 `npm run ui:sync` 写入并提交各 bundle 本地 `_leaf-ui` 快照，再用 `npm run ui:check` 检查漂移。
-- Bundle 单独复制后依赖自身源码、`_leaf-ui` 和 `_leaf-core` 快照安装构建；CI 对 17 个 bundle 的临时目录隔离构建路径进行验证。
+- Bundle 单独复制后只依赖自身源码安装构建；需要共享 UI 或共享核心的 bundle 分别使用本地 `_leaf-ui` 或 `_leaf-core` 快照。CI 对全部 17 个 bundle 的临时目录隔离构建路径进行验证。
 - 页面改动在 320、480、768px 检查无页面级溢出、焦点可见和运行时错误，随后由 `npm run test:ui` 比对 36 张视觉基线及 4 个交互流程。
 - 本轮文档任务不执行 8 个核心 bundle 的最终隔离构建；该验收由主代理最终验证执行。
 
