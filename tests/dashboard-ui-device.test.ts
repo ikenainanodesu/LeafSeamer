@@ -644,76 +644,226 @@ const hasPendingButtonContract = (source: ts.SourceFile, pendingName: string): b
       hasJsxAttribute(opening, "aria-busy", pendingName)
   );
 
-// 终审中的异步命令必须在 React 渲染前以同步 ref 获取锁，并在 finally 统一释放。
-test("终审 Dashboard 命令锁、等待状态与 finally 合同", () => {
+const constFunction = (source: ts.SourceFile, name: string): ts.ArrowFunction | undefined =>
+  descendants(source).find(
+    (node): node is ts.ArrowFunction =>
+      ts.isVariableDeclaration(node.parent) &&
+      ts.isIdentifier(node.parent.name) &&
+      node.parent.name.text === name &&
+      ts.isArrowFunction(node)
+  );
+
+const assignmentPosition = (source: ts.SourceFile, body: ts.Node, text: string): number | undefined =>
+  descendants(body)
+    .filter((node): node is ts.BinaryExpression => ts.isBinaryExpression(node))
+    .find((node) => node.getText(source) === text)
+    ?.getStart(source);
+
+const authenticatedCallPosition = (source: ts.SourceFile, body: ts.Node): number | undefined =>
+  descendants(body)
+    .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
+    .find(
+      (node) =>
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "sendAuthenticatedCommand"
+    )
+    ?.getStart(source);
+
+const promiseReceiverRoot = (expression: ts.Expression): ts.Identifier | undefined => {
+  if (ts.isIdentifier(expression)) return expression;
+  if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
+    return promiseReceiverRoot(expression.expression.expression);
+  }
+  return undefined;
+};
+
+const finallyOriginatesFromAuthenticatedCommand = (
+  source: ts.SourceFile,
+  body: ts.Node,
+  receiver: ts.Expression
+): boolean => {
+  if (receiver.getText(source).includes("sendAuthenticatedCommand")) return true;
+  const root = promiseReceiverRoot(receiver);
+  if (!root) return false;
+  return descendants(body).some(
+    (node) =>
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === root.text &&
+      node.initializer !== undefined &&
+      authenticatedCallPosition(source, node.initializer) !== undefined
+  );
+};
+
+const hasMountedRef = (source: ts.SourceFile): boolean => {
+  const text = source.getFullText();
+  return hasUseRefLock(source, "isMountedRef") && text.includes("isMountedRef.current = false");
+};
+
+const setterIsMountedGuarded = (
+  source: ts.SourceFile,
+  functionName: string,
+  setterName: string
+): boolean => {
+  const handler = constFunction(source, functionName);
+  if (!handler) return false;
+  return descendants(handler).some((node) => {
+    if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== setterName) {
+      return false;
+    }
+    let current: ts.Node | undefined = node.parent;
+    while (current && current !== handler) {
+      if (ts.isIfStatement(current) && current.expression.getText(source).includes("isMountedRef.current")) {
+        return true;
+      }
+      current = current.parent;
+    }
+    return false;
+  });
+};
+
+const handlerHasRealLockContract = (
+  source: ts.SourceFile,
+  handlerName: string,
+  lockName: string,
+  pendingSetter: string
+): boolean => {
+  const handler = constFunction(source, handlerName);
+  if (!handler || !hasUseRefLock(source, lockName) || !hasMountedRef(source)) return false;
+  const sendPosition = authenticatedCallPosition(source, handler.body);
+  const lockPosition = assignmentPosition(source, handler.body, `${lockName}.current = true`);
+  const pendingPosition = descendants(handler.body)
+    .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
+    .find((node) => ts.isIdentifier(node.expression) && node.expression.text === pendingSetter)
+    ?.getStart(source);
+  const guardPosition = descendants(handler.body)
+    .filter((node): node is ts.IfStatement => ts.isIfStatement(node))
+    .find((node) => node.expression.getText(source).includes(`${lockName}.current`))
+    ?.getStart(source);
+  const finallyCall = descendants(handler.body).find(
+    (node): node is ts.CallExpression =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "finally" &&
+      finallyOriginatesFromAuthenticatedCommand(source, handler.body, node.expression.expression)
+  );
+  return (
+    sendPosition !== undefined &&
+    lockPosition !== undefined &&
+    pendingPosition !== undefined &&
+    guardPosition !== undefined &&
+    guardPosition < lockPosition &&
+    lockPosition < pendingPosition &&
+    pendingPosition < sendPosition &&
+    finallyCall !== undefined &&
+    assignmentPosition(source, finallyCall, `${lockName}.current = false`) !== undefined &&
+    setterIsMountedGuarded(source, handlerName, pendingSetter)
+  );
+};
+
+const handlerHasCallbackLockContract = (
+  source: ts.SourceFile,
+  handlerName: string,
+  lockName: string,
+  pendingSetter: string
+): boolean => {
+  const handler = constFunction(source, handlerName);
+  if (!handler || !hasUseRefLock(source, lockName) || !hasMountedRef(source)) return false;
+  const lockPosition = assignmentPosition(source, handler.body, `${lockName}.current = true`);
+  const pendingPosition = descendants(handler.body)
+    .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
+    .find((node) => ts.isIdentifier(node.expression) && node.expression.text === pendingSetter)
+    ?.getStart(source);
+  const callbackPosition = descendants(handler.body)
+    .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
+    .find((node) => ts.isIdentifier(node.expression) && node.expression.text === "command")
+    ?.getStart(source);
+  const guardPosition = descendants(handler.body)
+    .filter((node): node is ts.IfStatement => ts.isIfStatement(node))
+    .find((node) => node.expression.getText(source).includes(`${lockName}.current`))
+    ?.getStart(source);
+  const finallyCall = descendants(handler.body).find(
+    (node): node is ts.CallExpression =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "finally" &&
+      node.expression.expression.getText(source).includes("command()")
+  );
+  return (
+    lockPosition !== undefined &&
+    pendingPosition !== undefined &&
+    callbackPosition !== undefined &&
+    guardPosition !== undefined &&
+    guardPosition < lockPosition &&
+    lockPosition < pendingPosition &&
+    pendingPosition < callbackPosition &&
+    finallyCall !== undefined &&
+    assignmentPosition(source, finallyCall, `${lockName}.current = false`) !== undefined &&
+    setterIsMountedGuarded(source, handlerName, pendingSetter)
+  );
+};
+
+// 同步锁、认证调用与 finally 必须属于同一真实 handler，诱饵 ref 或无关 finally 不能通过。
+test("终审命令合同拒绝诱饵锁和卸载后的状态更新", () => {
   const atem = parseSource("bundles/atem-control/src/dashboard/atem-panel.tsx");
   const obsPanel = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
-  const obsConnection = parseSource("bundles/obs-control/src/dashboard/obs-connection.tsx");
   const patchStatus = parseSource("bundles/vb-matrix-control/src/dashboard/components/PatchStatus.tsx");
-
-  ok(hasUseRefLock(atem, "macroCommandLockRef"));
-  ok(hasFinallyLockRelease(atem, "macroCommandLockRef"));
+  const obsConnection = parseSource("bundles/obs-control/src/dashboard/obs-connection.tsx");
+  ok(handlerHasRealLockContract(atem, "handleRunMacro", "macroCommandLockRef", "setPendingMacroId"));
+  ok(handlerHasRealLockContract(obsPanel, "toggleStreaming", "streamCommandLockRef", "setIsStreamCommandPending"));
+  ok(handlerHasRealLockContract(patchStatus, "updatePatch", "patchCommandLockRef", "setIsPatchCommandPending"));
   ok(hasPendingButtonContract(atem, "pendingMacroId"));
-
-  ok(hasUseRefLock(obsPanel, "streamCommandLockRef"));
-  ok(hasFinallyLockRelease(obsPanel, "streamCommandLockRef"));
   ok(hasPendingButtonContract(obsPanel, "isStreamCommandPending"));
-
-  ok(hasUseRefLock(obsConnection, "connectionCommandLockRef"));
-  ok(hasFinallyLockRelease(obsConnection, "connectionCommandLockRef"));
+  ok(hasPendingButtonContract(patchStatus, "isPatchCommandPending"));
+  ok(hasMountedRef(obsConnection));
+  ok(handlerHasCallbackLockContract(obsConnection, "runConnectionCommand", "connectionCommandLockRef", "setPendingConnectionAction"));
+  ok(setterIsMountedGuarded(obsConnection, "saveConnection", "setConnections"));
+  ok(setterIsMountedGuarded(obsConnection, "runConnectionCommand", "setPendingConnectionAction"));
   ok(hasPendingButtonContract(obsConnection, "isConnectionCommandPending"));
 
-  ok(hasUseRefLock(patchStatus, "patchCommandLockRef"));
-  ok(hasFinallyLockRelease(patchStatus, "patchCommandLockRef"));
-  ok(hasPendingButtonContract(patchStatus, "isPatchCommandPending"));
+  const decoy = parseText(
+    "decoy.tsx",
+    'const Component = () => { const isMountedRef = useRef(true); const lock = useRef(false); const handler = () => { sendAuthenticatedCommand("x", "y"); lock.current = true; setPending(true); Promise.resolve().finally(() => { lock.current = false; }); }; return null; };'
+  );
+  ok(!handlerHasRealLockContract(decoy, "handler", "lock", "setPending"));
+  ok(!handlerHasCallbackLockContract(decoy, "handler", "lock", "setPending"));
+  const pendingDecoy = parseText("pending-decoy.tsx", "const view = <button disabled={pending} aria-busy={other} />;");
+  ok(!hasPendingButtonContract(pendingDecoy, "pending"));
 });
 
-// Scene 的选择与 PGM 切换必须是相邻的原生按钮，避免嵌套交互元素吞掉键盘事件。
-test("OBS Scene 使用相邻原生按钮且不嵌套交互控件", () => {
+// Scene 的两个原生按钮必须同级，展开按钮交给浏览器默认键盘行为。
+test("OBS Scene 合同拒绝嵌套或手写键盘触发", () => {
   const source = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
-  const openings = jsxOpenings(source);
-  ok(!openings.some((opening) => hasJsxAttribute(opening, "role", '"button"')));
-  const sceneButtons = openings.filter(
-    (opening) =>
-      jsxTagName(opening.tagName) === "button" &&
-      hasJsxAttribute(opening, "className", "obs-scene")
+  const sceneButton = jsxOpenings(source).find(
+    (opening) => jsxTagName(opening.tagName) === "button" && hasJsxAttribute(opening, "className", "obs-scene")
   );
-  ok(sceneButtons.length > 0);
+  ok(sceneButton !== undefined && !hasJsxAttribute(sceneButton, "onKeyDown"));
   ok(
-    openings.some(
-      (opening) =>
-        jsxTagName(opening.tagName) === "button" &&
-        hasJsxAttribute(opening, "onClick", "handleSwitchScene")
+    jsxOpenings(source).some(
+      (opening) => jsxTagName(opening.tagName) === "button" && hasJsxAttribute(opening, "onClick", "handleSwitchScene")
+    )
+  );
+  const decoy = parseText("scene-decoy.tsx", 'const view = <button className="obs-scene" onKeyDown={() => {}} />;');
+  ok(
+    !jsxOpenings(decoy).some(
+      (opening) => jsxTagName(opening.tagName) === "button" && hasJsxAttribute(opening, "className", "obs-scene") && !hasJsxAttribute(opening, "onKeyDown")
     )
   );
 });
 
-// Playlist 对话框必须声明模态语义，并完整管理打开、圈定和恢复焦点。
-test("OBS Playlist 对话框保留焦点生命周期合同", () => {
-  const source = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
-  const openings = jsxOpenings(source);
-  ok(
-    openings.some(
-      (opening) =>
-        hasJsxAttribute(opening, "role", '"dialog"') &&
-        hasJsxAttribute(opening, "aria-modal", '"true"') &&
-        hasJsxAttribute(opening, "aria-labelledby")
-    )
-  );
-  ok(hasUseRefLock(source, "playlistTriggerRef"));
-  ok(hasUseRefLock(source, "playlistDialogRef"));
-  const text = source.getFullText();
-  ok(text.includes('"Tab"') && text.includes('"Escape"'));
-  ok(text.includes("trigger.focus"));
-  ok(text.includes("trigger?.isConnected"));
-});
+// Playlist 和 Network 焦点合同必须绑定真实 DOM 结构与稳定 ref，而非孤立字符串。
+test("Playlist 与 Network 焦点合同拒绝诱饵实现", () => {
+  const playlist = parseSource("bundles/obs-control/src/dashboard/obs-control-panel.tsx");
+  const network = parseSource("bundles/vb-matrix-control/src/dashboard/components/NetworkConfigList.tsx");
+  const dialog = jsxOpenings(playlist).find((opening) => hasJsxAttribute(opening, "role", '"dialog"'));
+  ok(dialog !== undefined && hasJsxAttribute(dialog, "aria-modal", '"true"') && hasJsxAttribute(dialog, "ref", "playlistDialogRef") && hasJsxAttribute(dialog, "onKeyDown", "handleKeyDown"));
+  const playlistText = playlist.getFullText();
+  ok(playlistText.includes("event.key === \"Escape\"") && playlistText.includes("event.key !== \"Tab\"") && playlistText.includes("trigger?.isConnected"));
+  const networkText = network.getFullText();
+  ok(hasUseRefLock(network, "removeButtonRefs") && hasUseRefLock(network, "focusFrameRef"));
+  ok(networkText.includes("cancelAnimationFrame") && networkText.includes("removeButtonRefs.current.get") && !networkText.includes("querySelector"));
 
-// 删除后的焦点只允许通过稳定数据属性定位相邻按钮，空列表回退到新增按钮。
-test("VB Network 删除后使用稳定目标恢复焦点", () => {
-  const source = parseSource("bundles/vb-matrix-control/src/dashboard/components/NetworkConfigList.tsx");
-  const text = source.getFullText();
-  ok(hasUseRefLock(source, "focusAfterRemovalRef"));
-  ok(hasUseRefLock(source, "addConfigurationButtonRef"));
-  ok(text.includes("data-network-remove-id"));
-  ok(text.includes("addConfigurationButtonRef.current?.focus"));
+  const decoy = parseText("focus-decoy.tsx", 'const view = <div role="dialog" aria-modal="true" />; const ref = useRef(null);');
+  const decoyDialog = jsxOpenings(decoy).find((opening) => hasJsxAttribute(opening, "role", '"dialog"'));
+  ok(!(decoyDialog && hasJsxAttribute(decoyDialog, "ref", "playlistDialogRef") && hasJsxAttribute(decoyDialog, "onKeyDown", "handleKeyDown")));
 });

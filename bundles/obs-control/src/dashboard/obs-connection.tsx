@@ -32,11 +32,20 @@ const ObsConnection = () => {
     "save" | "connect" | "disconnect" | "remove" | null
   >(null);
   const connectionCommandLockRef = useRef(false);
+  const isMountedRef = useRef(true);
   const isConnectionCommandPending = pendingConnectionAction !== null;
   const { items: toasts, pushToast } = useToast();
   const showCommandError = (error: unknown) => {
+    if (!isMountedRef.current) return;
     pushToast(error instanceof Error ? error.message : String(error), "danger");
   };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const obsConnectionsRep = nodecg.Replicant<OBSConnectionSettings[]>(
@@ -107,7 +116,7 @@ const ObsConnection = () => {
       .catch(showCommandError)
       .finally(() => {
         connectionCommandLockRef.current = false;
-        setPendingConnectionAction(null);
+        if (isMountedRef.current) setPendingConnectionAction(null);
       });
   };
 
@@ -117,13 +126,15 @@ const ObsConnection = () => {
       "obs.saveConnection",
       conn,
     );
-    setConnections((current) =>
-      current.map((item) =>
-        item.id === conn.id
-          ? { ...item, password: "", clearPassword: false }
-          : item,
-      ),
-    );
+    if (isMountedRef.current) {
+      setConnections((current) =>
+        current.map((item) =>
+          item.id === conn.id
+            ? { ...item, password: "", clearPassword: false }
+            : item,
+        ),
+      );
+    }
   };
 
   const handleSave = (conn: OBSConnectionDraft) =>
@@ -159,9 +170,11 @@ const ObsConnection = () => {
       sendAuthenticatedCommand("obs-control", "obs.removeConnection", {
         id: connToRemove.id,
       }).then(() => {
-        setConnections((current) =>
-          current.filter((item) => item.id !== connToRemove.id),
-        );
+        if (isMountedRef.current) {
+          setConnections((current) =>
+            current.filter((item) => item.id !== connToRemove.id),
+          );
+        }
       })
     );
   };

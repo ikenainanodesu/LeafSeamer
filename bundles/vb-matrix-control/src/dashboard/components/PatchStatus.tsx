@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ToastRegion, useToast } from "../_leaf-ui/components";
 import { CurrentPatchStatus } from "../../types";
 import { sendAuthenticatedCommand } from "../../_leaf-core/security/authenticated-command-client";
@@ -9,6 +9,14 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
   const { items: toasts, pushToast } = useToast();
   const [isPatchCommandPending, setIsPatchCommandPending] = useState(false);
   const patchCommandLockRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // 状态由父组件传入，因此不在此订阅 Replicant。
   const updatePatch = (patch: CurrentPatchStatus) => {
@@ -17,11 +25,12 @@ export const PatchStatus: React.FC<{ status: CurrentPatchStatus }> = ({
     setIsPatchCommandPending(true);
     void sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch)
       .catch((error) =>
+        isMountedRef.current &&
         pushToast(error instanceof Error ? error.message : String(error), "danger")
       )
       .finally(() => {
         patchCommandLockRef.current = false;
-        setIsPatchCommandPending(false);
+        if (isMountedRef.current) setIsPatchCommandPending(false);
       });
   };
 

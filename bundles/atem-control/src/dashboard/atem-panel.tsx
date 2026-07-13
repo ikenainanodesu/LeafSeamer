@@ -15,7 +15,15 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
   const [state, setState] = useState<AtemState | null>(null);
   const [pendingMacroId, setPendingMacroId] = useState<number | null>(null);
   const macroCommandLockRef = useRef(false);
+  const isMountedRef = useRef(true);
   const { items: toasts, pushToast } = useToast();
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedIp((current) => {
@@ -92,11 +100,12 @@ const AtemPanel: React.FC<AtemPanelProps> = ({ switchers, onRemove }) => {
       macroIndex: id,
     })
       .catch((error) =>
+        isMountedRef.current &&
         pushToast(error instanceof Error ? error.message : String(error), "danger")
       )
       .finally(() => {
         macroCommandLockRef.current = false;
-        setPendingMacroId(null);
+        if (isMountedRef.current) setPendingMacroId(null);
       });
   };
 

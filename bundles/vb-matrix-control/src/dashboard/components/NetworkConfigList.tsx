@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { NetworkConfig } from "../../types";
-import { ConfirmDialog, IconButton, PanelHeader } from "../_leaf-ui/components";
+import { ConfirmDialog, PanelHeader } from "../_leaf-ui/components";
 
 const NetworkConfigList: React.FC = () => {
   const [configs, setConfigs] = useState<NetworkConfig[]>([]);
@@ -9,6 +9,8 @@ const NetworkConfigList: React.FC = () => {
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
   const focusAfterRemovalRef = useRef<{ neighborId: string | null } | null>(null);
   const addConfigurationButtonRef = useRef<HTMLButtonElement>(null);
+  const removeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const focusFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const rep = nodecg.Replicant<NetworkConfig[]>("networkConfigs", {
@@ -59,22 +61,45 @@ const NetworkConfigList: React.FC = () => {
     nodecg.Replicant<NetworkConfig[]>("networkConfigs").value = newConfigs;
   };
 
+  const setRemoveButtonRef = (id: string, node: HTMLButtonElement | null) => {
+    if (node) {
+      removeButtonRefs.current.set(id, node);
+    } else {
+      removeButtonRefs.current.delete(id);
+    }
+  };
+
   useEffect(() => {
     const focusTarget = focusAfterRemovalRef.current;
     if (!focusTarget) return;
-    window.requestAnimationFrame(() => {
-      if (focusTarget.neighborId) {
-        document
-          .querySelector<HTMLButtonElement>(
-            `[data-network-remove-id="${focusTarget.neighborId}"]`,
-          )
-          ?.focus();
+    focusFrameRef.current = window.requestAnimationFrame(() => {
+      const neighbor = focusTarget.neighborId
+        ? removeButtonRefs.current.get(focusTarget.neighborId)
+        : undefined;
+      if (neighbor?.isConnected) {
+        neighbor.focus();
       } else {
         addConfigurationButtonRef.current?.focus();
       }
       focusAfterRemovalRef.current = null;
+      focusFrameRef.current = null;
     });
+    return () => {
+      if (focusFrameRef.current !== null) {
+        window.cancelAnimationFrame(focusFrameRef.current);
+        focusFrameRef.current = null;
+      }
+    };
   }, [configs]);
+
+  useEffect(
+    () => () => {
+      if (focusFrameRef.current !== null) {
+        window.cancelAnimationFrame(focusFrameRef.current);
+      }
+    },
+    [],
+  );
 
   return (
     <div className="vb-shell vb-shell--compact">
@@ -96,6 +121,7 @@ const NetworkConfigList: React.FC = () => {
             config={config}
             onUpdate={(updates) => handleUpdate(config.id, updates)}
             onRemove={() => setPendingRemovalId(config.id)}
+            removeButtonRef={(node) => setRemoveButtonRef(config.id, node)}
           />
         ))}
       </div>
@@ -130,17 +156,22 @@ const NetworkConfigCard: React.FC<{
   config: NetworkConfig;
   onUpdate: (updates: Partial<NetworkConfig>) => void;
   onRemove: () => void;
-}> = ({ config, onUpdate, onRemove }) => {
+  removeButtonRef: (node: HTMLButtonElement | null) => void;
+}> = ({ config, onUpdate, onRemove, removeButtonRef }) => {
   return (
     <article className="network-card">
-      <IconButton
+      <button
+        ref={removeButtonRef}
+        type="button"
         onClick={onRemove}
-        className="network-remove"
-        tone="danger"
+        className="leaf-icon-button network-remove"
+        data-tone="danger"
         data-network-remove-id={config.id}
-        label={`Remove connection ${config.name}`}
-        icon={<Trash2 size={15} aria-hidden="true" />}
-      />
+        aria-label={`Remove connection ${config.name}`}
+        title={`Remove connection ${config.name}`}
+      >
+        <Trash2 size={15} aria-hidden="true" />
+      </button>
 
       <div>
         <label className="field field--name">

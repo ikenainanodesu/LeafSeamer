@@ -663,6 +663,14 @@ const SingleObsControl = ({
   const [showPass, setShowPass] = useState(false);
   const [isStreamCommandPending, setIsStreamCommandPending] = useState(false);
   const streamCommandLockRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // 当前展开的Scene名称（null表示全部收起）
   const [expandedScene, setExpandedScene] = useState<string | null>(null);
@@ -889,7 +897,7 @@ const SingleObsControl = ({
       .catch(showCommandError)
       .finally(() => {
         streamCommandLockRef.current = false;
-        setIsStreamCommandPending(false);
+        if (isMountedRef.current) setIsStreamCommandPending(false);
       });
   };
 
@@ -1104,12 +1112,6 @@ const SingleObsControl = ({
                   <button
                     type="button"
                   onClick={() => handleSceneClick(scene.name)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      handleSceneClick(scene.name);
-                    }
-                  }}
                     className="obs-scene"
                   aria-current={isActive ? "true" : undefined}
                   aria-selected={isSelected ? "true" : undefined}
