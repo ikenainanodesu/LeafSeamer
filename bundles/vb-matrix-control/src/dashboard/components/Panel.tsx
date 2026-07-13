@@ -1,5 +1,12 @@
 import React, { useEffect } from "react";
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
+import { Plus, Trash2 } from "lucide-react";
+import {
+  Button,
+  Disclosure,
+  IconButton,
+  PanelHeader,
+} from "../_leaf-ui/components";
 import { PatchSelector } from "./PatchSelector";
 import { PatchStatus } from "./PatchStatus";
 import { PresetManager } from "./PresetManager";
@@ -70,9 +77,9 @@ export const Panel: React.FC = () => {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { over } = event;
-    // If dropped over a bank slot
+    // 拖放到预设库槽位时保存当前预设。
     if (over && over.id) {
-      // Use the name from state
+      // 使用状态中的预设名称。
       nodecg.sendMessage("savePresetToBank", {
         slotId: over.id,
         name: presetName || "Untitled",
@@ -104,16 +111,17 @@ export const Panel: React.FC = () => {
   return (
     <DndContext onDragEnd={handleDragEnd}>
       <div className="vb-shell">
-        <header className="vb-header">
-          <div className="vb-title-group">
-            <span className="vb-kicker">VBAN Matrix</span>
-            <h2>VB Matrix Control</h2>
-          </div>
-          <div className="header-meta" title={activeConnection?.ip || ""}>
-            <strong>{activeConnection?.name || "No Matrix"}</strong>
-            {activeConnection?.ip || "Not configured"}
-          </div>
-        </header>
+        <PanelHeader
+          kicker="VBAN Matrix"
+          title="VB Matrix Control"
+          target={
+            activeConnection
+              ? `${activeConnection.name} · ${activeConnection.ip}`
+              : "Not configured"
+          }
+          status={activeConnectionId ? "Configured" : "Not Configured"}
+          statusTone={activeConnectionId ? "neutral" : "warning"}
+        />
 
         <div className="matrix-toolbar">
           <label className="field">
@@ -136,92 +144,73 @@ export const Panel: React.FC = () => {
           <div className="config-count">{networkConfigs.length} Configs</div>
         </div>
 
-        {activeConnectionId ? (
-          <>
-            <MatrixView
-              connectionId={activeConnectionId}
-              devices={devices}
-              points={matrixPoints}
-              patches={patches}
-              onRefresh={handleRefreshMatrix}
-            />
+        <MatrixView
+          connectionId={activeConnectionId}
+          devices={devices}
+          points={matrixPoints}
+          patches={patches}
+          onRefresh={handleRefreshMatrix}
+        />
 
-            <section className="section-panel">
-              <div className="section-heading">
-                <div className="section-title">
-                  <span className="section-kicker">Routing</span>
-                  <h3>Patch Control</h3>
-                  <p className="section-note">
-                    {filteredPatches.length} active row
-                    {filteredPatches.length === 1 ? "" : "s"} for{" "}
-                    {activeConnection?.name || "selected matrix"}
-                  </p>
-                </div>
-                <button
-                  onClick={handleAddPatch}
-                  className="icon-button icon-button--primary section-action"
-                  title="Add patch"
-                  aria-label="Add patch"
-                >
-                  +
-                </button>
-              </div>
-
-              {filteredPatches.length === 0 && (
-                <div className="empty-state">No patches for this matrix.</div>
-              )}
-
-              <div className="patch-list">
-                {filteredPatches.map((patch, index) => (
-                  <article className="patch-row" key={patch.id}>
-                    <div className="patch-row-heading">
-                      <span className="patch-index">Patch {index + 1}</span>
-                      {index > 0 && (
-                        <button
-                          onClick={() => handleRemovePatch(patch.id)}
-                          className="icon-button icon-button--danger"
-                          title="Remove patch"
-                          aria-label={`Remove patch ${index + 1}`}
-                        >
-                          X
-                        </button>
-                      )}
-                    </div>
-                    <PatchSelector
-                      patchId={patch.id}
-                      connectionId={activeConnectionId}
-                      status={patch}
-                      onSelectionChange={() => {}}
-                    />
-                    <PatchStatus status={patch} />
-                  </article>
-                ))}
-              </div>
-            </section>
-          </>
-        ) : (
-          <div className="empty-panel">
-            Please add a Network Configuration in the dedicated panel.
+        <Disclosure
+          title="Patch Control"
+          summary={`${filteredPatches.length} active`}
+          defaultOpen
+          storageKey="vb.patch-control.open"
+        >
+          <div className="leaf-toolbar">
+            <Button
+              tone="primary"
+              onClick={handleAddPatch}
+              disabled={!activeConnectionId}
+            >
+              <Plus size={15} aria-hidden="true" />
+              Add Patch
+            </Button>
           </div>
-        )}
+          {filteredPatches.length === 0 ? (
+            <div className="empty-state">No patches for this matrix.</div>
+          ) : null}
+          <div className="patch-list">
+            {filteredPatches.map((patch, index) => (
+              <article className="patch-row" key={patch.id}>
+                <div className="patch-row-heading">
+                  <span className="patch-index">Patch {index + 1}</span>
+                  {index > 0 ? (
+                    <IconButton
+                      tone="danger"
+                      label={`Remove patch ${index + 1}`}
+                      icon={<Trash2 size={14} aria-hidden="true" />}
+                      onClick={() => handleRemovePatch(patch.id)}
+                    />
+                  ) : null}
+                </div>
+                <PatchSelector
+                  patchId={patch.id}
+                  connectionId={activeConnectionId}
+                  status={patch}
+                  onSelectionChange={() => {}}
+                />
+                <PatchStatus status={patch} />
+              </article>
+            ))}
+          </div>
+        </Disclosure>
 
-        <div className="management-grid">
-          <section className="section-panel">
-            <div className="section-title">
-              <span className="section-kicker">Capture</span>
-              <h3>Preset Manager</h3>
-            </div>
-            <PresetManager name={presetName} setName={setPresetName} />
-          </section>
-
-          <section className="section-panel">
-            <div className="section-title">
-              <span className="section-kicker">Recall</span>
-              <h3>Preset Bank</h3>
-            </div>
-            <Bank />
-          </section>
-        </div>
+        <Disclosure
+          title="Preset Manager"
+          defaultOpen={false}
+          storageKey="vb.preset-manager.open"
+        >
+          <PresetManager name={presetName} setName={setPresetName} />
+        </Disclosure>
+        <Disclosure
+          title="Preset Bank"
+          defaultOpen={false}
+          storageKey="vb.preset-bank.open"
+        >
+          <Bank />
+        </Disclosure>
       </div>
     </DndContext>
   );

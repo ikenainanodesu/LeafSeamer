@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { IconButton, ToastRegion, useToast } from "../_leaf-ui/components";
 import { sendAuthenticatedCommand } from "../../_leaf-core/security/authenticated-command-client";
 import {
   CurrentPatchStatus,
@@ -58,6 +60,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   onRefresh,
 }) => {
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
+  const { items: toasts, pushToast } = useToast();
 
   const connectionDevices = useMemo(
     () => devices.filter((device) => device.connectionId === connectionId),
@@ -136,25 +139,18 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
       exists: !isPatched,
     };
 
-    void sendAuthenticatedCommand(
-      "vb-matrix-control",
-      "vb.updatePatch",
-      patch
-    ).catch((error) =>
-      window.alert(error instanceof Error ? error.message : String(error))
-    );
-    window.setTimeout(() => {
-      setPendingKeys((current) => {
-        const next = new Set(current);
-        next.delete(key);
-        return next;
+    void sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch)
+      .catch((error) => {
+        pushToast(error instanceof Error ? error.message : String(error), "danger");
+      })
+      .finally(() => {
+        setPendingKeys((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
       });
-    }, 700);
   };
-
-  if (!connectionId) {
-    return null;
-  }
 
   const hasMatrix = inputEndpoints.length > 0 && outputEndpoints.length > 0;
 
@@ -168,16 +164,20 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             {inputEndpoints.length} inputs / {outputEndpoints.length} outputs
           </p>
         </div>
-        <button
-          type="button"
-          className="control-button section-action"
+        <IconButton
+          tone="neutral"
+          label="Refresh Matrix"
+          icon={<RefreshCw size={15} aria-hidden="true" />}
           onClick={onRefresh}
-        >
-          Refresh
-        </button>
+          disabled={!connectionId}
+        />
       </div>
 
-      {hasMatrix ? (
+      {!connectionId ? (
+        <div className="empty-state">
+          Please add a Network Configuration in the dedicated panel.
+        </div>
+      ) : hasMatrix ? (
         <>
           <div className="matrix-summary" aria-label="Matrix summary">
             <span>
@@ -212,13 +212,13 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             <div
               className="matrix-grid"
               style={{
-                gridTemplateColumns: `156px repeat(${outputEndpoints.length}, 38px)`,
+                gridTemplateColumns: `156px repeat(${outputEndpoints.length}, 30px)`,
               }}
             >
               <div className="matrix-corner">Inputs / Outputs</div>
               {outputEndpoints.map((output) => (
                 <div
-                  className="matrix-column-header"
+                  className="matrix-column-header matrix-output-header"
                   key={`${output.slotSuid}-${output.channel}`}
                   title={`${output.deviceName} OUT ${output.channel}`}
                 >
@@ -230,7 +230,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
               {inputEndpoints.map((input) => (
                 <React.Fragment key={`${input.slotSuid}-${input.channel}`}>
                   <div
-                    className="matrix-row-header"
+                    className="matrix-row-header matrix-input-header"
                     title={`${input.deviceName} IN ${input.channel}`}
                   >
                     <span>{input.deviceName}</span>
@@ -265,12 +265,14 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                         }`}
                         title={`${input.deviceName} IN ${input.channel} -> ${output.deviceName} OUT ${output.channel}: ${gainLabel}`}
                         aria-pressed={isPatched}
+                        aria-busy={isPending}
                         aria-label={`${isPatched ? "Depatch" : "Patch"} ${
                           input.deviceName
                         } input ${input.channel} to ${output.deviceName} output ${
                           output.channel
                         }`}
                         onClick={() => togglePoint(point, isPatched)}
+                        disabled={isPending}
                       >
                         <span aria-hidden="true" />
                       </button>
@@ -287,6 +289,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
           reachable.
         </div>
       )}
+      <ToastRegion items={toasts} />
     </section>
   );
 };

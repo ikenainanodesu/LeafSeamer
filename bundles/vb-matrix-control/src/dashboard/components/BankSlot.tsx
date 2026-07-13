@@ -1,5 +1,7 @@
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
+import { Trash2 } from "lucide-react";
+import { IconButton } from "../_leaf-ui/components";
 import { Preset } from "../../types";
 
 interface BankSlotProps {
@@ -30,19 +32,17 @@ export const BankSlot: React.FC<BankSlotProps> = ({ id, preset, index }) => {
             >
               Load
             </button>
-            <button
+            <IconButton
+              tone="danger"
+              label={`Delete preset ${preset.name}`}
+              icon={<Trash2 size={14} aria-hidden="true" />}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 nodecg.sendMessage("deletePreset", preset.id);
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              className="icon-button icon-button--danger"
-              title="Delete preset"
-              aria-label={`Delete preset ${preset.name}`}
-            >
-              X
-            </button>
+            />
           </div>
         </>
       ) : (

@@ -262,6 +262,212 @@ const hasTogglePointContract = (source: ts.SourceFile): boolean => {
   });
 };
 
+const hasNamedImports = (
+  source: ts.SourceFile,
+  moduleSpecifier: string,
+  names: string[]
+): boolean => {
+  const imported = new Set<string>();
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      stringLiteralValue(statement.moduleSpecifier) !== moduleSpecifier
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    bindings.elements.forEach((element) => imported.add(element.name.text));
+  }
+  return names.every((name) => imported.has(name));
+};
+
+const hasDisclosure = (source: ts.SourceFile, title: string, storageKey: string): boolean =>
+  descendants(source).some((node) => {
+    if (!ts.isJsxElement(node) || jsxTagName(node.openingElement.tagName) !== "Disclosure") {
+      return false;
+    }
+    const attributes = node.openingElement.attributes.properties;
+    return ["title", "storageKey"].every((name) =>
+      attributes.some(
+        (attribute) =>
+          ts.isJsxAttribute(attribute) &&
+          ts.isIdentifier(attribute.name) &&
+          attribute.name.text === name &&
+          stringLiteralValue(attribute.initializer?.kind === ts.SyntaxKind.StringLiteral ? attribute.initializer : undefined) ===
+            (name === "title" ? title : storageKey)
+      )
+    );
+  });
+
+const hasJsxAttribute = (source: ts.SourceFile, className: string, attributeName: string): boolean =>
+  descendants(source).some((node) => {
+    if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) {
+      return false;
+    }
+    const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
+    const hasClass = openingElement.attributes.properties.some(
+      (attribute) =>
+        ts.isJsxAttribute(attribute) &&
+        ts.isIdentifier(attribute.name) &&
+        attribute.name.text === "className" &&
+        attribute.initializer?.getText(source).includes(className)
+    );
+    return (
+      hasClass &&
+      openingElement.attributes.properties.some(
+        (attribute) =>
+          ts.isJsxAttribute(attribute) &&
+          ts.isIdentifier(attribute.name) &&
+          attribute.name.text === attributeName
+      )
+    );
+  });
+
+const getJsxAttribute = (
+  openingElement: ts.JsxOpeningLikeElement,
+  name: string
+): ts.JsxAttribute | undefined =>
+  openingElement.attributes.properties.find(
+    (attribute): attribute is ts.JsxAttribute =>
+      ts.isJsxAttribute(attribute) && ts.isIdentifier(attribute.name) && attribute.name.text === name
+  );
+
+const hasPanelHeaderContract = (source: ts.SourceFile): boolean =>
+  descendants(source).some((node) => {
+    if (!ts.isJsxSelfClosingElement(node) || jsxTagName(node.tagName) !== "PanelHeader") {
+      return false;
+    }
+    const kicker = getJsxAttribute(node, "kicker");
+    const title = getJsxAttribute(node, "title");
+    const target = getJsxAttribute(node, "target");
+    const status = getJsxAttribute(node, "status");
+    const statusTone = getJsxAttribute(node, "statusTone");
+    const references = (attribute: ts.JsxAttribute | undefined, identifier: string) =>
+      Boolean(
+        attribute?.initializer &&
+          descendants(attribute.initializer).some(
+            (child) => ts.isIdentifier(child) && child.text === identifier
+          )
+      );
+    return (
+      stringLiteralValue(kicker?.initializer?.kind === ts.SyntaxKind.StringLiteral ? kicker.initializer : undefined) ===
+        "VBAN Matrix" &&
+      stringLiteralValue(title?.initializer?.kind === ts.SyntaxKind.StringLiteral ? title.initializer : undefined) ===
+        "VB Matrix Control" &&
+      references(target, "activeConnection") &&
+      references(status, "activeConnectionId") &&
+      references(statusTone, "activeConnectionId")
+    );
+  });
+
+const hasToastBinding = (source: ts.SourceFile): boolean => {
+  const usesToast = descendants(source).some(
+    (node) =>
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.name.elements.some(
+        (element) =>
+          element.propertyName?.getText(source) === "items" && element.name.getText(source) === "toasts"
+      ) &&
+      node.name.elements.some(
+        (element) =>
+          element.propertyName?.getText(source) === "pushToast" ||
+          element.name.getText(source) === "pushToast"
+      ) &&
+      node.initializer !== undefined &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === "useToast"
+  );
+  const rendersToastRegion = descendants(source).some((node) => {
+    if (!ts.isJsxSelfClosingElement(node) || jsxTagName(node.tagName) !== "ToastRegion") {
+      return false;
+    }
+    const items = getJsxAttribute(node, "items");
+    const expression =
+      items?.initializer && ts.isJsxExpression(items.initializer)
+        ? items.initializer.expression
+        : undefined;
+    return (
+      expression !== undefined && ts.isIdentifier(expression) && expression.text === "toasts"
+    );
+  });
+  return usesToast && rendersToastRegion;
+};
+
+const hasPromiseScopedPendingContract = (source: ts.SourceFile): boolean => {
+  const toggleBody = descendants(source)
+    .map(functionBody)
+    .find((body): body is ts.Block => body !== undefined);
+  if (!toggleBody) {
+    return false;
+  }
+  const hasTimer = descendants(toggleBody).some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "window" &&
+      node.expression.name.text === "setTimeout"
+  );
+  const finallyCall = descendants(toggleBody).find(
+    (node): node is ts.CallExpression =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "finally" &&
+      node.arguments.length === 1 &&
+      (ts.isArrowFunction(node.arguments[0]) || ts.isFunctionExpression(node.arguments[0]))
+  );
+  if (!finallyCall || hasTimer || !descendants(finallyCall).some(isAuthenticatedPatchCall)) {
+    return false;
+  }
+  const finallyHandler = finallyCall.arguments[0];
+  if (!ts.isArrowFunction(finallyHandler) && !ts.isFunctionExpression(finallyHandler)) {
+    return false;
+  }
+  return descendants(finallyHandler.body).some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "delete" &&
+      node.arguments.length === 1 &&
+      ts.isIdentifier(node.arguments[0]) &&
+      node.arguments[0].text === "key" &&
+      descendants(finallyHandler.body).some(
+        (child) =>
+          ts.isCallExpression(child) &&
+          ts.isIdentifier(child.expression) &&
+          child.expression.text === "setPendingKeys"
+      )
+  );
+};
+
+const hasWindowAlert = (source: ts.SourceFile): boolean =>
+  descendants(source).some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "window" &&
+      node.expression.name.text === "alert"
+  );
+
+const cssDeclarations = (css: string, selector: string): Map<string, string> => {
+  const selectorStart = css.indexOf(selector);
+  const blockStart = selectorStart >= 0 ? css.indexOf("{", selectorStart) : -1;
+  const blockEnd = blockStart >= 0 ? css.indexOf("}", blockStart) : -1;
+  const block = blockStart >= 0 && blockEnd >= 0 ? css.slice(blockStart + 1, blockEnd) : "";
+  return new Map(
+    [...block.matchAll(/([a-z-]+)\s*:\s*([^;]+);/g)].map((declaration) => [
+      declaration[1],
+      declaration[2].trim(),
+    ])
+  );
+};
+
 const hasNetworkRemovalConfirmationContract = (source: ts.SourceFile): boolean =>
   descendants(source).some((node) => {
     if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) {
@@ -332,6 +538,61 @@ test("VB matrix keeps authenticated point toggling", () => {
       parseSource("bundles/vb-matrix-control/src/dashboard/components/MatrixView.tsx")
     )
   );
+});
+
+// VB 主面板的高频矩阵常驻，次级控制使用本地折叠组件和 Lucide 图标。
+test("VB panel uses tiered local UI controls", () => {
+  const source = parseSource("bundles/vb-matrix-control/src/dashboard/components/Panel.tsx");
+  ok(hasNamedImports(source, "../_leaf-ui/components", ["Button", "Disclosure", "IconButton", "PanelHeader"]));
+  ok(hasNamedImports(source, "lucide-react", ["Plus", "Trash2"]));
+  ok(hasPanelHeaderContract(source));
+  ok(hasDisclosure(source, "Patch Control", "vb.patch-control.open"));
+  ok(hasDisclosure(source, "Preset Manager", "vb.preset-manager.open"));
+  ok(hasDisclosure(source, "Preset Bank", "vb.preset-bank.open"));
+});
+
+// Matrix 命令的等待状态必须绑定真实 Promise，错误使用 Toast 且单元格不可重复触发。
+test("VB matrix uses toast feedback and promise-scoped pending state", () => {
+  const source = parseSource("bundles/vb-matrix-control/src/dashboard/components/MatrixView.tsx");
+  ok(hasNamedImports(source, "../_leaf-ui/components", ["ToastRegion", "useToast", "IconButton"]));
+  ok(hasNamedImports(source, "lucide-react", ["RefreshCw"]));
+  ok(hasToastBinding(source));
+  ok(hasPromiseScopedPendingContract(source));
+  ok(!hasWindowAlert(source));
+  ok(hasJsxAttribute(source, "matrix-cell", "aria-busy"));
+  ok(hasJsxAttribute(source, "matrix-cell", "disabled"));
+});
+
+// Patch 与预设操作保留原命令，同时用本地 Toast 和 Lucide 删除图标提供反馈。
+test("VB patch and preset controls use local toast and Lucide affordances", () => {
+  const patchStatus = parseSource("bundles/vb-matrix-control/src/dashboard/components/PatchStatus.tsx");
+  const bankSlot = parseSource("bundles/vb-matrix-control/src/dashboard/components/BankSlot.tsx");
+  ok(hasNamedImports(patchStatus, "../_leaf-ui/components", ["ToastRegion", "useToast"]));
+  ok(hasToastBinding(patchStatus));
+  ok(!hasWindowAlert(patchStatus));
+  ok(hasNamedImports(bankSlot, "../_leaf-ui/components", ["IconButton"]));
+  ok(hasNamedImports(bankSlot, "lucide-react", ["Trash2"]));
+});
+
+// Matrix 在窄面板中以固定点击尺寸和自身滚动区呈现，避免压缩整个页面。
+test("VB matrix CSS keeps fixed cells inside an internal scroll viewport", () => {
+  const css = fs.readFileSync(
+    path.join(projectRoot, "bundles/vb-matrix-control/src/dashboard/vb-control.css"),
+    "utf8"
+  );
+  const panel = cssDeclarations(css, ".matrix-panel");
+  const scroll = cssDeclarations(css, ".matrix-scroll");
+  const grid = cssDeclarations(css, ".matrix-grid");
+  const cell = cssDeclarations(css, ".matrix-cell");
+  const outputHeader = cssDeclarations(css, ".matrix-output-header");
+  const inputHeader = cssDeclarations(css, ".matrix-input-header");
+  ok(panel.get("min-width") === "0");
+  ok(scroll.get("max-width") === "100%" && scroll.get("overflow") === "auto");
+  ok(scroll.get("overscroll-behavior") === "contain");
+  ok(grid.get("width") === "max-content" && grid.get("grid-auto-columns") === "30px");
+  ok(cell.get("width") === "28px" && cell.get("height") === "28px" && cell.get("min-width") === "28px");
+  ok(outputHeader.get("position") === "sticky" && outputHeader.get("top") === "0");
+  ok(inputHeader.get("position") === "sticky" && inputHeader.get("left") === "0");
 });
 
 // 删除状态以 null 表示无待删除项，空字符串 ID 也必须在确认后传给原删除逻辑。
