@@ -793,3 +793,58 @@ decisions, or release-readiness status changes.
 - 定向 RED：强化合同首次运行 6 项中 3 项失败，分别命中 mounted/真实锁链、Scene 手写键盘与 Network selector/ref map。
 - 定向 GREEN：6/6 通过。
 - `npm.cmd test`：83/83 通过；`npm.cmd run typecheck` 与 ATEM、OBS、VB 构建通过，仅有既有 warning。
+
+## 2026-07-14 F2 浏览器回归与测试服务器收紧
+
+### 需求变化
+
+- Playwright 静态服务器仅允许 8 个非 Graphics Dashboard bundle 的 `dashboard/` 与 `shared/` 构建输出，并拒绝仓库文件、源码、路径穿越及符号链接逃逸。
+- Windows Playwright 不再使用 `webServer` 子进程和 `taskkill` 回退；服务器改由 global setup 在 runner 进程中启动，并由异步 teardown 显式等待关闭。
+- F1 的 ATEM、OBS 与 VB 交互修复增加真实 Chromium 回归，快速重复点击统一在页面上下文同一 task 内触发。
+
+### 代码变动
+
+- `serve-dashboard-ui.mjs` 导出启动/关闭 API，保留脚本直接运行入口，删除 idle timer，并逐级验证 bundles、bundle、output 与目标文件的词法路径和真实路径边界。
+- NodeCG 浏览器 stub 支持按 socket event 延迟 ack、resolve/reject ack，以及按普通消息名返回 Scene item 与 VLC Playlist 结果。
+- Playwright 增加 2 个服务器回归与 8 个交互分支，完整断言认证 event/command/payload 或普通 bundle/message/payload。
+- VB Network 原生 Remove 按钮补回 `leaf-button` 基础类，恢复 F1 ref 改造前的 danger/focus 视觉合同。
+- 仅刷新 OBS Scene 相邻双按钮结构导致的 320、480、768px 三张视觉基线；VB Network 三张继续使用旧基线。
+
+### 功能增减
+
+- 新增可复用的测试服务器生命周期接口和同进程 Playwright 托管方式；独立脚本启动命令保持不变。
+- 未增加、删除或重命名生产消息、bundle、payload 或 Replicant schema；未修改 `graphics-package`。
+
+### 功能实现路径
+
+- Node 生命周期测试先验证模块可启动/关闭，再使用临时项目根与 junction 验证真实路径逃逸被拒绝，最后探测脚本直接启动日志和 HTTP 200。
+- Playwright global setup 调用 `startDashboardServer()`，返回的 teardown 调用并等待 `stopDashboardServer(server)`，测试结束不再创建需外部终止的服务器子进程。
+- socket stub 按 event 保存待确认回调；浏览器测试从 `window.__nodecgTest` 精确完成或拒绝对应 ack，覆盖完整 Promise 链的 pending 生命周期。
+
+### 已知 Bug
+
+- 真实 NodeCG 登录会话与 ATEM、OBS、VB Matrix 硬件仍未接入本轮浏览器测试。
+- 视觉基线仍限定 Windows Chromium；其他平台刷新 PNG 可能产生非产品差异。
+- 受管环境可能存在本轮接手前启动的历史 Playwright runner；本轮未广泛终止未知进程，但所有 F2 命令均真实退出且 4173 无监听。
+
+### 预期解决方法
+
+- 在具备可回滚设备窗口后执行真实认证 socket 与设备命令往返验收。
+- 继续在 Windows Chromium CI 中维护视觉基线；跨平台基线另建兼容性任务。
+- 历史 runner 仅在确认所有权后按精确 PID 清理，不使用广泛 Node 进程终止。
+
+### 已解决 Bug 以及解决方法
+
+- 解决 Playwright Windows teardown 卡在 `Terminating the WebServer`：移除 `webServer`，改用同进程 global setup/teardown 显式关闭。
+- 解决测试服务器暴露仓库文件、10 秒空闲退出及 symlink/junction 逃逸：采用白名单路由、逐级真实路径检查并删除 idle timer。
+- 解决浏览器 stub 无法控制认证命令 Promise 链：增加按 event 的待确认队列及 resolve/reject API。
+- 解决 VB Remove ref 改造导致按钮视觉基线变化：补回 `leaf-button` 基础类，三张 VB Network 旧快照重新通过。
+
+### 阶段验证
+
+- 实现提交：`1f69523`（`fix: harden dashboard browser regressions`）。
+- 生命周期测试：3/3 通过，覆盖同进程启停、junction 逃逸和独立脚本探针。
+- Playwright：50/50 通过，其中 36 张视觉基线、4 个既有交互及 10 个 F2 服务器/交互测试。
+- `npm.cmd test`：83/83 通过；仅输出既有 `node:sqlite` experimental warning。
+- `npm.cmd run typecheck`、`git diff --check`：通过。
+- `git diff --name-only 4cb3af2..HEAD -- bundles/graphics-package`：空；4173 无监听。
