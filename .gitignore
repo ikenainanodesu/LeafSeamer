@@ -44,6 +44,9 @@ service-account*.json
 
 # 本地隔离开发工作区
 .worktrees/
+
+# 子代理开发流程临时交接文件
+.superpowers/sdd/
 *.pem
 cfg/secrets/
 bundles/*/secrets/
