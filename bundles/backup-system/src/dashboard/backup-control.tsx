@@ -90,6 +90,9 @@ const BackupControl = () => {
         status={creating ? "Creating" : "Ready"}
         statusTone={creating ? "warning" : "success"}
       />
+      <div className="leaf-sr-only" aria-live="polite" aria-atomic="true">
+        {creating ? "Backup creation in progress." : "Backup creation ready."}
+      </div>
       <div className="backup-content">
         {errorMessage ? (
           <div className="backup-error" role="alert">
