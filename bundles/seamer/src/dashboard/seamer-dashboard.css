@@ -222,6 +222,10 @@
   width: 100%;
 }
 
+.seamer-wide-field {
+  grid-column: 1 / -1;
+}
+
 .seamer-action-row {
   display: grid;
   gap: 8px;

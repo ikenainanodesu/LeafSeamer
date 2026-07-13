@@ -284,7 +284,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
               </select>
             </div>
             {condition.property === "currentScene" && (
-              <div style={{ gridColumn: "span 2" }}>
+              <div className="seamer-wide-field">
                 <label>Scene Name:</label>
                 <select
                   value={String(condition.value)}
@@ -621,7 +621,7 @@ const EditTriggerModal: React.FC<EditTriggerModalProps> = ({
               </select>
             </div>
             {action.actionType === "setScene" && (
-              <div style={{ gridColumn: "span 2" }}>
+              <div className="seamer-wide-field">
                 <label>Scene:</label>
                 <select
                   value={String(action.value)}

@@ -210,14 +210,16 @@ const App = () => {
         </button>
       </div>
 
-      {activeTab === "workspace" ? (
-        <main
-          id="seamer-workspace-panel"
-          className="seamer-card-grid"
-          role="tabpanel"
-          aria-labelledby="seamer-workspace-tab"
-          tabIndex={0}
-        >
+      <main
+        id="seamer-workspace-panel"
+        className="seamer-card-grid"
+        role="tabpanel"
+        aria-labelledby="seamer-workspace-tab"
+        hidden={activeTab !== "workspace"}
+        tabIndex={0}
+      >
+        {activeTab === "workspace" ? (
+          <>
           {cards.map((card) => (
             <Card
               key={card.id}
@@ -238,14 +240,17 @@ const App = () => {
               Drag JSON here or add a card.
             </div>
           ) : null}
-        </main>
-      ) : (
-        <section
-          id="seamer-triggers-panel"
-          role="tabpanel"
-          aria-labelledby="seamer-triggers-tab"
-          tabIndex={0}
-        >
+          </>
+        ) : null}
+      </main>
+      <section
+        id="seamer-triggers-panel"
+        role="tabpanel"
+        aria-labelledby="seamer-triggers-tab"
+        hidden={activeTab !== "triggers"}
+        tabIndex={0}
+      >
+        {activeTab === "triggers" ? (
           <TriggerPage
             mixerState={mixerState}
             obsConnections={obsConnections}
@@ -254,8 +259,8 @@ const App = () => {
             atemSwitchers={atemSwitchers}
             integrations={integrations}
           />
-        </section>
-      )}
+        ) : null}
+      </section>
 
       {isEditing && currentCard && activeTab === "workspace" ? (
         <EditCardModal
