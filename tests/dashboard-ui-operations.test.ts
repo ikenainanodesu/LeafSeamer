@@ -195,11 +195,19 @@ const hasUniqueExactDefaultImport = (
 
 const hasUniqueLocalComponent = (source: ts.SourceFile, name: string): boolean => {
   const owners = bindingOwners(source, name);
+  const owner = owners[0];
+  const hasExecutableInitializer =
+    owner !== undefined &&
+    ts.isVariableDeclaration(owner) &&
+    owner.initializer !== undefined &&
+    (ts.isArrowFunction(owner.initializer) ||
+      ts.isFunctionExpression(owner.initializer) ||
+      ts.isClassExpression(owner.initializer));
   return (
     owners.length === 1 &&
-    (ts.isVariableDeclaration(owners[0]) ||
-      ts.isFunctionDeclaration(owners[0]) ||
-      ts.isClassDeclaration(owners[0]))
+    (hasExecutableInitializer ||
+      ts.isFunctionDeclaration(owner) ||
+      ts.isClassDeclaration(owner))
   );
 };
 
@@ -464,12 +472,16 @@ const compileFixture = (fileName: string, text: string): ts.SourceFile => {
   return parseText(fileName, text);
 };
 
-const entryFixture = (body: string, setup = ""): string => `
+const entryFixture = (
+  body: string,
+  setup = "",
+  componentDeclaration = "const SchedulePanel = () => <div />;"
+): string => `
 import { createRoot } from "react-dom/client";
 import { PanelErrorBoundary } from "./_leaf-ui/components";
 import "./_leaf-ui/index.css";
-const SchedulePanel = () => <div />;
 const Button = () => <button />;
+${componentDeclaration}
 ${setup}
 ${body}
 `;
@@ -514,6 +526,16 @@ test("Operations 合同夹具拒绝伪造绑定", () => {
     )
   );
   ok(entryContractFailures(valid, entries[0]).length === 0);
+
+  const identifierComponent = compileFixture(
+    "operations-identifier-component-fixture.tsx",
+    entryFixture(
+      "const root = createRoot(document.getElementById(\"root\")!); root.render(<PanelErrorBoundary><SchedulePanel /></PanelErrorBoundary>);",
+      "",
+      "const SchedulePanel = Button;"
+    )
+  );
+  ok(entryContractFailures(identifierComponent, entries[0]).length > 0);
 
   const aliasedButton = compileFixture(
     "operations-aliased-button-fixture.tsx",
