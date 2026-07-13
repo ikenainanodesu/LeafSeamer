@@ -89,7 +89,7 @@ const NetworkConfigList: React.FC = () => {
         confirmLabel="Remove Connection"
         onCancel={() => setPendingRemovalId(null)}
         onConfirm={() => {
-          if (pendingRemovalId) handleRemove(pendingRemovalId);
+          if (pendingRemovalId !== null) handleRemove(pendingRemovalId);
           setPendingRemovalId(null);
         }}
       />

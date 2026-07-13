@@ -262,6 +262,39 @@ const hasTogglePointContract = (source: ts.SourceFile): boolean => {
   });
 };
 
+const hasNetworkRemovalConfirmationContract = (source: ts.SourceFile): boolean =>
+  descendants(source).some((node) => {
+    if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) {
+      return false;
+    }
+    const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
+    if (jsxTagName(openingElement.tagName) !== "ConfirmDialog") {
+      return false;
+    }
+    const onConfirm = openingElement.attributes.properties.find(
+      (attribute): attribute is ts.JsxAttribute =>
+        ts.isJsxAttribute(attribute) &&
+        ts.isIdentifier(attribute.name) &&
+        attribute.name.text === "onConfirm"
+    );
+    if (!onConfirm?.initializer || !ts.isJsxExpression(onConfirm.initializer)) {
+      return false;
+    }
+    const handler = onConfirm.initializer.expression;
+    if (!handler || !ts.isArrowFunction(handler) || !ts.isBlock(handler.body)) {
+      return false;
+    }
+    return descendants(handler.body).some(
+      (child) =>
+        ts.isIfStatement(child) &&
+        ts.isBinaryExpression(child.expression) &&
+        child.expression.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+        ts.isIdentifier(child.expression.left) &&
+        child.expression.left.text === "pendingRemovalId" &&
+        child.expression.right.kind === ts.SyntaxKind.NullKeyword
+    );
+  });
+
 // 固定参考面板必须满足真实的本地 UI 导入、错误边界包裹和渲染结构。
 test("reference dashboards use the local UI snapshot and error boundary", () => {
   for (const relative of entries) {
@@ -274,6 +307,15 @@ test("VB matrix keeps authenticated point toggling", () => {
   ok(
     hasTogglePointContract(
       parseSource("bundles/vb-matrix-control/src/dashboard/components/MatrixView.tsx")
+    )
+  );
+});
+
+// 删除状态以 null 表示无待删除项，空字符串 ID 也必须在确认后传给原删除逻辑。
+test("VB network removal confirmation preserves empty-string ids", () => {
+  ok(
+    hasNetworkRemovalConfirmationContract(
+      parseSource("bundles/vb-matrix-control/src/dashboard/components/NetworkConfigList.tsx")
     )
   );
 });
