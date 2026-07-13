@@ -10,6 +10,7 @@
     "build": "ts-node scripts/build-bundles.ts",
     "core:sync": "ts-node scripts/sync-bundle-core.ts",
     "core:check": "ts-node scripts/sync-bundle-core.ts --check",
+    "test:standalone": "powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1",
     "watch": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
