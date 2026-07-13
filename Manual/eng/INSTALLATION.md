@@ -70,6 +70,15 @@ This command will:
 - Build Extension and Dashboard for all bundles
 - Generate executable production code
 
+### Bundle Source Independence
+
+Each affected bundle contains a versioned `src/_leaf-core/` snapshot, allowing it to build without repository-level shared source files. Do not modify this snapshot manually. Update the authoritative sources in `shared/integration` or `shared/security`, then run `npm run core:sync` to regenerate all snapshots. Before committing, check snapshot consistency and run an isolated temporary-directory build:
+
+```powershell
+npm run core:check
+powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1 -Bundle seamer
+```
+
 ## Configuration
 
 ### NodeCG Core Configuration

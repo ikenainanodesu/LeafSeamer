@@ -70,6 +70,15 @@ npm run build
 - すべてのバンドルのExtensionとDashboardをビルド
 - 実行可能なプロダクションコードを生成
 
+### Bundle ソースの独立性
+
+影響を受ける各 bundle には、リポジトリ全体の共有ソースファイルなしでビルドできるよう、バージョン管理された `src/_leaf-core/` スナップショットが含まれます。このスナップショットを手作業で変更してはいけません。`shared/integration` または `shared/security` の権威ソースを更新してから、`npm run core:sync` を実行してすべてのスナップショットを再生成してください。コミット前にスナップショットの整合性を確認し、隔離された一時ディレクトリで代表的な bundle をビルドします：
+
+```powershell
+npm run core:check
+powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1 -Bundle seamer
+```
+
 ## 構成説明
 
 ### NodeCG コア構成

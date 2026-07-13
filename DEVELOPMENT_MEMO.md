@@ -565,3 +565,34 @@ decisions, or release-readiness status changes.
 - 解决依赖树 20 个高危公告命中：联网审计后执行兼容 lockfile 更新，将完整与生产依赖结果均降至 11 个中危、0 个高危、0 个严重。
 - 解决 NodeCG 2.8 类型与运行时 API 变化：将 logger、Schedule Adapter、Seamer Adapter 和共享审计入口统一改用 `nodecg.extensions`。
 - 最新源码已通过 47 项测试、全仓 TypeScript 检查和 17 Bundle 全量生产构建。
+
+## 2026-07-13 Bundle 源码独立性文档与验收
+
+### 需求变化
+
+- 每个受影响 Bundle 必须使用版本化 `src/_leaf-core/` 快照构建；`shared/integration` 与 `shared/security` 仍为唯一权威源。
+- 独立性文档必须明确快照不可手工修改，权威源变化后必须执行 `core:sync`，并提供一致性检查和隔离构建命令。
+
+### 代码变动
+
+- 新增 README 及中英日三语安装手册的 Bundle 源码独立性说明，记录 `core:sync`、`core:check` 与代表性隔离构建命令。
+- `.gitignore` 已核对：不会忽略 `bundles/*/src/_leaf-core/`，并继续忽略各 Bundle 的 `node_modules/` 与隔离测试临时产物。
+- P2 评审记录 `sync-bundle-core.ts` 的两处 `replaceAll` 类型逃逸为 Minor 改善项；本轮仅记录，不修改实现。
+
+### 功能实现路径
+
+- 开发者只在 `shared/integration` 和 `shared/security` 修改共享逻辑，随后运行 `npm run core:sync` 生成并提交每个 Bundle 的本地快照。
+- `npm run core:check` 验证快照未漂移；`powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1 -Bundle seamer` 在临时目录验证真实隔离构建。
+- CI matrix 对 17 个 Bundle 执行真实临时目录构建；`atem-control` 与 `seamer` 代表隔离构建已通过。
+
+### 已知 Bug
+
+- `seamer` 的直接生产依赖 `uuid@9.0.1` 存在 GHSA-w5hq-g745-h8pq 中危公告；当前仅调用 `v4`，本任务不升级依赖。
+
+### 预期解决方法
+
+- 在独立升级分支评估升至 `uuid` 14 的 semver-major 迁移，完成兼容性验证后再更新生产依赖。
+
+### 已解决 Bug 以及解决方法
+
+- 解决旧 CI 未进行真正隔离构建的问题：改为每个 Bundle 使用已提交的本地 `src/_leaf-core/` 快照，并在 CI matrix 的临时目录执行真实构建验证。

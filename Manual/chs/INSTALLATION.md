@@ -70,6 +70,15 @@ npm run build
 - 构建所有 bundle 的 Extension 和 Dashboard
 - 生成可执行的生产代码
 
+### Bundle 源码独立性
+
+每个受影响的 bundle 都包含版本化的 `src/_leaf-core/` 快照，因此无需仓库级共享源码也能构建。不得手工修改此快照。请修改 `shared/integration` 或 `shared/security` 中的权威源，再运行 `npm run core:sync` 重新生成全部快照。提交前，请检查快照一致性，并在隔离临时目录中构建一个代表性 bundle：
+
+```powershell
+npm run core:check
+powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1 -Bundle seamer
+```
+
 ## 配置说明
 
 ### NodeCG 核心配置

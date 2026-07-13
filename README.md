@@ -279,6 +279,15 @@ OBS WebSocket passwords, stream keys, and stream authentication passwords are en
 
 Backup System supports selectable L0 Public, L1 Operational, L2 Confidential, and L3 Secret data. L3 is excluded by default and is written only as an AES-256-GCM encrypted payload protected by a separate passphrase. Logger applies redaction before persistence and stores command audit history in a separate SQLite/WAL database that is not affected by runtime-log cleanup.
 
+### Bundle Source Independence
+
+Each affected bundle includes a versioned `src/_leaf-core/` snapshot so it can build without repository-level shared source files. Do not edit these snapshots manually. Change the authoritative sources in `shared/integration` or `shared/security`, then run `npm run core:sync` to regenerate every snapshot. Before committing, verify that snapshots are current and that a representative bundle builds from an isolated temporary directory:
+
+```powershell
+npm run core:check
+powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1 -Bundle seamer
+```
+
 The PostgreSQL adapter and its `pg` dependency are included in the workspace lockfile. Use a read-only database account and expose the connection string only through the configured environment variable.
 
 The 2026-07-13 online dependency audit reports 0 high/critical findings after compatible lockfile updates. Eleven moderate transitive findings remain in NodeCG and Google API dependency trees; they require upstream fixes or separately tested major-version migrations, so this branch does not use `npm audit fix --force`.
