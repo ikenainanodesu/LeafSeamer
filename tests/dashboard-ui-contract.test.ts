@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deepEqual, equal, ok, test } from "./test-harness";
+import { deepEqual, equal, ok, test, throws } from "./test-harness";
 import {
   checkDashboardUiSnapshots,
   DASHBOARD_UI_TARGETS,
@@ -10,6 +10,35 @@ import {
 } from "../scripts/sync-dashboard-ui";
 
 const projectRoot = path.resolve(__dirname, "..");
+
+// 检查确认对话框的可访问名称和描述是否由真实 JSX 变量连接到标题与消息节点。
+const assertConfirmDialogAccessibilityContract = (source: string): void => {
+  const reactImport = source.match(/import\s*\{([^}]*)\}\s*from\s*["']react["']/);
+  ok(reactImport?.[1].split(",").some((name) => name.trim() === "useId"));
+
+  const dialog = source.match(/<dialog\b[\s\S]*?<\/dialog>/)?.[0];
+  ok(dialog);
+  if (!dialog) throw new Error("ConfirmDialog must render a dialog element");
+  const readBinding = (attribute: string): string => {
+    const binding = dialog.match(new RegExp(`${attribute}\\s*=\\s*\\{\\s*([A-Za-z_$][\\w$]*)\\s*\\}`));
+    ok(binding?.[1]);
+    return binding?.[1] ?? "";
+  };
+  const titleBinding = readBinding("aria-labelledby");
+  const messageBinding = readBinding("aria-describedby");
+  const titleNode = dialog.match(/<h2\b[^>]*\bid\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/);
+  const messageNode = dialog.match(/<p\b[^>]*\bid\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/);
+  equal(titleNode?.[1], titleBinding);
+  equal(messageNode?.[1], messageBinding);
+
+  const useIdBindings = new Set(
+    [...source.matchAll(/\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*useId\s*\(\s*\)/g)].map(
+      (match) => match[1]
+    )
+  );
+  ok(useIdBindings.has(titleBinding));
+  ok(useIdBindings.has(messageBinding));
+};
 
 // 在临时项目中复制权威源，避免漂移测试污染仓库中的已提交快照。
 const withDashboardUiFixture = (body: (fixtureRoot: string) => void): void => {
@@ -61,6 +90,62 @@ test("graphics package does not declare the dashboard icon dependency", () => {
     fs.readFileSync(path.join(projectRoot, "bundles", "graphics-package", "package.json"), "utf8")
   ) as { dependencies?: Record<string, string> };
   equal(Object.prototype.hasOwnProperty.call(packageJson.dependencies ?? {}, "lucide-react"), false);
+});
+
+test("ConfirmDialog binds dialog name and description to useId nodes", () => {
+  const source = fs.readFileSync(
+    path.join(projectRoot, "shared", "dashboard-ui", "components", "ConfirmDialog.tsx"),
+    "utf8"
+  );
+  assertConfirmDialogAccessibilityContract(source);
+
+  const equivalentSource = `
+    import { useId } from "react";
+    const Example = () => {
+      const messageId = useId();
+      const titleId = useId();
+      return (
+        <dialog
+          aria-describedby={messageId}
+          aria-labelledby={titleId}
+        >
+          <h2 id={titleId}>Title</h2>
+          <p id={messageId}>Message</p>
+        </dialog>
+      );
+    };
+  `;
+  assertConfirmDialogAccessibilityContract(equivalentSource);
+
+  const constantForgery = `
+    import { useEffect, useId } from "react";
+    const Example = () => {
+      const titleId = "confirm-title";
+      const messageId = "confirm-message";
+      return (
+        <dialog aria-labelledby={titleId} aria-describedby={messageId}>
+          <h2 id={titleId}>Title</h2>
+          <p id={messageId}>Message</p>
+        </dialog>
+      );
+    };
+  `;
+  throws(() => assertConfirmDialogAccessibilityContract(constantForgery));
+
+  const brokenChain = `
+    import { useId } from "react";
+    const Example = () => {
+      const titleId = useId();
+      const messageId = useId();
+      return (
+        <dialog aria-labelledby={titleId} aria-describedby={messageId}>
+          <h2 id={messageId}>Title</h2>
+          <p id={titleId}>Message</p>
+        </dialog>
+      );
+    };
+  `;
+  throws(() => assertConfirmDialogAccessibilityContract(brokenChain));
 });
 
 test("dashboard UI snapshots match the canonical source", () => {

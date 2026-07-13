@@ -209,8 +209,9 @@ test("Schedule deletes the empty local id and restores focus after cancel and co
   const localItem = page.locator(".schedule-item").filter({ hasText: "Source: local" }).first();
   const deleteButton = localItem.getByRole("button", { name: "Delete schedule item" });
   await deleteButton.click();
-  const dialog = page.locator("dialog.leaf-dialog");
+  const dialog = page.getByRole("dialog", { name: "Delete Schedule Item" });
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleDescription("This permanently removes the selected local schedule item.");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(deleteButton).toBeFocused();
   await deleteButton.click();
