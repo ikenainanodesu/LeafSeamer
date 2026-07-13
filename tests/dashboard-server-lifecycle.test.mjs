@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { fork } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,12 +12,45 @@ import {
   stopDashboardServer,
 } from "../scripts/serve-dashboard-ui.mjs";
 
+const requestStatus = (server, requestPath) =>
+  new Promise((resolve, reject) => {
+    const address = server.address();
+    assert(address && typeof address === "object");
+    const request = http.request({
+      host: "127.0.0.1",
+      method: "GET",
+      path: requestPath,
+      port: address.port,
+    }, (response) => {
+      response.resume();
+      response.once("end", () => resolve(response.statusCode));
+    });
+    request.once("error", reject);
+    request.end();
+  });
+
 test("Dashboard server can be started and stopped in the current process", async () => {
   const server = await startDashboardServer({ port: 0 });
 
   assert.equal(server.listening, true);
   await stopDashboardServer(server);
   assert.equal(server.listening, false);
+});
+
+test("Concurrent dashboard server stops share one completion promise", async () => {
+  const server = await startDashboardServer({ port: 0 });
+  let firstStop;
+
+  try {
+    firstStop = stopDashboardServer(server);
+    const secondStop = stopDashboardServer(server);
+    assert.strictEqual(secondStop, firstStop);
+    await Promise.all([firstStop, secondStop]);
+    assert.equal(server.listening, false);
+  } finally {
+    if (firstStop) await firstStop;
+    else if (server.listening) await stopDashboardServer(server);
+  }
 });
 
 test("Dashboard server rejects an output directory symlink that escapes the project", async () => {
@@ -44,11 +78,55 @@ test("Dashboard server rejects an output directory symlink that escapes the proj
   }
 });
 
-test("Dashboard server remains directly executable with a newline-terminated startup log", async () => {
+test("Dashboard server rejects raw dot segments before URL normalization", async () => {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "leafseamer-dashboard-dots-"));
+  const dashboardRoot = path.join(fixtureRoot, "bundles", "logger-system", "dashboard");
+  fs.mkdirSync(dashboardRoot, { recursive: true });
+  fs.writeFileSync(path.join(dashboardRoot, "log-viewer.html"), "allowed");
+
+  let server;
+  try {
+    server = await startDashboardServer({ port: 0, root: fixtureRoot });
+    for (const requestPath of [
+      "/bundles/graphics-package/../logger-system/dashboard/log-viewer.html",
+      "/bundles/graphics-package/%2e%2e%2flogger-system/dashboard/log-viewer.html",
+      "/bundles/graphics-package/%2e%2e%5clogger-system/dashboard/log-viewer.html",
+    ]) {
+      assert.equal(await requestStatus(server, requestPath), 404);
+    }
+  } finally {
+    if (server?.listening) await stopDashboardServer(server);
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("Dashboard server rejects a bundles root junction that escapes the project", async () => {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "leafseamer-dashboard-project-"));
+  const outsideBundlesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "leafseamer-dashboard-bundles-"));
+  const dashboardRoot = path.join(outsideBundlesRoot, "logger-system", "dashboard");
+  fs.mkdirSync(dashboardRoot, { recursive: true });
+  fs.writeFileSync(path.join(dashboardRoot, "log-viewer.html"), "outside");
+  fs.symlinkSync(outsideBundlesRoot, path.join(fixtureRoot, "bundles"), "junction");
+
+  let server;
+  try {
+    server = await startDashboardServer({ port: 0, root: fixtureRoot });
+    assert.equal(
+      await requestStatus(server, "/bundles/logger-system/dashboard/log-viewer.html"),
+      404,
+    );
+  } finally {
+    if (server?.listening) await stopDashboardServer(server);
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    fs.rmSync(outsideBundlesRoot, { recursive: true, force: true });
+  }
+});
+
+test("Dashboard server exits naturally after an internal IPC shutdown request", async () => {
   const scriptPath = fileURLToPath(new URL("../scripts/serve-dashboard-ui.mjs", import.meta.url));
-  const child = spawn(process.execPath, [scriptPath], {
+  const child = fork(scriptPath, [], {
     cwd: path.dirname(path.dirname(scriptPath)),
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
   let output = "";
   let errors = "";
@@ -59,6 +137,7 @@ test("Dashboard server remains directly executable with a newline-terminated sta
   });
 
   let startupTimer;
+  let shutdownTimer;
   try {
     await Promise.race([
       new Promise((resolve, reject) => {
@@ -79,8 +158,21 @@ test("Dashboard server remains directly executable with a newline-terminated sta
       (await fetch("http://127.0.0.1:4173/bundles/logger-system/dashboard/log-viewer.html")).status,
       200,
     );
+    const naturalExit = new Promise((resolve) => {
+      child.once("exit", (code, signal) => resolve({ code, signal }));
+    });
+    child.send({ type: "leafseamer:shutdown" });
+    const exitResult = await Promise.race([
+      naturalExit,
+      new Promise((_, reject) => {
+        shutdownTimer = setTimeout(() => reject(new Error("Server IPC shutdown timed out")), 2_000);
+      }),
+    ]);
+    clearTimeout(shutdownTimer);
+    assert.deepEqual(exitResult, { code: 0, signal: null });
   } finally {
     clearTimeout(startupTimer);
+    clearTimeout(shutdownTimer);
     if (child.exitCode === null) {
       child.kill();
       await new Promise((resolve) => child.once("exit", resolve));

@@ -325,26 +325,19 @@ test("Dashboard test server exposes only approved build output", async ({ page }
 
 const authenticatedEvent = (bundle: string) => `leafseamer:authenticated-command:${bundle}`;
 
-const authenticatedCalls = (page: Page, command: string) =>
-  page.evaluate((expected) =>
-    (window as any).__nodecgTest.calls.filter(
-      (call: any) => call.kind === "socket.emit" && call.payload[0]?.command === expected,
-    ), command);
+const socketCalls = (page: Page) =>
+  page.evaluate(() =>
+    (window as any).__nodecgTest.calls.filter((call: any) => call.kind === "socket.emit"));
 
-const expectAuthenticatedCall = async (
-  page: Page,
+const expectedSocketCall = (
   bundle: string,
   command: string,
   payload: unknown,
-) => {
-  const calls = await authenticatedCalls(page, command);
-  expect(calls).toHaveLength(1);
-  expect(calls[0]).toMatchObject({
+) => ({
     kind: "socket.emit",
     event: authenticatedEvent(bundle),
     payload: [{ command, correlationId: expect.any(String), payload }],
   });
-};
 
 const messageCalls = (page: Page, message: string) =>
   page.evaluate((expected) =>
@@ -366,10 +359,12 @@ test("ATEM Macro 同 tick 双击只发出一个认证命令", async ({ page }) =
   const macro = page.locator(".atem-macro-grid button").first();
   await expect(macro).toHaveText("OPEN");
   await clickTwiceInSameTask(macro);
-  await expectAuthenticatedCall(page, "atem-control", "atem.runMacro", {
-    ip: "192.168.10.20",
-    macroIndex: 1,
-  });
+  expect(await socketCalls(page)).toEqual([
+    expectedSocketCall("atem-control", "atem.runMacro", {
+      ip: "192.168.10.20",
+      macroIndex: 1,
+    }),
+  ]);
   await expect(macro).toBeDisabled();
   expect(await page.evaluate((current) => (window as any).__nodecgTest.rejectSocket(current, "macro failed"), event)).toBe(true);
   await expect(macro).toBeEnabled();
@@ -383,7 +378,7 @@ test("OBS Streaming 将设置与开始保持为同一在途链", async ({ page }
   const start = page.locator(".obs-live-actions button").first();
   await expect(start).toHaveText("Start Streaming");
   await clickTwiceInSameTask(start);
-  await expectAuthenticatedCall(page, "obs-control", "obs.setStreamSettings", {
+  const settingsCall = expectedSocketCall("obs-control", "obs.setStreamSettings", {
     id: "obs-1",
     settings: {
       clearKey: false,
@@ -397,11 +392,14 @@ test("OBS Streaming 将设置与开始保持为同一在途链", async ({ page }
       username: "",
     },
   });
-  expect(await authenticatedCalls(page, "obs.startStreaming")).toHaveLength(0);
+  expect(await socketCalls(page)).toEqual([settingsCall]);
   await expect(start).toBeDisabled();
   expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
-  await expect.poll(() => authenticatedCalls(page, "obs.startStreaming")).toHaveLength(1);
-  await expectAuthenticatedCall(page, "obs-control", "obs.startStreaming", { id: "obs-1" });
+  await expect.poll(() => socketCalls(page)).toHaveLength(2);
+  expect(await socketCalls(page)).toEqual([
+    settingsCall,
+    expectedSocketCall("obs-control", "obs.startStreaming", { id: "obs-1" }),
+  ]);
   await expect(start).toBeDisabled();
   expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
   await expect(start).toBeEnabled();
@@ -415,16 +413,19 @@ test("OBS Connection Connect 同 tick 双击只执行一条 Save 到 Connect 链
   const connect = page.locator(".obs-conn-actions button").last();
   await expect(connect).toHaveText("Connect");
   await clickTwiceInSameTask(connect);
-  await expectAuthenticatedCall(page, "obs-control", "obs.saveConnection", {
+  const saveCall = expectedSocketCall("obs-control", "obs.saveConnection", {
     ...obsConnection,
     clearPassword: false,
     password: "",
   });
-  expect(await authenticatedCalls(page, "obs.connect")).toHaveLength(0);
+  expect(await socketCalls(page)).toEqual([saveCall]);
   await expect(connect).toBeDisabled();
   expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
-  await expect.poll(() => authenticatedCalls(page, "obs.connect")).toHaveLength(1);
-  await expectAuthenticatedCall(page, "obs-control", "obs.connect", { id: "obs-1" });
+  await expect.poll(() => socketCalls(page)).toHaveLength(2);
+  expect(await socketCalls(page)).toEqual([
+    saveCall,
+    expectedSocketCall("obs-control", "obs.connect", { id: "obs-1" }),
+  ]);
   await expect(connect).toBeDisabled();
   expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
   await expect(connect).toBeEnabled();
@@ -553,10 +554,12 @@ test("VB Patch 同 tick 双击只发出一个认证更新", async ({ page }) => 
   await page.goto("/bundles/vb-matrix-control/dashboard/control-panel.html");
   const toggle = page.locator("button.connection-toggle");
   await clickTwiceInSameTask(toggle);
-  await expectAuthenticatedCall(page, "vb-matrix-control", "vb.updatePatch", {
-    ...activePatch,
-    exists: false,
-  });
+  expect(await socketCalls(page)).toEqual([
+    expectedSocketCall("vb-matrix-control", "vb.updatePatch", {
+      ...activePatch,
+      exists: false,
+    }),
+  ]);
   await expect(toggle).toBeDisabled();
   expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
   await expect(toggle).toBeEnabled();

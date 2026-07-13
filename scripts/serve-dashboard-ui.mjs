@@ -22,6 +22,7 @@ const mimeTypes = {
   ".map": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
 };
+const serverClosePromises = new WeakMap();
 
 const sendNotFound = (response) => {
   response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
@@ -33,6 +34,21 @@ const isWithin = (target, root) => {
   return relative !== "" && !path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`);
 };
 
+const getRawPathname = (requestTarget) => {
+  const queryIndex = requestTarget.indexOf("?");
+  const fragmentIndex = requestTarget.indexOf("#");
+  const endIndex = Math.min(
+    queryIndex === -1 ? requestTarget.length : queryIndex,
+    fragmentIndex === -1 ? requestTarget.length : fragmentIndex,
+  );
+  const targetWithoutQuery = requestTarget.slice(0, endIndex);
+  if (targetWithoutQuery.startsWith("/")) return targetWithoutQuery;
+  const schemeIndex = targetWithoutQuery.indexOf("://");
+  if (schemeIndex === -1) return targetWithoutQuery;
+  const pathIndex = targetWithoutQuery.indexOf("/", schemeIndex + 3);
+  return pathIndex === -1 ? "/" : targetWithoutQuery.slice(pathIndex);
+};
+
 const createRequestHandler = (projectRoot) => (request, response) => {
   if (request.method !== "GET" && request.method !== "HEAD") {
     response.writeHead(405, { Allow: "GET, HEAD" });
@@ -42,6 +58,11 @@ const createRequestHandler = (projectRoot) => (request, response) => {
 
   let pathname;
   try {
+    const rawPathname = decodeURIComponent(getRawPathname(request.url ?? "/"));
+    if (rawPathname.replaceAll("\\", "/").split("/").some((segment) => segment === "." || segment === "..")) {
+      sendNotFound(response);
+      return;
+    }
     pathname = decodeURIComponent(new URL(request.url ?? "/", "http://127.0.0.1").pathname);
   } catch {
     sendNotFound(response);
@@ -73,11 +94,13 @@ const createRequestHandler = (projectRoot) => (request, response) => {
     return;
   }
 
+  let realProjectRoot;
   let realBundlesRoot;
   let realBundleRoot;
   let realOutputRoot;
   let realTarget;
   try {
+    realProjectRoot = fs.realpathSync(projectRoot);
     realBundlesRoot = fs.realpathSync(bundlesRoot);
     realBundleRoot = fs.realpathSync(bundleRoot);
     realOutputRoot = fs.realpathSync(outputRoot);
@@ -87,6 +110,7 @@ const createRequestHandler = (projectRoot) => (request, response) => {
     return;
   }
   if (
+    !isWithin(realBundlesRoot, realProjectRoot) ||
     !isWithin(realBundleRoot, realBundlesRoot) ||
     !isWithin(realOutputRoot, realBundleRoot) ||
     !isWithin(realTarget, realOutputRoot)
@@ -118,14 +142,19 @@ export const startDashboardServer = ({ host = "127.0.0.1", port = 4173, root = d
   });
 
 export const stopDashboardServer = (server) => {
-  if (!server.listening) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) reject(error);
-      else resolve();
-    });
-    server.closeAllConnections();
-  });
+  const existingClose = serverClosePromises.get(server);
+  if (existingClose) return existingClose;
+  const closePromise = server.listening
+    ? new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+        server.closeAllConnections();
+      })
+    : Promise.resolve();
+  serverClosePromises.set(server, closePromise);
+  return closePromise;
 };
 
 const isDirectExecution = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -134,12 +163,24 @@ if (isDirectExecution) {
   process.stdout.write("Dashboard UI server: http://127.0.0.1:4173\n");
 
   let closePromise;
-  const closeServer = () => {
-    closePromise ??= stopDashboardServer(server).catch((error) => {
+  const closeServer = async () => {
+    closePromise ??= stopDashboardServer(server);
+    try {
+      await closePromise;
+    } catch (error) {
       process.stderr.write(`Dashboard UI server shutdown failed: ${error instanceof Error ? error.message : String(error)}\n`);
       process.exitCode = 1;
-    });
+    } finally {
+      if (process.connected) process.disconnect();
+    }
   };
-  process.once("SIGINT", closeServer);
-  process.once("SIGTERM", closeServer);
+  process.once("SIGINT", () => void closeServer());
+  process.once("SIGTERM", () => void closeServer());
+  if (process.send) {
+    process.on("message", (message) => {
+      if (message && typeof message === "object" && message.type === "leafseamer:shutdown") {
+        void closeServer();
+      }
+    });
+  }
 }
