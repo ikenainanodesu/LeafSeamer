@@ -14,6 +14,7 @@ import "./bundle-source-independence.test";
 import "./dashboard-ui-contract.test";
 import "./dashboard-ui-reference.test";
 import "./dashboard-ui-device.test";
+import "./dashboard-ui-operations.test";
 import { runTests } from "./test-harness";
 
 void runTests();
