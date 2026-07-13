@@ -7,9 +7,11 @@
     "test": "ts-node tests/run-tests.ts",
     "start": "nodecg start",
     "dev": "nodecg start",
-    "build": "ts-node scripts/build-bundles.ts",
+    "build": "npm run core:check && npm run ui:check && ts-node scripts/build-bundles.ts",
     "core:sync": "ts-node scripts/sync-bundle-core.ts",
     "core:check": "ts-node scripts/sync-bundle-core.ts --check",
+    "ui:sync": "ts-node scripts/sync-dashboard-ui.ts",
+    "ui:check": "ts-node scripts/sync-dashboard-ui.ts --check",
     "test:standalone": "powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1",
     "watch": "tsc --watch",
     "typecheck": "tsc --noEmit"

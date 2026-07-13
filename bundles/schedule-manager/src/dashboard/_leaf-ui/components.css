@@ -1,0 +1,30 @@
+/* 此文件由 scripts/sync-dashboard-ui.ts 生成，请勿手工修改。 */
+/* Dashboard 共享组件基础样式，bundle 专属布局在本地样式中追加。 */
+.leaf-panel { min-width: 0; background: var(--leaf-bg); }
+.leaf-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px; border-bottom: 1px solid var(--leaf-border); background: var(--leaf-surface); }
+.leaf-panel-title { margin: 0; font-size: 17px; line-height: 1.2; }
+.leaf-panel-kicker, .leaf-section-kicker { color: var(--leaf-text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.leaf-panel-target { margin-top: 4px; color: var(--leaf-text-muted); font-family: var(--leaf-font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.leaf-status { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px; border: 1px solid var(--leaf-border); border-radius: var(--leaf-radius); background: var(--leaf-surface-deep); font: 700 11px/1 var(--leaf-font-mono); text-transform: uppercase; }
+.leaf-status[data-tone="success"] { color: var(--leaf-success); }
+.leaf-status[data-tone="warning"] { color: var(--leaf-warning); }
+.leaf-status[data-tone="danger"] { color: var(--leaf-danger); }
+.leaf-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.leaf-button { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; border: 1px solid var(--leaf-border); border-radius: var(--leaf-radius); background: var(--leaf-surface-raised); color: var(--leaf-text); cursor: pointer; }
+.leaf-button:hover:not(:disabled) { border-color: var(--leaf-text-faint); }
+.leaf-button[data-tone="primary"] { border-color: var(--leaf-command); background: var(--leaf-command); color: #07111d; font-weight: 700; }
+.leaf-button[data-tone="danger"] { border-color: var(--leaf-danger); color: var(--leaf-danger); }
+.leaf-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.leaf-icon-button { width: 32px; padding: 0; }
+.leaf-spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: leaf-spin 700ms linear infinite; }
+@keyframes leaf-spin { to { transform: rotate(360deg); } }
+.leaf-section { border-top: 1px solid var(--leaf-border); background: var(--leaf-surface); }
+.leaf-section-header { display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
+.leaf-section-body { padding: 12px; border-top: 1px solid var(--leaf-border); }
+.leaf-field { display: grid; min-width: 0; gap: 4px; }
+.leaf-field > span { color: var(--leaf-text-muted); font-size: 11px; font-weight: 700; }
+.leaf-input { width: 100%; min-width: 0; min-height: 32px; padding: 6px 8px; border: 1px solid var(--leaf-border); border-radius: var(--leaf-radius); background: var(--leaf-surface-deep); color: var(--leaf-text); }
+.leaf-dialog { width: min(420px, calc(100vw - 24px)); padding: 0; border: 1px solid var(--leaf-border); border-radius: var(--leaf-radius); background: var(--leaf-surface); color: var(--leaf-text); }
+.leaf-dialog::backdrop { background: rgb(0 0 0 / 68%); }
+.leaf-toast-region { position: fixed; right: 12px; bottom: 12px; z-index: 1000; display: grid; width: min(360px, calc(100vw - 24px)); gap: 8px; }
+.leaf-toast { padding: 10px 12px; border: 1px solid var(--leaf-border); border-left: 3px solid var(--leaf-command); border-radius: var(--leaf-radius); background: var(--leaf-surface-raised); }
