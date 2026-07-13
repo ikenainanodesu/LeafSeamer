@@ -14,7 +14,9 @@
     "ui:check": "ts-node scripts/sync-dashboard-ui.ts --check",
     "test:standalone": "powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1",
     "watch": "tsc --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:ui": "npm run build && playwright test",
+    "test:ui:update": "npm run build && playwright test --update-snapshots"
   },
   "workspaces": [
     "bundles/*"
@@ -32,6 +34,7 @@
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@types/archiver": "^7.0.0",
     "@types/async": "^3.2.25",
     "@types/node": "^22.10.1",

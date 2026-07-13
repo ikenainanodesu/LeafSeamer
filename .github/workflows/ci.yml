@@ -14,12 +14,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npx playwright install chromium
       - run: npm run core:check
       - run: npm run ui:check
       - run: npm test
       - run: npm run typecheck
       - run: npm audit --omit=dev --audit-level=high
-      - run: npm run build
+      - run: npm run test:ui
       - run: node scripts/validate-status-report.mjs
 
   standalone-bundles:
