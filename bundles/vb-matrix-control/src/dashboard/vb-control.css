@@ -743,9 +743,10 @@ button {
   overflow-wrap: anywhere;
 }
 
-.config-list {
+.vb-shell--compact .config-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  padding: 8px;
 }
 
 .local-ip-list {
@@ -767,26 +768,32 @@ button {
   white-space: nowrap;
 }
 
-.network-card {
+.vb-shell--compact .network-card {
   position: relative;
-  padding: 12px;
-}
-
-.network-remove {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-}
-
-.network-fields {
   display: grid;
-  grid-template-columns: minmax(118px, 1.2fr) 76px minmax(92px, 0.8fr) auto;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--leaf-border);
+  border-radius: var(--leaf-radius);
+  background: var(--leaf-surface);
+}
+
+.vb-shell--compact .network-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.vb-shell--compact .network-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
-.field--name {
+.vb-shell--compact .field--name {
   padding-right: 42px;
 }
 
@@ -831,19 +838,6 @@ button {
     justify-content: flex-start;
   }
 
-  .vb-shell--compact .network-fields {
-    grid-template-columns: minmax(0, 1fr) 76px;
-  }
-
-  .vb-shell--compact .network-fields .field:first-child,
-  .vb-shell--compact .network-fields .field:nth-child(3),
-  .vb-shell--compact .network-fields .ping-button {
-    grid-column: 1 / -1;
-  }
-
-  .vb-shell--compact .ping-button {
-    width: 100%;
-  }
 }
 
 @media (max-width: 410px) {
@@ -875,6 +869,22 @@ button {
 
   .section-action {
     align-self: flex-start;
+  }
+}
+
+@media (max-width: 479px) {
+  .vb-shell--compact .network-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .vb-shell--compact .field--name {
+    padding-right: 40px;
+  }
+}
+
+@media (max-width: 359px) {
+  .vb-shell--compact .network-fields {
+    grid-template-columns: 1fr;
   }
 }
 

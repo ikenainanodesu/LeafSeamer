@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { NetworkConfig } from "../../types";
+import { Button, ConfirmDialog, IconButton, PanelHeader } from "../_leaf-ui/components";
 
 const NetworkConfigList: React.FC = () => {
   const [configs, setConfigs] = useState<NetworkConfig[]>([]);
   const [localIPs, setLocalIPs] = useState<string[]>([]);
+  const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
 
   useEffect(() => {
     const rep = nodecg.Replicant<NetworkConfig[]>("networkConfigs", {
       defaultValue: [],
     });
 
-    // First value load
+    // 首次加载数据
     rep.on("change", (newVal: NetworkConfig[]) => {
       if (newVal) {
         setConfigs(newVal);
@@ -32,7 +35,7 @@ const NetworkConfigList: React.FC = () => {
       streamName: "Command1",
     };
     const newConfigs = [...configs, newConfig];
-    setConfigs(newConfigs); // Optimistic
+    setConfigs(newConfigs); // 乐观更新
     nodecg.Replicant<NetworkConfig[]>("networkConfigs").value = newConfigs;
   };
 
@@ -45,7 +48,6 @@ const NetworkConfigList: React.FC = () => {
   };
 
   const handleRemove = (id: string) => {
-    if (!confirm("Are you sure you want to remove this connection?")) return;
     const newConfigs = configs.filter((c) => c.id !== id);
     setConfigs(newConfigs);
     nodecg.Replicant<NetworkConfig[]>("networkConfigs").value = newConfigs;
@@ -53,23 +55,13 @@ const NetworkConfigList: React.FC = () => {
 
   return (
     <div className="vb-shell vb-shell--compact">
-      <header className="vb-header">
-        <div className="config-title">
-          <span className="vb-kicker">VBAN Matrix</span>
-          <h2>Network Configuration</h2>
-        </div>
-        <div className="local-ip-list" aria-label="Local IP addresses">
-          {localIPs.length > 0 ? (
-            localIPs.map((ip) => (
-              <span className="ip-pill" key={ip} title={ip}>
-                {ip}
-              </span>
-            ))
-          ) : (
-            <span className="ip-pill">No local IPs</span>
-          )}
-        </div>
-      </header>
+      <PanelHeader
+        kicker="VBAN Matrix"
+        title="Network Configuration"
+        target={localIPs.length > 0 ? localIPs.join(" · ") : "No local IPs"}
+        status={`${configs.length} Configs`}
+        statusTone={configs.length > 0 ? "success" : "warning"}
+      />
 
       <div className="config-list">
         {configs.length === 0 && (
@@ -80,14 +72,27 @@ const NetworkConfigList: React.FC = () => {
             key={config.id}
             config={config}
             onUpdate={(updates) => handleUpdate(config.id, updates)}
-            onRemove={() => handleRemove(config.id)}
+            onRemove={() => setPendingRemovalId(config.id)}
           />
         ))}
       </div>
 
-      <button onClick={handleAdd} className="add-config-button">
-        + Add Network Configuration
-      </button>
+      <Button tone="primary" onClick={handleAdd}>
+        <Plus size={15} aria-hidden="true" />
+        Add Configuration
+      </Button>
+
+      <ConfirmDialog
+        open={pendingRemovalId !== null}
+        title="Remove Connection"
+        message="This removes the selected Matrix connection from this NodeCG instance."
+        confirmLabel="Remove Connection"
+        onCancel={() => setPendingRemovalId(null)}
+        onConfirm={() => {
+          if (pendingRemovalId) handleRemove(pendingRemovalId);
+          setPendingRemovalId(null);
+        }}
+      />
     </div>
   );
 };
@@ -99,14 +104,13 @@ const NetworkConfigCard: React.FC<{
 }> = ({ config, onUpdate, onRemove }) => {
   return (
     <article className="network-card">
-      <button
+      <IconButton
         onClick={onRemove}
-        className="icon-button icon-button--danger network-remove"
-        title="Remove connection"
-        aria-label={`Remove connection ${config.name}`}
-      >
-        X
-      </button>
+        className="network-remove"
+        tone="danger"
+        label={`Remove connection ${config.name}`}
+        icon={<Trash2 size={15} aria-hidden="true" />}
+      />
 
       <div>
         <label className="field field--name">
@@ -170,11 +174,11 @@ const PingTestButton: React.FC<{ configId: string }> = ({ configId }) => {
     for (let i = 0; i < 5; i++) {
       let success = false;
       try {
-        // Send Ping specific to this connection
-        // We'll use a transaction ID or specific message.
-        // For now, simpler: listen for specific success event if we implement targeted ping.
-        // OR: just rely on global "pingSuccess" but we can't differentiate easily without update.
-        // Let's assume manager will be updated to send { connectionId, version } in pingSuccess.
+        // 向此连接发送 Ping。
+        // 使用事务 ID 或指定消息。
+        // 当前采用更简单的方式：若实现定向 Ping，则监听对应成功事件。
+        // 或仅依赖全局 "pingSuccess"，但未更新前无法轻易区分连接。
+        // 假定管理器会在 pingSuccess 中发送 { connectionId, version }。
 
         const promise = new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
@@ -183,9 +187,9 @@ const PingTestButton: React.FC<{ configId: string }> = ({ configId }) => {
           }, 500);
 
           const listener = (data: any) => {
-            // If data is string, it's old format. If object, check connectionId.
-            // For backward compat during dev, accept any if we didn't send ID?
-            // Plan: manager sends { connectionId, result }
+            // 字符串数据为旧格式；对象数据则检查 connectionId。
+            // 开发期为向后兼容，未发送 ID 时是否接受任意结果？
+            // 计划由管理器发送 { connectionId, result }。
             if (data && data.connectionId === configId) {
               clearTimeout(timeout);
               nodecg.unlisten("pingSuccess", listener);
