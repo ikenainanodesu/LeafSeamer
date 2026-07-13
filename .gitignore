@@ -37,10 +37,13 @@ cfg/*
 !cfg/
 !cfg/*.example.json
 !cfg/*.json.example
-!cfg/README.md
+!cfg/README*.md
 credentials*.json
 service-account*.json
 *.key
+
+# 本地隔离开发工作区
+.worktrees/
 *.pem
 cfg/secrets/
 bundles/*/secrets/
