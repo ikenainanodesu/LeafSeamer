@@ -298,3 +298,267 @@ test("Backup protects L3 creation and reports pending, error, and success states
   await expect(page.getByRole("button", { name: "Create Backup" })).toBeEnabled();
   expectNoRuntimeFailures(failures);
 });
+
+test("Dashboard test server exposes only approved build output", async ({ page }) => {
+  const dashboard = await page.goto("/bundles/obs-control/dashboard/obs-control-panel.html");
+  expect(dashboard?.status()).toBe(200);
+  const html = (await dashboard?.text()) ?? "";
+  const sharedAsset = html.match(/\.\.\/shared\/([^"']+)/)?.[1];
+  expect(sharedAsset).toBeTruthy();
+  if (!sharedAsset) throw new Error("Dashboard HTML did not reference a shared asset.");
+  const requestStatus = (pathname: string, method = "GET") =>
+    page.evaluate(async ({ method, pathname }) => (await fetch(pathname, { method })).status, { method, pathname });
+  expect(await requestStatus(`/bundles/obs-control/shared/${sharedAsset}`)).toBe(200);
+  expect(await requestStatus("/bundles/obs-control/dashboard/obs-control-panel.html", "HEAD")).toBe(200);
+  expect(await requestStatus("/bundles/obs-control/dashboard/obs-control-panel.html", "POST")).toBe(405);
+  for (const pathname of [
+    "/package.json",
+    "/.env",
+    "/cfg/nodecg.json",
+    "/bundles/obs-control/src/dashboard/obs-control-panel.tsx",
+    "/bundles/obs-control/dashboard/%2e%2e%2f%2e%2e%2fpackage.json",
+    "/bundles/graphics-package/dashboard/lower-third.html",
+  ]) {
+    expect(await requestStatus(pathname)).toBe(404);
+  }
+});
+
+const authenticatedEvent = (bundle: string) => `leafseamer:authenticated-command:${bundle}`;
+
+const authenticatedCalls = (page: Page, command: string) =>
+  page.evaluate((expected) =>
+    (window as any).__nodecgTest.calls.filter(
+      (call: any) => call.kind === "socket.emit" && call.payload[0]?.command === expected,
+    ), command);
+
+const expectAuthenticatedCall = async (
+  page: Page,
+  bundle: string,
+  command: string,
+  payload: unknown,
+) => {
+  const calls = await authenticatedCalls(page, command);
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({
+    kind: "socket.emit",
+    event: authenticatedEvent(bundle),
+    payload: [{ command, correlationId: expect.any(String), payload }],
+  });
+};
+
+const messageCalls = (page: Page, message: string) =>
+  page.evaluate((expected) =>
+    (window as any).__nodecgTest.calls.filter(
+      (call: any) => call.kind === "sendMessageToBundle" && call.message === expected,
+    ), message);
+
+const clickTwiceInSameTask = (locator: import("@playwright/test").Locator) =>
+  locator.evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
+
+test("ATEM Macro 同 tick 双击只发出一个认证命令", async ({ page }) => {
+  const event = authenticatedEvent("atem-control");
+  const failures = await setupDashboard(page, { "atem:state:192.168.10.20": atemState, "atem:switchers": [atemSwitcher] }, { pendingSocketEvents: [event] });
+  await page.goto("/bundles/atem-control/dashboard/atem-control.html");
+  await page.locator("summary", { hasText: "Macros" }).click();
+  const macro = page.locator(".atem-macro-grid button").first();
+  await expect(macro).toHaveText("OPEN");
+  await clickTwiceInSameTask(macro);
+  await expectAuthenticatedCall(page, "atem-control", "atem.runMacro", {
+    ip: "192.168.10.20",
+    macroIndex: 1,
+  });
+  await expect(macro).toBeDisabled();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.rejectSocket(current, "macro failed"), event)).toBe(true);
+  await expect(macro).toBeEnabled();
+  expectNoRuntimeFailures(failures);
+});
+
+test("OBS Streaming 将设置与开始保持为同一在途链", async ({ page }) => {
+  const event = authenticatedEvent("obs-control");
+  const failures = await setupDashboard(page, pages.find((item) => item.name === "obs-control")!.seed, { pendingSocketEvents: [event] });
+  await page.goto("/bundles/obs-control/dashboard/obs-control-panel.html");
+  const start = page.locator(".obs-live-actions button").first();
+  await expect(start).toHaveText("Start Streaming");
+  await clickTwiceInSameTask(start);
+  await expectAuthenticatedCall(page, "obs-control", "obs.setStreamSettings", {
+    id: "obs-1",
+    settings: {
+      clearKey: false,
+      clearPassword: false,
+      key: "",
+      keyConfigured: true,
+      password: "",
+      passwordConfigured: false,
+      server: "rtmp://example.invalid/live",
+      useAuth: false,
+      username: "",
+    },
+  });
+  expect(await authenticatedCalls(page, "obs.startStreaming")).toHaveLength(0);
+  await expect(start).toBeDisabled();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect.poll(() => authenticatedCalls(page, "obs.startStreaming")).toHaveLength(1);
+  await expectAuthenticatedCall(page, "obs-control", "obs.startStreaming", { id: "obs-1" });
+  await expect(start).toBeDisabled();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect(start).toBeEnabled();
+  expectNoRuntimeFailures(failures);
+});
+
+test("OBS Connection Connect 同 tick 双击只执行一条 Save 到 Connect 链", async ({ page }) => {
+  const event = authenticatedEvent("obs-control");
+  const failures = await setupDashboard(page, { obsConnections: [obsConnection], obsStates: { "obs-1": { ...obsState, status: "disconnected" } } }, { pendingSocketEvents: [event] });
+  await page.goto("/bundles/obs-control/dashboard/obs-connection.html");
+  const connect = page.locator(".obs-conn-actions button").last();
+  await expect(connect).toHaveText("Connect");
+  await clickTwiceInSameTask(connect);
+  await expectAuthenticatedCall(page, "obs-control", "obs.saveConnection", {
+    ...obsConnection,
+    clearPassword: false,
+    password: "",
+  });
+  expect(await authenticatedCalls(page, "obs.connect")).toHaveLength(0);
+  await expect(connect).toBeDisabled();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect.poll(() => authenticatedCalls(page, "obs.connect")).toHaveLength(1);
+  await expectAuthenticatedCall(page, "obs-control", "obs.connect", { id: "obs-1" });
+  await expect(connect).toBeDisabled();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect(connect).toBeEnabled();
+  expectNoRuntimeFailures(failures);
+});
+
+test("OBS Scene Switch 键盘只切换 PGM，不触发展开", async ({ page }) => {
+  const failures = await setupDashboard(page, pages.find((item) => item.name === "obs-control")!.seed, { messageResults: { getSceneItems: [] } });
+  await page.goto("/bundles/obs-control/dashboard/obs-control-panel.html");
+  const scene = page.locator(".obs-scene-item").filter({ hasText: "CAM 2" });
+  const expand = scene.locator("button.obs-scene");
+  const switchButton = scene.getByRole("button", { name: "Switch to program" });
+  await expect(scene.locator(".obs-scene-actions > button")).toHaveCount(2);
+  await expand.click();
+  await expect(expand).toHaveAttribute("aria-expanded", "true");
+  expect(await messageCalls(page, "getSceneItems")).toContainEqual({
+    bundle: "obs-control",
+    kind: "sendMessageToBundle",
+    message: "getSceneItems",
+    payload: { id: "obs-1", sceneName: "CAM 2" },
+  });
+  await switchButton.focus();
+  await page.keyboard.press("Enter");
+  expect(await messageCalls(page, "setOBSScene")).toEqual([{
+    bundle: "obs-control",
+    kind: "sendMessageToBundle",
+    message: "setOBSScene",
+    payload: { id: "obs-1", scene: "CAM 2" },
+  }]);
+  await page.keyboard.press("Space");
+  expect(await messageCalls(page, "setOBSScene")).toEqual([
+    {
+      bundle: "obs-control",
+      kind: "sendMessageToBundle",
+      message: "setOBSScene",
+      payload: { id: "obs-1", scene: "CAM 2" },
+    },
+    {
+      bundle: "obs-control",
+      kind: "sendMessageToBundle",
+      message: "setOBSScene",
+      payload: { id: "obs-1", scene: "CAM 2" },
+    },
+  ]);
+  await expect(expand).toHaveAttribute("aria-expanded", "true");
+  expectNoRuntimeFailures(failures);
+});
+
+test("VB Network 删除后焦点移动到相邻 Remove", async ({ page }) => {
+  const second = { ...matrixConfig, id: "matrix-2", name: "Backup Matrix" };
+  const failures = await setupDashboard(page, { hostInfo: { ips: ["192.168.10.10"] }, networkConfigs: [matrixConfig, second] });
+  await page.goto("/bundles/vb-matrix-control/dashboard/network-config.html");
+  const firstRemove = page.getByRole("button", { name: `Remove connection ${matrixConfig.name}` });
+  await firstRemove.click();
+  await page.getByRole("dialog", { name: "Remove Connection" }).getByRole("button", { name: "Remove Connection" }).click();
+  await expect(page.getByRole("button", { name: `Remove connection ${second.name}` })).toBeFocused();
+  expect(await page.evaluate(() => (window as any).nodecg.Replicant("networkConfigs").value)).toEqual([second]);
+  expectNoRuntimeFailures(failures);
+});
+
+test("VB Network 删除最后一项后焦点移动到 Add Configuration", async ({ page }) => {
+  const failures = await setupDashboard(page, { hostInfo: { ips: ["192.168.10.10"] }, networkConfigs: [matrixConfig] });
+  await page.goto("/bundles/vb-matrix-control/dashboard/network-config.html");
+  await page.getByRole("button", { name: `Remove connection ${matrixConfig.name}` }).click();
+  await page.getByRole("dialog", { name: "Remove Connection" }).getByRole("button", { name: "Remove Connection" }).click();
+  await expect(page.getByRole("button", { name: "Add Configuration" })).toBeFocused();
+  expect(await page.evaluate(() => (window as any).nodecg.Replicant("networkConfigs").value)).toEqual([]);
+  expectNoRuntimeFailures(failures);
+});
+
+test("Dashboard test server 在超过十秒空闲后仍可访问", async ({ page }) => {
+  await page.waitForTimeout(10_250);
+  expect((await page.request.get("/bundles/logger-system/dashboard/log-viewer.html")).status()).toBe(200);
+});
+
+test("OBS Playlist 圈定焦点并在 Escape 后恢复触发器", async ({ page }) => {
+  const vlcItem = { inputKind: "vlc_source", sceneItemEnabled: true, sceneItemId: 9, sourceName: "Playlist" };
+  const failures = await setupDashboard(page, pages.find((item) => item.name === "obs-control")!.seed, {
+    messageResults: { getInputSettings: { playlist: [{ selected: true, value: "C:/media/opening.mp4" }] }, getSceneItems: [vlcItem] },
+  });
+  await page.goto("/bundles/obs-control/dashboard/obs-control-panel.html");
+  await page.locator("button.obs-scene").first().click();
+  const trigger = page.getByRole("button", { name: "View Playlist" });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Playlist" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toBeFocused();
+  expect(await messageCalls(page, "getSceneItems")).toContainEqual({
+    bundle: "obs-control",
+    kind: "sendMessageToBundle",
+    message: "getSceneItems",
+    payload: { id: "obs-1", sceneName: "CAM 1" },
+  });
+  expect(await messageCalls(page, "getInputSettings")).toContainEqual({
+    bundle: "obs-control",
+    kind: "sendMessageToBundle",
+    message: "getInputSettings",
+    payload: { id: "obs-1", inputName: "Playlist" },
+  });
+  const close = dialog.getByRole("button", { name: "Close" });
+  const play = dialog.getByRole("button", { name: "Play: opening.mp4" });
+  await page.keyboard.press("Shift+Tab");
+  await expect(play).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expectNoRuntimeFailures(failures);
+});
+
+test("VB Patch 同 tick 双击只发出一个认证更新", async ({ page }) => {
+  const event = authenticatedEvent("vb-matrix-control");
+  const activePatch = {
+    connectionId: "matrix-1",
+    exists: true,
+    gain: 0,
+    id: "matrix-matrix-1_VAIO_1_A1_1",
+    inputChannel: 1,
+    inputDevice: "VAIO",
+    mute: false,
+    outputChannel: 1,
+    outputDevice: "A1",
+  };
+  const failures = await setupDashboard(page, { activePatches: [activePatch], availableDevices: matrixDevices, matrixPoints: [matrixPoint], networkConfigs: [matrixConfig], presets: [] }, { pendingSocketEvents: [event] });
+  await page.goto("/bundles/vb-matrix-control/dashboard/control-panel.html");
+  const toggle = page.locator("button.connection-toggle");
+  await clickTwiceInSameTask(toggle);
+  await expectAuthenticatedCall(page, "vb-matrix-control", "vb.updatePatch", {
+    ...activePatch,
+    exists: false,
+  });
+  await expect(toggle).toBeDisabled();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect(toggle).toBeEnabled();
+  expectNoRuntimeFailures(failures);
+});

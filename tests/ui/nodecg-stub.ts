@@ -4,6 +4,8 @@ export type NodecgSeed = Record<string, unknown>;
 
 export interface NodecgStubOptions {
   pendingMessages?: string[];
+  pendingSocketEvents?: string[];
+  messageResults?: Record<string, unknown>;
   socketAcks?: Record<string, unknown>;
 }
 
@@ -13,7 +15,7 @@ export const installNodecgStub = async (
   options: NodecgStubOptions = {},
 ): Promise<void> => {
   await page.addInitScript(
-    ({ pendingMessages, socketAcks, values }) => {
+    ({ messageResults, pendingMessages, socketAcks, socketPendingEvents, values }) => {
       type Listener = (...args: unknown[]) => void;
       type ReplicantRecord = {
         value: unknown;
@@ -26,11 +28,17 @@ export const installNodecgStub = async (
         reject: (error: Error) => void;
         resolve: (result: unknown) => void;
       };
+      type PendingSocket = {
+        acknowledge: (result: unknown) => void;
+        event: string;
+      };
 
       const replicants = new Map<string, ReplicantRecord>();
       const listeners = new Map<string, Set<Listener>>();
       const pending = new Set(pendingMessages);
+      const pendingSocketEvents = new Set(socketPendingEvents);
       const pendingRequests: PendingMessage[] = [];
+      const pendingSockets: PendingSocket[] = [];
       const calls: Array<Record<string, unknown>> = [];
 
       const getReplicant = (name: string, defaultValue?: unknown) => {
@@ -92,8 +100,11 @@ export const installNodecgStub = async (
             return;
           }
           queueMicrotask(() => {
-            callback?.(null, []);
-            resolve([]);
+            const result = Object.prototype.hasOwnProperty.call(messageResults, message)
+              ? messageResults[message]
+              : [];
+            callback?.(null, result);
+            resolve(result);
           });
         });
       };
@@ -124,6 +135,10 @@ export const installNodecgStub = async (
               (item): item is (value: unknown) => void => typeof item === "function",
             );
             calls.push({ kind: "socket.emit", event, payload: args.filter((item) => typeof item !== "function") });
+            if (pendingSocketEvents.has(event) && acknowledge) {
+              pendingSockets.push({ acknowledge, event });
+              return;
+            }
             queueMicrotask(() => acknowledge?.(socketAcks[event] ?? { ok: true, result: null }));
           },
         },
@@ -165,10 +180,30 @@ export const installNodecgStub = async (
           else request.reject(failure);
           return true;
         },
+        resolveSocket: (event?: string, result: unknown = { ok: true, result: null }) => {
+          const request = pendingSockets.find((item) => !event || item.event === event);
+          if (!request) return false;
+          pendingSockets.splice(pendingSockets.indexOf(request), 1);
+          request.acknowledge(result);
+          return true;
+        },
+        rejectSocket: (event?: string, error: unknown = "Request failed") => {
+          const request = pendingSockets.find((item) => !event || item.event === event);
+          if (!request) return false;
+          pendingSockets.splice(pendingSockets.indexOf(request), 1);
+          request.acknowledge({ ok: false, error: { code: "COMMAND_FAILED", message: String(error) } });
+          return true;
+        },
       };
 
       Object.assign(window, { nodecg, NodeCG: function NodeCG() {}, __nodecgTest: testApi });
     },
-    { pendingMessages: options.pendingMessages ?? [], socketAcks: options.socketAcks ?? {}, values: seed },
+    {
+      messageResults: options.messageResults ?? {},
+      pendingMessages: options.pendingMessages ?? [],
+      socketAcks: options.socketAcks ?? {},
+      socketPendingEvents: options.pendingSocketEvents ?? [],
+      values: seed,
+    },
   );
 };

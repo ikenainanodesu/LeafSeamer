@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests/ui",
   outputDir: "test-results/ui",
+  globalSetup: "./tests/ui/global-setup.mjs",
   timeout: 30_000,
   expect: {
     timeout: 10_000,
@@ -23,11 +24,4 @@ export default defineConfig({
     deviceScaleFactor: 1,
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
-  webServer: {
-    command: "node scripts/serve-dashboard-ui.mjs",
-    url: "http://127.0.0.1:4173/bundles/logger-system/dashboard/log-viewer.html",
-    timeout: 30_000,
-    reuseExistingServer: false,
-    gracefulShutdown: { signal: "SIGTERM", timeout: 500 },
-  },
 });

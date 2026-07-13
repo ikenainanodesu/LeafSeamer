@@ -164,7 +164,7 @@ const NetworkConfigCard: React.FC<{
         ref={removeButtonRef}
         type="button"
         onClick={onRemove}
-        className="leaf-icon-button network-remove"
+        className="leaf-button leaf-icon-button network-remove"
         data-tone="danger"
         data-network-remove-id={config.id}
         aria-label={`Remove connection ${config.name}`}
