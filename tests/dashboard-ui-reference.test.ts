@@ -363,25 +363,96 @@ const hasPanelHeaderContract = (source: ts.SourceFile): boolean =>
     );
   });
 
-const hasToastBinding = (source: ts.SourceFile): boolean => {
-  const usesToast = descendants(source).some(
-    (node) =>
-      ts.isVariableDeclaration(node) &&
-      ts.isObjectBindingPattern(node.name) &&
-      node.name.elements.some(
-        (element) =>
-          element.propertyName?.getText(source) === "items" && element.name.getText(source) === "toasts"
-      ) &&
-      node.name.elements.some(
-        (element) =>
-          element.propertyName?.getText(source) === "pushToast" ||
-          element.name.getText(source) === "pushToast"
-      ) &&
-      node.initializer !== undefined &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === "useToast"
+const bindingNameIncludes = (name: ts.BindingName, expected: string): boolean => {
+  if (ts.isIdentifier(name)) {
+    return name.text === expected;
+  }
+  if (ts.isObjectBindingPattern(name)) {
+    return name.elements.some((element) => bindingNameIncludes(element.name, expected));
+  }
+  return name.elements.some(
+    (element) => ts.isBindingElement(element) && bindingNameIncludes(element.name, expected)
   );
+};
+
+const bindingOwners = (source: ts.SourceFile, name: string): ts.Node[] => {
+  const owners = new Set<ts.Node>();
+  const add = (node: ts.Node, bindingName: ts.BindingName | undefined) => {
+    if (bindingName && bindingNameIncludes(bindingName, name)) {
+      owners.add(node);
+    }
+  };
+  for (const node of descendants(source)) {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      add(node, node.name);
+    } else if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) {
+      if (node.name?.text === name) {
+        owners.add(node);
+      }
+    } else if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+      if (node.name?.text === name) {
+        owners.add(node);
+      }
+    } else if (ts.isCatchClause(node)) {
+      add(node.variableDeclaration ?? node, node.variableDeclaration?.name);
+    } else if (ts.isImportSpecifier(node) && node.name.text === name) {
+      owners.add(node);
+    } else if (ts.isNamespaceImport(node) && node.name.text === name) {
+      owners.add(node);
+    }
+  }
+  return [...owners];
+};
+
+const isConstVariableDeclaration = (node: ts.Node): node is ts.VariableDeclaration =>
+  ts.isVariableDeclaration(node) &&
+  ts.isVariableDeclarationList(node.parent) &&
+  (node.parent.flags & ts.NodeFlags.Const) !== 0;
+
+const isUseToastPushToastBinding = (node: ts.Node): boolean =>
+  isConstVariableDeclaration(node) &&
+  ts.isObjectBindingPattern(node.name) &&
+  bindingNameIncludes(node.name, "pushToast") &&
+  node.initializer !== undefined &&
+  ts.isCallExpression(node.initializer) &&
+  ts.isIdentifier(node.initializer.expression) &&
+  node.initializer.expression.text === "useToast";
+
+const isUseStatePendingSetterBinding = (node: ts.Node): boolean => {
+  if (
+    !isConstVariableDeclaration(node) ||
+    !ts.isArrayBindingPattern(node.name) ||
+    node.name.elements.length < 2 ||
+    !ts.isBindingElement(node.name.elements[1]) ||
+    !ts.isIdentifier(node.name.elements[1].name) ||
+    node.name.elements[1].name.text !== "setPendingKeys" ||
+    !node.initializer ||
+    !ts.isCallExpression(node.initializer) ||
+    !ts.isIdentifier(node.initializer.expression) ||
+    node.initializer.expression.text !== "useState"
+  ) {
+    return false;
+  }
+  return true;
+};
+
+const hasUniqueBinding = (
+  source: ts.SourceFile,
+  name: string,
+  predicate: (node: ts.Node) => boolean
+): boolean => {
+  const owners = bindingOwners(source, name);
+  return owners.length === 1 && predicate(owners[0]);
+};
+
+const hasUniqueUseToastPushToastBinding = (source: ts.SourceFile): boolean =>
+  hasUniqueBinding(source, "pushToast", isUseToastPushToastBinding);
+
+const hasUniqueUseStatePendingSetterBinding = (source: ts.SourceFile): boolean =>
+  hasUniqueBinding(source, "setPendingKeys", isUseStatePendingSetterBinding);
+
+const hasToastBinding = (source: ts.SourceFile): boolean => {
+  const usesToast = hasUniqueUseToastPushToastBinding(source);
   const rendersToastRegion = descendants(source).some((node) => {
     if (!ts.isJsxSelfClosingElement(node) || jsxTagName(node.tagName) !== "ToastRegion") {
       return false;
@@ -531,6 +602,7 @@ const hasPendingKeysUpdaterContract = (handler: ts.Expression): boolean =>
   });
 
 const hasAuthenticatedCatchToastContract = (source: ts.SourceFile): boolean =>
+  hasUniqueUseToastPushToastBinding(source) &&
   descendants(source).some(
     (node) =>
       isPromiseMethodCall(node, "catch") &&
@@ -560,7 +632,11 @@ const hasPromiseScopedPendingContract = (source: ts.SourceFile): boolean => {
   const toggleBody = descendants(source)
     .map(functionBody)
     .find((body): body is ts.Block => body !== undefined);
-  if (!toggleBody) {
+  if (
+    !toggleBody ||
+    !hasUniqueUseToastPushToastBinding(source) ||
+    !hasUniqueUseStatePendingSetterBinding(source)
+  ) {
     return false;
   }
   const hasTimer = descendants(toggleBody).some(
@@ -677,7 +753,7 @@ const networkRemovalFixture = (statement: string): ts.SourceFile =>
 const matrixPromiseFixture = (body: string): ts.SourceFile =>
   ts.createSourceFile(
     "matrix-promise-fixture.tsx",
-    `const togglePoint = () => { const key = "point"; const patch = {}; ${body} };`,
+    `const { items: toasts, pushToast } = useToast(); const [pendingKeys, setPendingKeys] = useState(new Set()); const togglePoint = () => { const key = "point"; const patch = {}; ${body} };`,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX
@@ -686,7 +762,7 @@ const matrixPromiseFixture = (body: string): ts.SourceFile =>
 const toastFixture = (command: string): ts.SourceFile =>
   ts.createSourceFile(
     "toast-fixture.tsx",
-    `const { items: toasts, pushToast } = useToast(); const view = <ToastRegion items={toasts} />; ${command}`,
+    `const { items: toasts, pushToast } = useToast(); const [pendingKeys, setPendingKeys] = useState(new Set()); const view = <ToastRegion items={toasts} />; ${command}`,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TSX
@@ -785,6 +861,20 @@ test("VB matrix promise and toast fixtures reject unrelated callbacks", () => {
     !hasPromiseScopedPendingContract(
       matrixPromiseFixture(
         'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")).finally(() => { setPendingKeys((current) => { const unused = () => { const next = new Set(current); next.delete(key); return next; }; }); });'
+      )
+    )
+  );
+  ok(
+    !hasAuthenticatedCatchToastContract(
+      toastFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch(() => { const pushToast = () => {}; pushToast("x", "danger"); });'
+      )
+    )
+  );
+  ok(
+    !hasPromiseScopedPendingContract(
+      matrixPromiseFixture(
+        'sendAuthenticatedCommand("vb-matrix-control", "vb.updatePatch", patch).catch((error) => pushToast(String(error), "danger")).finally(() => { const setPendingKeys = () => {}; setPendingKeys((current) => { const next = new Set(current); next.delete(key); return next; }); });'
       )
     )
   );
