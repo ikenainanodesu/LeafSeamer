@@ -449,111 +449,160 @@ const hasSecretPassphrasePayload = (source: ts.SourceFile): boolean => {
   });
 };
 
-const functionBinding = (
-  source: ts.SourceFile,
-  name: string
-): ts.FunctionLikeDeclarationBase | undefined => {
-  const owners = bindingOwners(source, name);
-  if (owners.length !== 1) {
-    return undefined;
-  }
-  const owner = owners[0];
-  if (ts.isFunctionDeclaration(owner) || ts.isFunctionExpression(owner)) {
-    return owner;
-  }
-  if (
-    ts.isVariableDeclaration(owner) &&
-    owner.initializer &&
-    (ts.isArrowFunction(owner.initializer) || ts.isFunctionExpression(owner.initializer))
-  ) {
-    return owner.initializer;
-  }
-  return undefined;
-};
-
-const expressionFromFunction = (
-  functionLike: ts.FunctionLikeDeclarationBase
-): ts.Expression | undefined => {
-  const body = functionLike.body;
-  if (!body) {
-    return undefined;
-  }
-  return ts.isBlock(body)
-    ? body.statements.find(ts.isReturnStatement)?.expression
-    : body;
-};
-
 const isNullLiteral = (node: ts.Node): boolean =>
   node.kind === ts.SyntaxKind.NullKeyword;
 
 const isIdentifierNamed = (node: ts.Node, name: string): boolean =>
   ts.isIdentifier(node) && node.text === name;
 
-const isPendingRemovalNonNullCheck = (node: ts.Node): boolean =>
-  ts.isBinaryExpression(node) &&
-  node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
-  ((isIdentifierNamed(node.left, "pendingRemovalId") && isNullLiteral(node.right)) ||
-    (isNullLiteral(node.left) && isIdentifierNamed(node.right, "pendingRemovalId")));
+const arrowBinding = (source: ts.SourceFile, name: string): ts.ArrowFunction | undefined => {
+  const owners = bindingOwners(source, name);
+  if (owners.length !== 1 || !ts.isVariableDeclaration(owners[0])) {
+    return undefined;
+  }
+  return owners[0].initializer && ts.isArrowFunction(owners[0].initializer)
+    ? owners[0].initializer
+    : undefined;
+};
 
-const containsSourceIdAccess = (node: ts.Node): boolean =>
-  [node, ...descendants(node)].some(
-    (candidate) =>
-      ts.isPropertyAccessExpression(candidate) && candidate.name.text === "sourceId"
-  );
+const requiredIdentifierParameter = (
+  arrow: ts.ArrowFunction,
+  index: number
+): string | undefined => {
+  const parameter = arrow.parameters[index];
+  return (
+    parameter &&
+    !parameter.dotDotDotToken &&
+    !parameter.questionToken &&
+    !parameter.initializer &&
+    ts.isIdentifier(parameter.name)
+  )
+    ? parameter.name.text
+    : undefined;
+};
 
-const containsReturn = (node: ts.Node): boolean =>
-  [node, ...descendants(node)].some(ts.isReturnStatement);
+const isDirectCall = (
+  expression: ts.Expression,
+  name: string,
+  argumentCount: number
+): expression is ts.CallExpression =>
+  ts.isCallExpression(expression) &&
+  isIdentifierNamed(expression.expression, name) &&
+  expression.arguments.length === argumentCount;
 
-const isLocalRejectionGuard = (statement: ts.Statement): boolean => {
-  if (!ts.isIfStatement(statement) || !ts.isBinaryExpression(statement.expression)) {
+const isExpressionCall = (
+  statement: ts.Statement,
+  name: string,
+  argumentCount: number
+): boolean =>
+  ts.isExpressionStatement(statement) &&
+  isDirectCall(statement.expression, name, argumentCount);
+
+const isPropertyAccess = (
+  expression: ts.Expression,
+  objectName: string,
+  propertyName: string
+): boolean =>
+  ts.isPropertyAccessExpression(expression) &&
+  isIdentifierNamed(expression.expression, objectName) &&
+  expression.name.text === propertyName;
+
+const isStrictLocalComparison = (
+  expression: ts.Expression
+): expression is ts.BinaryExpression =>
+  ts.isBinaryExpression(expression) &&
+  expression.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+  stringLiteralValue(expression.right) === "local";
+
+const isBareReturn = (statement: ts.Statement): boolean =>
+  ts.isReturnStatement(statement) && statement.expression === undefined;
+
+const isReturnOnly = (statement: ts.Statement): boolean =>
+  isBareReturn(statement) ||
+  (ts.isBlock(statement) && statement.statements.length === 1 && isBareReturn(statement.statements[0]));
+
+const expressionArrowBody = (arrow: ts.ArrowFunction): ts.Expression | undefined =>
+  ts.isBlock(arrow.body) ? undefined : arrow.body;
+
+const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(expression)
+    ? unwrapParentheses(expression.expression)
+    : expression;
+
+const isExactFilterCallback = (expression: ts.Expression): boolean => {
+  if (!ts.isArrowFunction(expression) || expression.parameters.length !== 1) {
     return false;
   }
+  const parameterName = requiredIdentifierParameter(expression, 0);
+  const body = expressionArrowBody(expression);
   return (
-    statement.expression.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
-    containsSourceIdAccess(statement.expression) &&
-    (stringLiteralValue(statement.expression.left) === "local" ||
-      stringLiteralValue(statement.expression.right) === "local") &&
-    containsReturn(statement.thenStatement)
+    parameterName !== undefined &&
+    body !== undefined &&
+    ts.isBinaryExpression(body) &&
+    body.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
+    isPropertyAccess(body.left, parameterName, "sourceId") &&
+    stringLiteralValue(body.right) === "local"
   );
 };
 
-const containsNamedCall = (node: ts.Node, name: string): boolean =>
-  [node, ...descendants(node)].some(
-    (candidate) =>
-      ts.isCallExpression(candidate) && isIdentifierNamed(candidate.expression, name)
-  );
-
-const referencesNamedFunction = (node: ts.Node, name: string): boolean =>
-  isIdentifierNamed(node, name) || containsNamedCall(node, name);
-
-const hasLocalGuardBeforePersistence = (
-  source: ts.SourceFile,
-  name: string
-): boolean => {
-  const functionLike = functionBinding(source, name);
-  if (!functionLike || !functionLike.body || !ts.isBlock(functionLike.body)) {
+const isExactMapBinding = (parameter: ts.ParameterDeclaration): boolean => {
+  if (
+    parameter.dotDotDotToken ||
+    parameter.questionToken ||
+    parameter.initializer ||
+    !ts.isObjectBindingPattern(parameter.name) ||
+    parameter.name.elements.length !== 5
+  ) {
     return false;
   }
-  const persistenceIndex = functionLike.body.statements.findIndex((statement) =>
-    containsNamedCall(statement, "persistLocalItems")
+  const expected = new Set(["id", "time", "title", "description", "active"]);
+  const names = parameter.name.elements.map((element) =>
+    ts.isIdentifier(element.name) ? element.name.text : undefined
   );
   return (
-    persistenceIndex >= 0 &&
-    functionLike.body.statements
-      .slice(0, persistenceIndex)
-      .some(isLocalRejectionGuard)
+    names.every(
+      (name) => name !== undefined && expected.has(name)
+    ) &&
+    new Set(names).size === expected.size &&
+    parameter.name.elements.every(
+      (element) =>
+      !element.dotDotDotToken &&
+      !element.propertyName &&
+      !element.initializer &&
+      ts.isIdentifier(element.name)
+    )
   );
 };
 
-const callbackReturnExpression = (callback: ts.Expression): ts.Expression | undefined =>
-  ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
-    ? expressionFromFunction(callback)
-    : undefined;
-
-const callbackBodyNode = (callback: ts.Expression): ts.Node | undefined =>
-  ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
-    ? callback.body
-    : undefined;
+const isExactMapCallback = (expression: ts.Expression): boolean => {
+  if (
+    !ts.isArrowFunction(expression) ||
+    expression.parameters.length !== 1 ||
+    !isExactMapBinding(expression.parameters[0])
+  ) {
+    return false;
+  }
+  const body = expressionArrowBody(expression);
+  const payload = body ? unwrapParentheses(body) : undefined;
+  if (!payload || !ts.isObjectLiteralExpression(payload) || payload.properties.length !== 5) {
+    return false;
+  }
+  const expected = new Set(["id", "time", "title", "description", "active"]);
+  const names = payload.properties.map((property) =>
+    ts.isShorthandPropertyAssignment(property) ? property.name.text : undefined
+  );
+  return (
+    names.every(
+      (name) => name !== undefined && expected.has(name)
+    ) &&
+    new Set(names).size === expected.size &&
+    payload.properties.every(
+      (property) =>
+      ts.isShorthandPropertyAssignment(property) &&
+      !property.objectAssignmentInitializer
+    )
+  );
+};
 
 const hasExactSchedulePayload = (payload: ts.Expression): boolean => {
   if (
@@ -565,65 +614,129 @@ const hasExactSchedulePayload = (payload: ts.Expression): boolean => {
     return false;
   }
   const filter = payload.expression.expression;
-  if (
-    !ts.isCallExpression(filter) ||
-    !ts.isPropertyAccessExpression(filter.expression) ||
-    filter.expression.name.text !== "filter" ||
-    !isIdentifierNamed(filter.expression.expression, "items") ||
-    filter.arguments.length !== 1
-  ) {
-    return false;
-  }
-  const filterExpression = callbackReturnExpression(filter.arguments[0]);
-  if (
-    !filterExpression ||
-    !ts.isBinaryExpression(filterExpression) ||
-    filterExpression.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken ||
-    !containsSourceIdAccess(filterExpression) ||
-    (stringLiteralValue(filterExpression.left) !== "local" &&
-      stringLiteralValue(filterExpression.right) !== "local")
-  ) {
-    return false;
-  }
-  const mappedItem = callbackReturnExpression(payload.arguments[0]);
-  if (!mappedItem || !ts.isParenthesizedExpression(mappedItem)) {
-    return false;
-  }
-  const payloadObject = mappedItem.expression;
-  if (!ts.isObjectLiteralExpression(payloadObject)) {
-    return false;
-  }
-  const expected = new Set(["id", "time", "title", "description", "active"]);
-  const names = payloadObject.properties.map((property) => {
-    if (ts.isShorthandPropertyAssignment(property)) {
-      return property.name.text;
-    }
-    return ts.isPropertyAssignment(property)
-      ? propertyNameText(property.name)
-      : undefined;
-  });
-  return names.length === expected.size && names.every((name) => name !== undefined && expected.has(name));
+  return (
+    ts.isCallExpression(filter) &&
+    ts.isPropertyAccessExpression(filter.expression) &&
+    filter.expression.name.text === "filter" &&
+    isIdentifierNamed(filter.expression.expression, "items") &&
+    filter.arguments.length === 1 &&
+    isExactFilterCallback(filter.arguments[0]) &&
+    isExactMapCallback(payload.arguments[0])
+  );
 };
 
 const hasPersistLocalItemsContract = (source: ts.SourceFile): boolean => {
-  const functionLike = functionBinding(source, "persistLocalItems");
+  const persist = arrowBinding(source, "persistLocalItems");
+  if (!persist || persist.parameters.length !== 1 || requiredIdentifierParameter(persist, 0) !== "items") {
+    return false;
+  }
+  const body = persist.body;
+  if (!ts.isBlock(body) || body.statements.length !== 1 || !ts.isExpressionStatement(body.statements[0])) {
+    return false;
+  }
+  const command = body.statements[0].expression;
+  return (
+    isCommandCall(command, commandContracts[0]) &&
+    command.arguments.length === 2 &&
+    hasExactSchedulePayload(command.arguments[1])
+  );
+};
+
+const isScheduleIndexSourceId = (expression: ts.Expression, indexName: string): boolean =>
+  ts.isPropertyAccessExpression(expression) &&
+  expression.questionDotToken !== undefined &&
+  expression.name.text === "sourceId" &&
+  ts.isElementAccessExpression(expression.expression) &&
+  isIdentifierNamed(expression.expression.expression, "schedule") &&
+  expression.expression.argumentExpression !== undefined &&
+  isIdentifierNamed(expression.expression.argumentExpression, indexName);
+
+const isExactIndexedLocalGuard = (statement: ts.Statement, indexName: string): boolean => {
+  if (!ts.isIfStatement(statement) || !isStrictLocalComparison(statement.expression)) {
+    return false;
+  }
+  return (
+    isScheduleIndexSourceId(statement.expression.left, indexName) &&
+    isReturnOnly(statement.thenStatement)
+  );
+};
+
+const isExactFindSourceId = (expression: ts.Expression, idName: string): boolean => {
   if (
-    !functionLike ||
-    functionLike.parameters.length !== 1 ||
-    !isIdentifierNamed(functionLike.parameters[0].name, "items")
+    !ts.isPropertyAccessExpression(expression) ||
+    expression.questionDotToken === undefined ||
+    expression.name.text !== "sourceId" ||
+    !ts.isCallExpression(expression.expression) ||
+    !ts.isPropertyAccessExpression(expression.expression.expression)
   ) {
     return false;
   }
-  return [functionLike, ...descendants(functionLike)].some((node) => {
-    if (
-      !ts.isCallExpression(node) ||
-      !isCommandCall(node, commandContracts[0]) ||
-      node.arguments.length !== 2
-    ) {
-      return false;
-    }
-    return hasExactSchedulePayload(node.arguments[1]);
-  });
+  const find = expression.expression;
+  const findProperty = expression.expression.expression;
+  if (
+    findProperty.name.text !== "find" ||
+    !isIdentifierNamed(findProperty.expression, "schedule") ||
+    find.arguments.length !== 1 ||
+    !ts.isArrowFunction(find.arguments[0]) ||
+    find.arguments[0].parameters.length !== 1
+  ) {
+    return false;
+  }
+  const itemName = requiredIdentifierParameter(find.arguments[0], 0);
+  const body = expressionArrowBody(find.arguments[0]);
+  return (
+    itemName !== undefined &&
+    body !== undefined &&
+    ts.isBinaryExpression(body) &&
+    body.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
+    isPropertyAccess(body.left, itemName, "id") &&
+    isIdentifierNamed(body.right, idName)
+  );
+};
+
+const hasPersistenceAfterGuard = (arrow: ts.ArrowFunction): boolean =>
+  ts.isBlock(arrow.body) &&
+  arrow.body.statements.slice(1).some(
+    (statement) =>
+      ts.isExpressionStatement(statement) &&
+      [statement.expression, ...descendants(statement.expression)].some(
+        (node) => ts.isCallExpression(node) && isIdentifierNamed(node.expression, "persistLocalItems")
+      )
+  );
+
+const hasIndexedLocalGuard = (source: ts.SourceFile, name: string): boolean => {
+  const handler = arrowBinding(source, name);
+  const indexName = handler ? requiredIdentifierParameter(handler, 0) : undefined;
+  return (
+    handler !== undefined &&
+    indexName !== undefined &&
+    ts.isBlock(handler.body) &&
+    handler.body.statements.length > 0 &&
+    isExactIndexedLocalGuard(handler.body.statements[0], indexName) &&
+    hasPersistenceAfterGuard(handler)
+  );
+};
+
+const hasRemoveLocalGuard = (source: ts.SourceFile): boolean => {
+  const handler = arrowBinding(source, "removeItem");
+  const idName = handler ? requiredIdentifierParameter(handler, 0) : undefined;
+  if (
+    !handler ||
+    !idName ||
+    !ts.isBlock(handler.body) ||
+    handler.body.statements.length === 0
+  ) {
+    return false;
+  }
+  const guard = handler.body.statements[0];
+  if (!ts.isIfStatement(guard) || !isStrictLocalComparison(guard.expression)) {
+    return false;
+  }
+  return (
+    isExactFindSourceId(guard.expression.left, idName) &&
+    isReturnOnly(guard.thenStatement) &&
+    hasPersistenceAfterGuard(handler)
+  );
 };
 
 const jsxAttributeExpression = (
@@ -651,134 +764,192 @@ const isJsxComponent = (
   (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) &&
   jsxTagName(ts.isJsxElement(node) ? node.openingElement.tagName : node.tagName) === name;
 
-const containsRemoveItemCall = (node: ts.Node): boolean =>
-  [node, ...descendants(node)].some(
-    (candidate) =>
-      ts.isCallExpression(candidate) &&
-      isIdentifierNamed(candidate.expression, "removeItem") &&
-      candidate.arguments.length === 1 &&
-      isIdentifierNamed(candidate.arguments[0], "pendingRemovalId")
-  );
-
-const hasEmptyStringSafeRemovalConfirmation = (source: ts.SourceFile): boolean =>
-  descendants(source).some((node) => {
-    if (!isJsxComponent(node, "ConfirmDialog")) {
-      return false;
-    }
-    const open = jsxAttributeExpression(node, "open");
-    const onConfirm = jsxAttributeExpression(node, "onConfirm");
-    if (!open || !isPendingRemovalNonNullCheck(open) || !onConfirm) {
-      return false;
-    }
-    const handler = callbackBodyNode(onConfirm);
-    return (
-      handler !== undefined &&
-      [handler, ...descendants(handler)].some(
-        (candidate) =>
-          ts.isIfStatement(candidate) &&
-          isPendingRemovalNonNullCheck(candidate.expression) &&
-          containsRemoveItemCall(candidate.thenStatement)
-      )
-    );
-  });
-
-const containsSourceText = (node: ts.Node, text: string): boolean =>
-  node.getText().includes(text);
+const isPendingRemovalNonNullCheck = (expression: ts.Expression): boolean =>
+  ts.isBinaryExpression(expression) &&
+  expression.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+  isIdentifierNamed(expression.left, "pendingRemovalId") &&
+  isNullLiteral(expression.right);
 
 const isRemovalTriggerRefClear = (statement: ts.Statement): boolean =>
   ts.isExpressionStatement(statement) &&
   ts.isBinaryExpression(statement.expression) &&
   statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-  ts.isPropertyAccessExpression(statement.expression.left) &&
-  isIdentifierNamed(statement.expression.left.expression, "removalTriggerRef") &&
-  statement.expression.left.name.text === "current" &&
+  isPropertyAccess(statement.expression.left, "removalTriggerRef", "current") &&
   isNullLiteral(statement.expression.right);
 
-// 删除对话框关闭后恢复焦点，避免键盘用户失去操作位置。
-const hasDeletionFocusRestore = (source: ts.SourceFile): boolean => {
-  const refOwners = bindingOwners(source, "removalTriggerRef");
-  const hasRef =
-    refOwners.length === 1 &&
-    ts.isVariableDeclaration(refOwners[0]) &&
-    refOwners[0].initializer !== undefined &&
-    ts.isCallExpression(refOwners[0].initializer) &&
-    isIdentifierNamed(refOwners[0].initializer.expression, "useRef");
-  const restore = functionBinding(source, "restoreRemovalFocus");
-  const hasRestoreLogic =
-    restore !== undefined &&
-    containsNamedCall(restore, "requestAnimationFrame") &&
-    containsSourceText(restore, "isConnected") &&
-    containsSourceText(restore, "schedule-add-item") &&
-    containsSourceText(restore, ".focus");
-  const hasTriggerCapture = descendants(source).some((node) => {
+const isSetPendingRemovalNull = (statement: ts.Statement): boolean =>
+  ts.isExpressionStatement(statement) &&
+  isDirectCall(statement.expression, "setPendingRemovalId", 1) &&
+  isNullLiteral(statement.expression.arguments[0]);
+
+const isRestoreRemovalFocus = (statement: ts.Statement): boolean =>
+  isExpressionCall(statement, "restoreRemovalFocus", 0);
+
+const isExactRemoveCall = (statement: ts.Statement): boolean =>
+  ts.isExpressionStatement(statement) &&
+  isDirectCall(statement.expression, "removeItem", 1) &&
+  isIdentifierNamed(statement.expression.arguments[0], "pendingRemovalId");
+
+const isExactConfirmGuard = (statement: ts.Statement): boolean =>
+  ts.isIfStatement(statement) &&
+  isPendingRemovalNonNullCheck(statement.expression) &&
+  ts.isBlock(statement.thenStatement) &&
+  statement.thenStatement.statements.length === 1 &&
+  isExactRemoveCall(statement.thenStatement.statements[0]);
+
+const isExactCancelHandler = (expression: ts.Expression): boolean =>
+  ts.isArrowFunction(expression) &&
+  ts.isBlock(expression.body) &&
+  expression.body.statements.length === 2 &&
+  isSetPendingRemovalNull(expression.body.statements[0]) &&
+  isRestoreRemovalFocus(expression.body.statements[1]);
+
+const isExactConfirmHandler = (expression: ts.Expression): boolean =>
+  ts.isArrowFunction(expression) &&
+  ts.isBlock(expression.body) &&
+  expression.body.statements.length === 4 &&
+  isExactConfirmGuard(expression.body.statements[0]) &&
+  isRemovalTriggerRefClear(expression.body.statements[1]) &&
+  isSetPendingRemovalNull(expression.body.statements[2]) &&
+  isRestoreRemovalFocus(expression.body.statements[3]);
+
+const isTriggerBinding = (statement: ts.Statement): boolean =>
+  ts.isVariableStatement(statement) &&
+  statement.declarationList.declarations.length === 1 &&
+  isIdentifierNamed(statement.declarationList.declarations[0].name, "trigger") &&
+  statement.declarationList.declarations[0].initializer !== undefined &&
+  isPropertyAccess(
+    statement.declarationList.declarations[0].initializer,
+    "removalTriggerRef",
+    "current"
+  );
+
+const isTriggerFocus = (statement: ts.Statement): boolean =>
+  ts.isExpressionStatement(statement) &&
+  ts.isCallExpression(statement.expression) &&
+  statement.expression.arguments.length === 0 &&
+  isPropertyAccess(statement.expression.expression, "trigger", "focus");
+
+const isTriggerConnectionGuard = (statement: ts.Statement): boolean =>
+  ts.isIfStatement(statement) &&
+  isPropertyAccess(statement.expression, "trigger", "isConnected") &&
+  ts.isBlock(statement.thenStatement) &&
+  statement.thenStatement.statements.length === 2 &&
+  isTriggerFocus(statement.thenStatement.statements[0]) &&
+  isBareReturn(statement.thenStatement.statements[1]) &&
+  statement.elseStatement === undefined;
+
+const isAddItemFallbackFocus = (statement: ts.Statement): boolean => {
+  if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+    return false;
+  }
+  const focus = statement.expression;
+  if (focus.arguments.length !== 0 || !ts.isPropertyAccessExpression(focus.expression) || focus.expression.name.text !== "focus") {
+    return false;
+  }
+  const query = focus.expression.expression;
+  return (
+    ts.isCallExpression(query) &&
+    ts.isPropertyAccessExpression(query.expression) &&
+    isIdentifierNamed(query.expression.expression, "document") &&
+    query.expression.name.text === "querySelector" &&
+    query.typeArguments?.length === 1 &&
+    ts.isTypeReferenceNode(query.typeArguments[0]) &&
+    isIdentifierNamed(query.typeArguments[0].typeName, "HTMLButtonElement") &&
+    query.arguments.length === 1 &&
+    stringLiteralValue(query.arguments[0]) === ".schedule-add-item"
+  );
+};
+
+const hasExactRestoreFunction = (source: ts.SourceFile): boolean => {
+  const restore = arrowBinding(source, "restoreRemovalFocus");
+  if (
+    !restore ||
+    !ts.isBlock(restore.body) ||
+    restore.body.statements.length !== 1 ||
+    !ts.isExpressionStatement(restore.body.statements[0]) ||
+    !isDirectCall(restore.body.statements[0].expression, "requestAnimationFrame", 1)
+  ) {
+    return false;
+  }
+  const callback = restore.body.statements[0].expression.arguments[0];
+  return (
+    ts.isArrowFunction(callback) &&
+    callback.parameters.length === 0 &&
+    ts.isBlock(callback.body) &&
+    callback.body.statements.length === 3 &&
+    isTriggerBinding(callback.body.statements[0]) &&
+    isTriggerConnectionGuard(callback.body.statements[1]) &&
+    isAddItemFallbackFocus(callback.body.statements[2])
+  );
+};
+
+const hasExactTriggerCapture = (source: ts.SourceFile): boolean =>
+  descendants(source).some((node) => {
     if (!isJsxComponent(node, "IconButton")) {
       return false;
     }
     const onClick = jsxAttributeExpression(node, "onClick");
-    if (!onClick || !ts.isArrowFunction(onClick) || !ts.isBlock(onClick.body)) {
+    if (
+      !onClick ||
+      !ts.isArrowFunction(onClick) ||
+      onClick.parameters.length !== 1 ||
+      !ts.isBlock(onClick.body) ||
+      onClick.body.statements.length !== 2
+    ) {
       return false;
     }
-    const statements = onClick.body.statements;
-    const captureIndex = statements.findIndex((statement) =>
-      containsSourceText(statement, "removalTriggerRef.current") &&
-      containsSourceText(statement, "currentTarget")
+    const eventName = requiredIdentifierParameter(onClick, 0);
+    const capture = onClick.body.statements[0];
+    return (
+      eventName !== undefined &&
+      ts.isExpressionStatement(capture) &&
+      ts.isBinaryExpression(capture.expression) &&
+      capture.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      isPropertyAccess(capture.expression.left, "removalTriggerRef", "current") &&
+      isPropertyAccess(capture.expression.right, eventName, "currentTarget") &&
+      ts.isExpressionStatement(onClick.body.statements[1]) &&
+      isDirectCall(onClick.body.statements[1].expression, "setPendingRemovalId", 1)
     );
-    const openIndex = statements.findIndex((statement) =>
-      containsNamedCall(statement, "setPendingRemovalId")
-    );
-    return captureIndex >= 0 && openIndex > captureIndex;
   });
-  const restoredByDialog = descendants(source).some((node) => {
+
+const hasExactFocusDialogContract = (source: ts.SourceFile): boolean =>
+  descendants(source).some((node) => {
     if (!isJsxComponent(node, "ConfirmDialog")) {
       return false;
     }
+    const open = jsxAttributeExpression(node, "open");
     const onCancel = jsxAttributeExpression(node, "onCancel");
     const onConfirm = jsxAttributeExpression(node, "onConfirm");
     return (
+      open !== undefined &&
       onCancel !== undefined &&
       onConfirm !== undefined &&
-      referencesNamedFunction(onCancel, "restoreRemovalFocus") &&
-      referencesNamedFunction(onConfirm, "restoreRemovalFocus")
+      isPendingRemovalNonNullCheck(open) &&
+      isExactCancelHandler(onCancel) &&
+      isExactConfirmHandler(onConfirm)
     );
   });
-  const clearsRefBeforeConfirmRestore = descendants(source).some((node) => {
-    if (!isJsxComponent(node, "ConfirmDialog")) {
-      return false;
-    }
-    const onConfirm = jsxAttributeExpression(node, "onConfirm");
-    if (!onConfirm || !ts.isArrowFunction(onConfirm) || !ts.isBlock(onConfirm.body)) {
-      return false;
-    }
-    const clearIndex = onConfirm.body.statements.findIndex(isRemovalTriggerRefClear);
-    const restoreIndex = onConfirm.body.statements.findIndex((statement) =>
-      containsNamedCall(statement, "restoreRemovalFocus")
-    );
-    return clearIndex >= 0 && restoreIndex > clearIndex;
-  });
-  return (
-    hasRef &&
-    hasRestoreLogic &&
-    hasTriggerCapture &&
-    restoredByDialog &&
-    clearsRefBeforeConfirmRestore
-  );
-};
 
 const scheduleBehaviorContractFailures = (source: ts.SourceFile): string[] => {
   const failures: string[] = [];
   if (!hasPersistLocalItemsContract(source)) {
-    failures.push("persistLocalItems 未先过滤 local 条目或 payload 字段发生漂移");
+    failures.push("persistLocalItems 未精确过滤 local 条目并生成五字段 payload");
   }
-  for (const name of ["updateItem", "toggleActive", "removeItem"]) {
-    if (!hasLocalGuardBeforePersistence(source, name)) {
-      failures.push(`${name} 缺少写入前的 local 守卫`);
-    }
+  if (!hasIndexedLocalGuard(source, "toggleActive")) {
+    failures.push("toggleActive 缺少基于 index 参数的 local 守卫");
   }
-  if (!hasEmptyStringSafeRemovalConfirmation(source)) {
-    failures.push("pendingRemovalId 未使用 !== null 保留空字符串 ID");
+  if (!hasIndexedLocalGuard(source, "updateItem")) {
+    failures.push("updateItem 缺少基于 index 参数的 local 守卫");
   }
-  if (!hasDeletionFocusRestore(source)) {
-    failures.push("删除确认未保存并恢复键盘焦点");
+  if (!hasRemoveLocalGuard(source)) {
+    failures.push("removeItem 缺少基于 id 参数的 local 守卫");
+  }
+  if (!hasExactFocusDialogContract(source)) {
+    failures.push("删除确认未按顺序清理 pending 与触发器引用");
+  }
+  if (!hasExactRestoreFunction(source) || !hasExactTriggerCapture(source)) {
+    failures.push("删除焦点恢复未绑定到真实 DOM 数据流");
   }
   return failures;
 };
@@ -825,10 +996,20 @@ declare const nodecg: { sendMessage: (...args: unknown[]) => void };
 ${body}
 `;
 
-const scheduleFixture = (body: string): string => `
+type ScheduleFixtureOverrides = {
+  filterExpression?: string;
+  mapPayload?: string;
+  toggleGuardExpression?: string;
+  removeGuardExpression?: string;
+  confirmStatements?: string;
+  restoreDefinition?: string;
+};
+
+const scheduleFixture = (overrides: ScheduleFixtureOverrides = {}): string => `
 declare const nodecg: { sendMessage: (...args: unknown[]) => void };
 type Item = { id: string; sourceId: string; time: string; title: string; description: string; active: boolean };
 declare const schedule: Item[];
+declare const fixed: Item;
 declare const pendingRemovalId: string | null;
 declare const setPendingRemovalId: (id: string | null) => void;
 declare const requestAnimationFrame: (callback: () => void) => number;
@@ -837,10 +1018,10 @@ declare const useRef: <T>(value: T) => { current: T };
 declare const IconButton: unknown;
 declare const ConfirmDialog: unknown;
 const persistLocalItems = (items: Item[]) => {
-  nodecg.sendMessage("replaceSchedule", items.filter((item) => item.sourceId === "local").map(({ id, time, title, description, active }) => ({ id, time, title, description, active })));
+  nodecg.sendMessage("replaceSchedule", items.filter((item) => ${overrides.filterExpression ?? 'item.sourceId === "local"'}).map(({ id, time, title, description, active }) => (${overrides.mapPayload ?? "{ id, time, title, description, active }"})));
 };
 const toggleActive = (index: number) => {
-  if (schedule[index]?.sourceId !== "local") return;
+  if (${overrides.toggleGuardExpression ?? 'schedule[index]?.sourceId !== "local"'}) return;
   persistLocalItems(schedule);
 };
 const updateItem = (index: number) => {
@@ -848,10 +1029,10 @@ const updateItem = (index: number) => {
   persistLocalItems(schedule);
 };
 const removeItem = (id: string) => {
-  if (schedule.find((item) => item.id === id)?.sourceId !== "local") return;
+  if (${overrides.removeGuardExpression ?? 'schedule.find((item) => item.id === id)?.sourceId !== "local"'}) return;
   persistLocalItems(schedule);
 };
-const restoreRemovalFocus = () => {
+${overrides.restoreDefinition ?? `const restoreRemovalFocus = () => {
   requestAnimationFrame(() => {
     const trigger = removalTriggerRef.current;
     if (trigger?.isConnected) {
@@ -860,10 +1041,9 @@ const restoreRemovalFocus = () => {
     }
     document.querySelector<HTMLButtonElement>(".schedule-add-item")?.focus();
   });
-};
+};`}
 const removalTriggerRef = useRef<HTMLButtonElement | null>(null);
-const controls = <><IconButton onClick={(event) => { removalTriggerRef.current = event.currentTarget; setPendingRemovalId("item"); }} /><ConfirmDialog open={pendingRemovalId !== null} onCancel={restoreRemovalFocus} onConfirm={() => { if (pendingRemovalId !== null) { removeItem(pendingRemovalId); } removalTriggerRef.current = null; restoreRemovalFocus(); }} /></>;
-${body}
+const controls = <><IconButton onClick={(event) => { removalTriggerRef.current = event.currentTarget; setPendingRemovalId("item"); }} /><ConfirmDialog open={pendingRemovalId !== null} onCancel={() => { setPendingRemovalId(null); restoreRemovalFocus(); }} onConfirm={() => { ${overrides.confirmStatements ?? "if (pendingRemovalId !== null) { removeItem(pendingRemovalId); } removalTriggerRef.current = null; setPendingRemovalId(null); restoreRemovalFocus();"} }} /></>;
 `;
 
 // 三个 Operations 入口必须绑定本地 UI、真实错误边界、createRoot 和唯一渲染结构。
@@ -1031,43 +1211,61 @@ test("Operations 合同夹具拒绝伪造绑定", () => {
 
   const validSchedule = compileFixture(
     "operations-valid-schedule-fixture.tsx",
-    scheduleFixture("")
+    scheduleFixture()
   );
   ok(scheduleBehaviorContractFailures(validSchedule).length === 0);
 
-  const driftedSchedulePayload = compileFixture(
-    "operations-drifted-schedule-payload-fixture.tsx",
-    scheduleFixture("").replace(
-      "=> ({ id, time, title, description, active }))",
-      "=> ({ id, time, title, description, active, sourceId: \"local\" }))"
-    )
+  const fixedSourceFilter = compileFixture(
+    "operations-fixed-source-filter-fixture.tsx",
+    scheduleFixture({ filterExpression: 'fixed.sourceId === "local"' })
   );
-  ok(scheduleBehaviorContractFailures(driftedSchedulePayload).length > 0);
+  ok(scheduleBehaviorContractFailures(fixedSourceFilter).some((failure) =>
+    failure.includes("persistLocalItems")
+  ));
 
-  const unguardedScheduleUpdate = compileFixture(
-    "operations-unguarded-schedule-update-fixture.tsx",
-    scheduleFixture("").replace(
-      '  if (schedule[index]?.sourceId !== "local") return;\n  persistLocalItems(schedule);',
-      "  persistLocalItems(schedule);"
-    )
+  const constantActivePayload = compileFixture(
+    "operations-constant-active-payload-fixture.tsx",
+    scheduleFixture({ mapPayload: "{ id, time, title, description, active: true }" })
   );
-  ok(scheduleBehaviorContractFailures(unguardedScheduleUpdate).length > 0);
+  ok(scheduleBehaviorContractFailures(constantActivePayload).some((failure) =>
+    failure.includes("persistLocalItems")
+  ));
 
-  const truthyScheduleRemovalId = compileFixture(
-    "operations-truthy-schedule-removal-id-fixture.tsx",
-    scheduleFixture("").replace(
-      "if (pendingRemovalId !== null) { removeItem(pendingRemovalId); }",
-      "if (pendingRemovalId) { removeItem(pendingRemovalId); }"
-    )
+  const fixedIndexGuard = compileFixture(
+    "operations-fixed-index-guard-fixture.tsx",
+    scheduleFixture({ toggleGuardExpression: 'schedule[0]?.sourceId !== "local"' })
   );
-  ok(scheduleBehaviorContractFailures(truthyScheduleRemovalId).length > 0);
+  ok(scheduleBehaviorContractFailures(fixedIndexGuard).some((failure) =>
+    failure.includes("toggleActive")
+  ));
 
-  const unclearedConfirmTrigger = compileFixture(
-    "operations-uncleared-schedule-trigger-fixture.tsx",
-    scheduleFixture("").replace(
-      "removalTriggerRef.current = null; restoreRemovalFocus();",
-      "restoreRemovalFocus();"
-    )
+  const wrongRemoveId = compileFixture(
+    "operations-wrong-remove-id-fixture.tsx",
+    scheduleFixture({
+      removeGuardExpression: 'schedule.find((item) => item.id === "fixed")?.sourceId !== "local"',
+    })
   );
-  ok(scheduleBehaviorContractFailures(unclearedConfirmTrigger).length > 0);
+  ok(scheduleBehaviorContractFailures(wrongRemoveId).some((failure) =>
+    failure.includes("removeItem")
+  ));
+
+  const missingPendingClear = compileFixture(
+    "operations-missing-pending-clear-fixture.tsx",
+    scheduleFixture({
+      confirmStatements: "if (pendingRemovalId !== null) { removeItem(pendingRemovalId); } removalTriggerRef.current = null; restoreRemovalFocus();",
+    })
+  );
+  ok(scheduleBehaviorContractFailures(missingPendingClear).some((failure) =>
+    failure.includes("删除确认")
+  ));
+
+  const textOnlyFocus = compileFixture(
+    "operations-text-only-focus-fixture.tsx",
+    scheduleFixture({
+      restoreDefinition: 'const restoreRemovalFocus = () => { const note = "requestAnimationFrame trigger.isConnected trigger.focus .schedule-add-item"; };',
+    })
+  );
+  ok(scheduleBehaviorContractFailures(textOnlyFocus).some((failure) =>
+    failure.includes("焦点恢复")
+  ));
 });
