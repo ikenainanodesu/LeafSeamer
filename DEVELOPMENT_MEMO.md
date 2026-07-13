@@ -596,3 +596,58 @@ decisions, or release-readiness status changes.
 ### 已解决 Bug 以及解决方法
 
 - 解决旧 CI 未进行真正隔离构建的问题：改为每个 Bundle 使用已提交的本地 `src/_leaf-core/` 快照，并在 CI matrix 的临时目录执行真实构建验证。
+
+## 2026-07-13 设备 Dashboard UI 统一与阶段验收
+
+### 需求变化
+
+- 非 Graphics Dashboard 统一采用 Dense Hardware Console，并统一使用英文可见 UI 文案。
+- ATEM、Mixer 与 OBS 的 Dashboard 必须使用各自 bundle 内的版本化 `_leaf-ui` 本地快照，不能以运行时共享 UI 源码替代。
+
+### 代码变动
+
+- ATEM Connection 与 Control 接入本地 UI 快照、`PanelHeader`、分层控件、确认删除、Toast 和入口错误边界；删除当前选中交换机后同步回退选中 IP。
+- Mixer Connection 与 Panel 接入本地 UI 快照、`PanelHeader`、分层控制、内部滚动布局和入口错误边界。
+- OBS Connection 与 Live Control 接入本地 UI 快照、`PanelHeader`、确认删除、Promise 回执驱动的 Toast、内部滚动布局和入口错误边界。
+
+### 功能增减
+
+- 仅新增 UI 层的确认流程、临时 Toast 反馈和入口错误边界；未新增录制命令协议。
+- 未变更既有命令名称、payload、Replicant 或 Secret schema；OBS 录制仍只显示已有状态。
+
+### 功能实现路径
+
+- 每个入口以 `PanelHeader` 显示身份、目标和状态，并按高频操作、次级工具与高级设置组织 Tiered Controls。
+- 矩阵、通道与长内容使用组件内部滚动区域，避免页面级横向溢出；样式从内联声明迁移至 bundle 专属样式表与 UI 令牌。
+- 有 Promise 回执的认证命令在失败时使用 Toast；本阶段未为 fire-and-forget 消息或未实现回执的命令伪造成功或 pending 状态。
+- 设备入口继续绑定原有命令、Replicant 与认证调用路径；入口合同测试精确验证真实入口组件、渲染 API 和关键命令绑定。
+
+### 已知 Bug
+
+- 尚未在真实 ATEM、Mixer 或 OBS 硬件上完成端到端命令验收。
+- 浏览器视觉截图验收留待后续 O5 阶段完成。
+- OBS 录制目前仅显示既有状态，尚无开始或停止录制的命令协议；这不是本轮 UI 改造引入的回归。
+
+### 预期解决方法
+
+- 在具备真实设备、目标地址和可回滚测试窗口后，分别执行 ATEM、Mixer 与 OBS 的端到端命令验收。
+- 在 O5 阶段按设计规范补充浏览器视觉截图，并检查 320、480 和 768px 宽度。
+- 在独立协议任务中定义、实现并验收 OBS 录制命令后，再绑定常驻录制控制。
+
+### 已解决 Bug 以及解决方法
+
+- 解决 ATEM 删除当前选择后仍保留失效 IP 的问题：删除或清空交换机列表时，选中 IP 回退至首个可用项或空字符串。
+- 解决 OBS 使用 `window.alert` 提示命令失败的问题：改用非阻塞 Toast 展示错误结果。
+- 解决设备入口缺少错误边界的问题：ATEM、Mixer 与 OBS 的各 Dashboard 入口均以 `PanelErrorBoundary` 包裹根组件。
+- 解决布局溢出和大量内联样式的问题：使用稳定的 Grid、内部滚动与 bundle 专属 CSS，移除对应入口的内联样式。
+
+### 阶段验证
+
+- `npm.cmd run core:check`：通过。
+- `npm.cmd run ui:check`：通过。
+- `npm.cmd test`：通过，76 项测试、0 项失败；Node 24 输出既有 `node:sqlite` experimental warning。
+- `npm.cmd run typecheck`：通过。
+- `npm.cmd run build --workspace atem-control`：通过；仅输出既有 Vite `build.outDir` 与 root 父子目录关系警告。
+- `npm.cmd run build --workspace mixer-control`：通过；仅输出既有 Vite `build.outDir` 与 root 父子目录关系警告。
+- `npm.cmd run build --workspace obs-control`：通过；仅输出既有 Vite `build.outDir` 与 root 父子目录关系警告。
+- `git diff --check`：通过。
