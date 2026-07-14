@@ -49,7 +49,7 @@ npm run test:server
 npm run test:ui
 ```
 
-`npm run test:ui` accepts 36 Windows Chromium visual baselines and 14 behavior/infrastructure regressions (four core operation workflows, two server boundary/continued-availability checks, and eight device/focus workflows), for 50 Playwright tests total at 320, 480, and 768px. Use `npm run test:ui:update` only to deliberately refresh reviewed baselines.
+`npm run test:ui` accepts 36 Windows Chromium visual baselines and 16 behavior/infrastructure regressions (four core operation workflows, two server boundary/continued-availability checks, and ten device/focus workflows), for 52 Playwright tests total at 320, 480, and 768px. Use `npm run test:ui:update` only to deliberately refresh reviewed baselines.
 
 `npm run test:server` runs six Node lifecycle and path-boundary regressions for the Dashboard acceptance server. Windows CI runs this suite independently from Playwright.
 

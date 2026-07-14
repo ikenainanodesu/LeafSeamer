@@ -932,3 +932,51 @@ decisions, or release-readiness status changes.
 ### 已解决 Bug 以及解决方法
 
 - 解决现行文档仍写作 36 个视觉基线加 4 个交互流程、与实际 50 项测试不一致的问题：按视觉、核心业务、测试服务器访问边界/空闲持续可用性和设备/焦点四类同步说明。
+
+## 2026-07-14 UI 终审闭环修复
+
+### 需求变化
+
+- OBS 多连接必须独立工作：一台设备的命令在途状态不得禁用或误标记其他 OBS 连接。
+- Dashboard 验收服务器的 6 个生命周期与路径边界回归必须拥有稳定命令，并由 CI 强制执行。
+
+### 代码变动
+
+- OBS Connection 将命令锁与 pending action 改为按连接 ID 保存；新增删除按钮 ref map、相邻项焦点计划、Add Connection 回退和 rAF 清理。
+- Playwright 新增 OBS 多连接 pending 隔离与删除焦点恢复两项回归；设备 AST 合同同步验证按 ID 的 Set 锁、焦点 refs 和 mounted 状态保护。
+- 新增 `npm run test:server`，Windows CI 显式执行 6 项服务器生命周期/路径边界测试；合同测试锁定该入口与工作流步骤。
+- README、三语用户手册与 UI 规范更新为 36 个视觉基线加 16 个行为/基础设施回归，共 52 个 Playwright 测试。
+
+### 功能增减
+
+- OBS 多连接现在可以并行执行各自的保存/连接/断开/删除命令；同一连接的冲突命令仍保持互斥。
+- 未修改生产消息名、payload、Replicant schema、认证命令语义或 `graphics-package`。
+
+### 功能实现路径
+
+- `connectionCommandLockRef` 使用连接 ID 的 `Set` 提供同步 guard；React pending map 只负责对应卡片的禁用、busy 与文案状态。
+- 删除成功后根据删除前索引优先选择后一个可删除连接，其次选择前一个可删除连接，否则回退 Add Connection；等待 DOM 更新后再聚焦。
+- `test:server` 直接调用 Node test runner，CI 与 Playwright 分开执行，避免 `testDir` 边界遗漏安全回归。
+
+### 已知 Bug
+
+- 真实 NodeCG 登录会话与多台 OBS 设备仍未接入自动化，当前命令链由浏览器 stub 验证。
+- 本轮尝试重新执行独立 bundle 的联网安装时遇到平台额度限制，本机离线缓存又缺少 `@types/node`；当前代码仍通过 17-bundle 构建、独立导入合同，且较早阶段的 8 个临时复制安装/构建曾通过。
+
+### 预期解决方法
+
+- 在具备两台可回滚 OBS 与真实登录会话的设备窗口补做并行连接、失败恢复和删除焦点验收。
+- 在 CI 或联网额度恢复后重跑 17-bundle standalone matrix，保留当前 CI matrix 作为每次推送的强制验证。
+
+### 已解决 Bug 以及解决方法
+
+- 解决一台 OBS 命令在途时全部连接卡片一起禁用：全局布尔锁改为按连接 ID 的同步 Set 锁和 pending map。
+- 解决 OBS 删除成功后焦点落到 `BODY`：在 DOM 更新后聚焦相邻 Remove，无相邻可删除项时聚焦 Add Connection。
+- 解决服务器安全测试只能手动运行：新增脚本、CI 步骤与可执行合同测试。
+- 解决 UI 规范声称服务器 HTTP 测试也检查 Dashboard 运行时错误：区分 14 个挂载页面流程和 2 个服务器 HTTP 流程。
+
+### 阶段验证
+
+- CI 修复提交：`6aec833`（`test: enforce dashboard server lifecycle in CI`）；RED 为 84 项中新增合同唯一失败，GREEN 为 84/84，`test:server` 6/6。
+- OBS 修复提交：`0ae11a5`（`fix: isolate OBS connection commands`）；两项 Playwright RED 分别命中跨连接 pending 与删除焦点，GREEN 为定向 2/2、OBS 视觉/回归 6/6、全量 Playwright 52/52。
+- 17 个仓库内 bundle 构建、typecheck、`ui:check` 与 `git diff --check` 通过；未更新视觉快照。

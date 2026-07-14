@@ -49,7 +49,7 @@ npm run test:server
 npm run test:ui
 ```
 
-`npm run test:ui` は 320、480、768px で 36 枚の Windows Chromium ビジュアルベースラインと 14 本の動作/基盤リグレッション（4 本の主要業務フロー、2 本のテストサーバーアクセス境界/アイドル後の継続可用性確認、8 本のデバイスコマンド/フォーカスフロー）、合計 50 本の Playwright テストを実行します。レビュー済みの意図的な視覚変更でベースラインを更新する場合にのみ、`npm run test:ui:update` を使用します。
+`npm run test:ui` は 320、480、768px で 36 枚の Windows Chromium ビジュアルベースラインと 16 本の動作/基盤リグレッション（4 本の主要業務フロー、2 本のテストサーバーアクセス境界/アイドル後の継続可用性確認、10 本のデバイスコマンド/フォーカスフロー）、合計 52 本の Playwright テストを実行します。レビュー済みの意図的な視覚変更でベースラインを更新する場合にのみ、`npm run test:ui:update` を使用します。
 
 `npm run test:server` は Dashboard 検証サーバーのライフサイクルとパス境界に関する 6 本の Node リグレッションを実行します。Windows CI では Playwright と分離してこのテストセットを実行します。
 

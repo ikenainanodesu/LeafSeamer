@@ -49,7 +49,7 @@ npm run test:server
 npm run test:ui
 ```
 
-`npm run test:ui` 在 320、480、768px 下验收 36 张 Windows Chromium 视觉基线，以及 14 个行为/基础设施回归（4 个核心业务流程、2 个测试服务器访问边界/空闲持续可用性检查、8 个设备命令与焦点流程），合计 50 个 Playwright 测试。只有经过评审的有意视觉变更需要刷新基线时，才使用 `npm run test:ui:update`。
+`npm run test:ui` 在 320、480、768px 下验收 36 张 Windows Chromium 视觉基线，以及 16 个行为/基础设施回归（4 个核心业务流程、2 个测试服务器访问边界/空闲持续可用性检查、10 个设备命令与焦点流程），合计 52 个 Playwright 测试。只有经过评审的有意视觉变更需要刷新基线时，才使用 `npm run test:ui:update`。
 
 `npm run test:server` 执行 6 个 Dashboard 验收服务器生命周期与路径边界 Node 回归；Windows CI 会在 Playwright 之外独立执行该测试集。
 
