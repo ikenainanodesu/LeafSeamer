@@ -432,6 +432,65 @@ test("OBS Connection Connect 同 tick 双击只执行一条 Save 到 Connect 链
   expectNoRuntimeFailures(failures);
 });
 
+test("OBS Connection 按连接隔离在途命令", async ({ page }) => {
+  const event = authenticatedEvent("obs-control");
+  const backupConnection = {
+    ...obsConnection,
+    host: "127.0.0.2",
+    id: "obs-2",
+    name: "Backup OBS",
+    passwordConfigured: false,
+  };
+  const failures = await setupDashboard(
+    page,
+    {
+      obsConnections: [obsConnection, backupConnection],
+      obsStates: {
+        "obs-1": { ...obsState, status: "disconnected" },
+        "obs-2": { ...obsState, status: "disconnected" },
+      },
+    },
+    { pendingSocketEvents: [event] },
+  );
+  await page.goto("/bundles/obs-control/dashboard/obs-connection.html");
+  const studioConnect = page.locator(".obs-conn-card").filter({ hasText: "Studio OBS" }).locator(".obs-conn-actions button").last();
+  const backupConnect = page.locator(".obs-conn-card").filter({ hasText: "Backup OBS" }).locator(".obs-conn-actions button").last();
+
+  await studioConnect.click();
+  await expect(studioConnect).toHaveText("Connecting...");
+  await expect(backupConnect).toBeEnabled();
+  await expect(backupConnect).toHaveText("Connect");
+  await backupConnect.click();
+
+  const studioSave = expectedSocketCall("obs-control", "obs.saveConnection", {
+    ...obsConnection,
+    clearPassword: false,
+    password: "",
+  });
+  const backupSave = expectedSocketCall("obs-control", "obs.saveConnection", {
+    ...backupConnection,
+    clearPassword: false,
+    password: "",
+  });
+  expect(await socketCalls(page)).toEqual([studioSave, backupSave]);
+
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect.poll(() => socketCalls(page)).toHaveLength(3);
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect.poll(() => socketCalls(page)).toHaveLength(4);
+  expect(await socketCalls(page)).toEqual([
+    studioSave,
+    backupSave,
+    expectedSocketCall("obs-control", "obs.connect", { id: "obs-1" }),
+    expectedSocketCall("obs-control", "obs.connect", { id: "obs-2" }),
+  ]);
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect(studioConnect).toBeEnabled();
+  await expect(backupConnect).toBeEnabled();
+  expectNoRuntimeFailures(failures);
+});
+
 test("OBS Scene Switch 键盘只切换 PGM，不触发展开", async ({ page }) => {
   const failures = await setupDashboard(page, pages.find((item) => item.name === "obs-control")!.seed, { messageResults: { getSceneItems: [] } });
   await page.goto("/bundles/obs-control/dashboard/obs-control-panel.html");
@@ -483,6 +542,46 @@ test("VB Network 删除后焦点移动到相邻 Remove", async ({ page }) => {
   await page.getByRole("dialog", { name: "Remove Connection" }).getByRole("button", { name: "Remove Connection" }).click();
   await expect(page.getByRole("button", { name: `Remove connection ${second.name}` })).toBeFocused();
   expect(await page.evaluate(() => (window as any).nodecg.Replicant("networkConfigs").value)).toEqual([second]);
+  expectNoRuntimeFailures(failures);
+});
+
+test("OBS Connection 删除后按相邻项与新增按钮恢复焦点", async ({ page }) => {
+  const event = authenticatedEvent("obs-control");
+  const backupConnection = { ...obsConnection, id: "obs-2", name: "Backup OBS" };
+  const remoteConnection = { ...obsConnection, id: "obs-3", name: "Remote OBS" };
+  const failures = await setupDashboard(
+    page,
+    {
+      obsConnections: [obsConnection, backupConnection, remoteConnection],
+      obsStates: {
+        "obs-1": { ...obsState, status: "disconnected" },
+        "obs-2": { ...obsState, status: "disconnected" },
+        "obs-3": { ...obsState, status: "disconnected" },
+      },
+    },
+    { pendingSocketEvents: [event] },
+  );
+  await page.goto("/bundles/obs-control/dashboard/obs-connection.html");
+
+  const backupRemove = page.getByRole("button", { name: "Remove connection Backup OBS" });
+  await backupRemove.click();
+  const dialog = page.getByRole("dialog", { name: "Remove Connection" });
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(backupRemove).toBeFocused();
+
+  await backupRemove.click();
+  await dialog.getByRole("button", { name: "Remove Connection" }).click();
+  expect(await socketCalls(page)).toEqual([
+    expectedSocketCall("obs-control", "obs.removeConnection", { id: "obs-2" }),
+  ]);
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  const remoteRemove = page.getByRole("button", { name: "Remove connection Remote OBS" });
+  await expect(remoteRemove).toBeFocused();
+
+  await remoteRemove.click();
+  await dialog.getByRole("button", { name: "Remove Connection" }).click();
+  expect(await page.evaluate((current) => (window as any).__nodecgTest.resolveSocket(current), event)).toBe(true);
+  await expect(page.getByRole("button", { name: "Add Connection" })).toBeFocused();
   expectNoRuntimeFailures(failures);
 });
 

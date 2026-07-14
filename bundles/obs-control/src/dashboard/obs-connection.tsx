@@ -12,7 +12,6 @@ import {
   Button,
   ConfirmDialog,
   Disclosure,
-  IconButton,
   PanelErrorBoundary,
   PanelHeader,
   ToastRegion,
@@ -22,18 +21,25 @@ import "./_leaf-ui/index.css";
 import "./obs-connection.css";
 import { sendAuthenticatedCommand } from "../_leaf-core/security/authenticated-command-client";
 
+type ConnectionAction = "save" | "connect" | "disconnect" | "remove";
+
 const ObsConnection = () => {
   const [connections, setConnections] = useState<OBSConnectionDraft[]>([]);
   const [statuses, setStatuses] = useState<Record<string, OBSConnectionStatus>>(
     {},
   );
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
-  const [pendingConnectionAction, setPendingConnectionAction] = useState<
-    "save" | "connect" | "disconnect" | "remove" | null
-  >(null);
-  const connectionCommandLockRef = useRef(false);
+  const [pendingConnectionActions, setPendingConnectionActions] = useState<
+    Partial<Record<string, ConnectionAction>>
+  >({});
+  const connectionCommandLockRef = useRef(new Set<string>());
   const isMountedRef = useRef(true);
-  const isConnectionCommandPending = pendingConnectionAction !== null;
+  const addConnectionButtonRef = useRef<HTMLButtonElement>(null);
+  const removeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const focusAfterRemovalRef = useRef<{ neighborId: string | null } | null>(null);
+  const focusFrameRef = useRef<number | null>(null);
+  const pendingActions = Object.values(pendingConnectionActions);
+  const isConnectionCommandPending = pendingActions.length > 0;
   const { items: toasts, pushToast } = useToast();
   const showCommandError = (error: unknown) => {
     if (!isMountedRef.current) return;
@@ -44,6 +50,9 @@ const ObsConnection = () => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (focusFrameRef.current !== null) {
+        window.cancelAnimationFrame(focusFrameRef.current);
+      }
     };
   }, []);
 
@@ -93,6 +102,38 @@ const ObsConnection = () => {
     );
   }, []);
 
+  const setRemoveButtonRef = (id: string, node: HTMLButtonElement | null) => {
+    if (node) {
+      removeButtonRefs.current.set(id, node);
+    } else {
+      removeButtonRefs.current.delete(id);
+    }
+  };
+
+  useEffect(() => {
+    const focusTarget = focusAfterRemovalRef.current;
+    if (!focusTarget) return;
+    // 等待删除后的 DOM 稳定，再聚焦相邻删除按钮或新增按钮。
+    focusFrameRef.current = window.requestAnimationFrame(() => {
+      const neighbor = focusTarget.neighborId
+        ? removeButtonRefs.current.get(focusTarget.neighborId)
+        : undefined;
+      if (neighbor?.isConnected) {
+        neighbor.focus();
+      } else {
+        addConnectionButtonRef.current?.focus();
+      }
+      focusAfterRemovalRef.current = null;
+      focusFrameRef.current = null;
+    });
+    return () => {
+      if (focusFrameRef.current !== null) {
+        window.cancelAnimationFrame(focusFrameRef.current);
+        focusFrameRef.current = null;
+      }
+    };
+  }, [connections]);
+
   const updateSetting = (
     index: number,
     key: keyof OBSConnectionDraft,
@@ -106,17 +147,26 @@ const ObsConnection = () => {
   };
 
   const runConnectionCommand = (
-    action: "save" | "connect" | "disconnect" | "remove",
+    connectionId: string,
+    action: ConnectionAction,
     command: () => Promise<unknown>,
   ) => {
-    if (connectionCommandLockRef.current) return;
-    connectionCommandLockRef.current = true;
-    setPendingConnectionAction(action);
+    if (connectionCommandLockRef.current.has(connectionId)) return;
+    connectionCommandLockRef.current.add(connectionId);
+    if (isMountedRef.current) {
+      setPendingConnectionActions((current) => ({ ...current, [connectionId]: action }));
+    }
     void command()
       .catch(showCommandError)
       .finally(() => {
-        connectionCommandLockRef.current = false;
-        if (isMountedRef.current) setPendingConnectionAction(null);
+        connectionCommandLockRef.current.delete(connectionId);
+        if (isMountedRef.current) {
+          setPendingConnectionActions((current) => {
+            const next = { ...current };
+            delete next[connectionId];
+            return next;
+          });
+        }
       });
   };
 
@@ -138,16 +188,16 @@ const ObsConnection = () => {
   };
 
   const handleSave = (conn: OBSConnectionDraft) =>
-    runConnectionCommand("save", () => saveConnection(conn));
+    runConnectionCommand(conn.id, "save", () => saveConnection(conn));
 
   const handleConnect = (conn: OBSConnectionDraft) =>
-    runConnectionCommand("connect", async () => {
+    runConnectionCommand(conn.id, "connect", async () => {
       await saveConnection(conn);
       await sendAuthenticatedCommand("obs-control", "obs.connect", { id: conn.id });
     });
 
   const handleDisconnect = (id: string) =>
-    runConnectionCommand("disconnect", () =>
+    runConnectionCommand(id, "disconnect", () =>
       sendAuthenticatedCommand("obs-control", "obs.disconnect", { id })
     );
 
@@ -164,13 +214,17 @@ const ObsConnection = () => {
   };
 
   const removeConnection = (id: string) => {
-    const connToRemove = connections.find((connection) => connection.id === id);
+    const removalIndex = connections.findIndex((connection) => connection.id === id);
+    const connToRemove = connections[removalIndex];
     if (!connToRemove) return;
-    runConnectionCommand("remove", () =>
+    const neighborId = connections[removalIndex + 1]?.id
+      ?? (removalIndex > 1 ? connections[removalIndex - 1]?.id ?? null : null);
+    runConnectionCommand(connToRemove.id, "remove", () =>
       sendAuthenticatedCommand("obs-control", "obs.removeConnection", {
         id: connToRemove.id,
       }).then(() => {
         if (isMountedRef.current) {
+          focusAfterRemovalRef.current = { neighborId };
           setConnections((current) =>
             current.filter((item) => item.id !== connToRemove.id),
           );
@@ -192,10 +246,16 @@ const ObsConnection = () => {
         status={connectedCount > 0 ? `${connectedCount} Online` : "Offline"}
         statusTone={connectedCount > 0 ? "success" : "warning"}
         actions={
-          <Button tone="primary" onClick={addConnection}>
+          <button
+            ref={addConnectionButtonRef}
+            type="button"
+            className="leaf-button"
+            data-tone="primary"
+            onClick={addConnection}
+          >
             <Plus size={15} aria-hidden="true" />
             Add Connection
-          </Button>
+          </button>
         }
       />
 
@@ -205,6 +265,8 @@ const ObsConnection = () => {
             const status = statuses[conn.id] || "disconnected";
             const isConnected = status === "connected";
             const isConnecting = status === "connecting";
+            const pendingAction = pendingConnectionActions[conn.id];
+            const isThisConnectionPending = pendingAction !== undefined;
 
             return (
               <article key={conn.id} className="obs-conn-card">
@@ -221,14 +283,19 @@ const ObsConnection = () => {
                     </span>
                   </div>
                   {index > 0 ? (
-                    <IconButton
-                      tone="danger"
-                      label={`Remove connection ${conn.name || index + 1}`}
-                      icon={<Trash2 size={15} aria-hidden="true" />}
+                    <button
+                      ref={(node) => setRemoveButtonRef(conn.id, node)}
+                      type="button"
+                      className="leaf-button leaf-icon-button"
+                      data-tone="danger"
+                      aria-label={`Remove connection ${conn.name || index + 1}`}
+                      title={`Remove connection ${conn.name || index + 1}`}
                       onClick={() => setPendingRemovalId(conn.id)}
-                      disabled={isConnectionCommandPending}
-                      aria-busy={isConnectionCommandPending}
-                    />
+                      disabled={isThisConnectionPending}
+                      aria-busy={isThisConnectionPending}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
                   ) : null}
                 </div>
 
@@ -309,9 +376,9 @@ const ObsConnection = () => {
                 <div className="obs-conn-actions">
                   <Button
                     onClick={() => handleSave(conn)}
-                    disabled={isConnectionCommandPending}
-                    aria-busy={isConnectionCommandPending}
-                    pending={pendingConnectionAction === "save"}
+                    disabled={isThisConnectionPending}
+                    aria-busy={isThisConnectionPending}
+                    pending={pendingAction === "save"}
                     pendingLabel="Saving..."
                   >
                     Save
@@ -320,9 +387,9 @@ const ObsConnection = () => {
                     <Button
                       tone="primary"
                       onClick={() => handleConnect(conn)}
-                      disabled={isConnecting || isConnectionCommandPending}
-                      aria-busy={isConnectionCommandPending}
-                      pending={pendingConnectionAction === "connect"}
+                      disabled={isConnecting || isThisConnectionPending}
+                      aria-busy={isThisConnectionPending}
+                      pending={pendingAction === "connect"}
                       pendingLabel="Connecting..."
                     >
                       {isConnecting ? "Connecting..." : "Connect"}
@@ -331,9 +398,9 @@ const ObsConnection = () => {
                     <Button
                       tone="danger"
                       onClick={() => handleDisconnect(conn.id)}
-                      disabled={isConnectionCommandPending}
-                      aria-busy={isConnectionCommandPending}
-                      pending={pendingConnectionAction === "disconnect"}
+                      disabled={isThisConnectionPending}
+                      aria-busy={isThisConnectionPending}
+                      pending={pendingAction === "disconnect"}
                       pendingLabel="Disconnecting..."
                     >
                       Disconnect
@@ -349,7 +416,7 @@ const ObsConnection = () => {
         </div>
         {isConnectionCommandPending ? (
           <p className="obs-conn-pending" role="status" aria-live="polite">
-            {pendingConnectionAction === "remove" ? "Removing connection..." : "Command in progress..."}
+            {pendingActions.includes("remove") ? "Removing connection..." : "Command in progress..."}
           </p>
         ) : null}
       </main>

@@ -769,7 +769,9 @@ const handlerHasCallbackLockContract = (
 ): boolean => {
   const handler = constFunction(source, handlerName);
   if (!handler || !hasUseRefLock(source, lockName) || !hasMountedRef(source)) return false;
-  const lockPosition = assignmentPosition(source, handler.body, `${lockName}.current = true`);
+  const bodyText = handler.body.getText(source);
+  const guardPosition = bodyText.indexOf(`${lockName}.current.has(connectionId)`);
+  const lockPosition = bodyText.indexOf(`${lockName}.current.add(connectionId)`);
   const pendingPosition = descendants(handler.body)
     .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
     .find((node) => ts.isIdentifier(node.expression) && node.expression.text === pendingSetter)
@@ -777,10 +779,6 @@ const handlerHasCallbackLockContract = (
   const callbackPosition = descendants(handler.body)
     .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
     .find((node) => ts.isIdentifier(node.expression) && node.expression.text === "command")
-    ?.getStart(source);
-  const guardPosition = descendants(handler.body)
-    .filter((node): node is ts.IfStatement => ts.isIfStatement(node))
-    .find((node) => node.expression.getText(source).includes(`${lockName}.current`))
     ?.getStart(source);
   const finallyCall = descendants(handler.body).find(
     (node): node is ts.CallExpression =>
@@ -790,15 +788,22 @@ const handlerHasCallbackLockContract = (
       node.expression.expression.getText(source).includes("command()")
   );
   return (
-    lockPosition !== undefined &&
+    lockPosition >= 0 &&
     pendingPosition !== undefined &&
     callbackPosition !== undefined &&
-    guardPosition !== undefined &&
+    guardPosition >= 0 &&
     guardPosition < lockPosition &&
-    lockPosition < pendingPosition &&
+    handler.body.getStart(source) + lockPosition < pendingPosition &&
     pendingPosition < callbackPosition &&
     finallyCall !== undefined &&
-    assignmentPosition(source, finallyCall, `${lockName}.current = false`) !== undefined &&
+    descendants(finallyCall).some(
+      (node) =>
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === "delete" &&
+        node.expression.expression.getText(source) === `${lockName}.current` &&
+        node.arguments[0]?.getText(source) === "connectionId"
+    ) &&
     setterIsMountedGuarded(source, handlerName, pendingSetter)
   );
 };
@@ -816,10 +821,10 @@ test("终审命令合同拒绝诱饵锁和卸载后的状态更新", () => {
   ok(hasPendingButtonContract(obsPanel, "isStreamCommandPending"));
   ok(hasPendingButtonContract(patchStatus, "isPatchCommandPending"));
   ok(hasMountedRef(obsConnection));
-  ok(handlerHasCallbackLockContract(obsConnection, "runConnectionCommand", "connectionCommandLockRef", "setPendingConnectionAction"));
+  ok(handlerHasCallbackLockContract(obsConnection, "runConnectionCommand", "connectionCommandLockRef", "setPendingConnectionActions"));
   ok(setterIsMountedGuarded(obsConnection, "saveConnection", "setConnections"));
-  ok(setterIsMountedGuarded(obsConnection, "runConnectionCommand", "setPendingConnectionAction"));
-  ok(hasPendingButtonContract(obsConnection, "isConnectionCommandPending"));
+  ok(setterIsMountedGuarded(obsConnection, "runConnectionCommand", "setPendingConnectionActions"));
+  ok(hasPendingButtonContract(obsConnection, "isThisConnectionPending"));
 
   const decoy = parseText(
     "decoy.tsx",
@@ -862,6 +867,11 @@ test("Playlist 与 Network 焦点合同拒绝诱饵实现", () => {
   const networkText = network.getFullText();
   ok(hasUseRefLock(network, "removeButtonRefs") && hasUseRefLock(network, "focusFrameRef"));
   ok(networkText.includes("cancelAnimationFrame") && networkText.includes("removeButtonRefs.current.get") && !networkText.includes("querySelector"));
+  const obsConnection = parseSource("bundles/obs-control/src/dashboard/obs-connection.tsx");
+  const obsConnectionText = obsConnection.getFullText();
+  ok(hasUseRefLock(obsConnection, "removeButtonRefs") && hasUseRefLock(obsConnection, "focusFrameRef"));
+  ok(hasUseRefLock(obsConnection, "addConnectionButtonRef") && hasUseRefLock(obsConnection, "focusAfterRemovalRef"));
+  ok(obsConnectionText.includes("cancelAnimationFrame") && obsConnectionText.includes("removeButtonRefs.current.get") && !obsConnectionText.includes("querySelector"));
 
   const decoy = parseText("focus-decoy.tsx", 'const view = <div role="dialog" aria-modal="true" />; const ref = useRef(null);');
   const decoyDialog = jsxOpenings(decoy).find((opening) => hasJsxAttribute(opening, "role", '"dialog"'));
