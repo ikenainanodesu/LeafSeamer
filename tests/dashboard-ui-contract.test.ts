@@ -92,6 +92,20 @@ test("graphics package does not declare the dashboard icon dependency", () => {
   equal(Object.prototype.hasOwnProperty.call(packageJson.dependencies ?? {}, "lucide-react"), false);
 });
 
+test("dashboard server lifecycle regressions are exposed and enforced by CI", () => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")
+  ) as { scripts?: Record<string, string> };
+  const workflow = fs.readFileSync(path.join(projectRoot, ".github", "workflows", "ci.yml"), "utf8");
+
+  // 生命周期与路径边界测试必须有稳定的本地入口，并由 Windows CI 显式执行。
+  equal(
+    packageJson.scripts?.["test:server"],
+    "node --test tests/dashboard-server-lifecycle.test.mjs"
+  );
+  ok(/^\s*- run: npm run test:server\s*$/m.test(workflow));
+});
+
 test("ConfirmDialog binds dialog name and description to useId nodes", () => {
   const source = fs.readFileSync(
     path.join(projectRoot, "shared", "dashboard-ui", "components", "ConfirmDialog.tsx"),

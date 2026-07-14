@@ -21,10 +21,13 @@ The approved Dashboard UI rules are maintained in [UI Design Guidelines](docs/UI
 ```powershell
 npm run ui:sync
 npm run ui:check
+npm run test:server
 npm run test:ui
 ```
 
 `npm run test:ui` accepts 36 Windows Chromium visual baselines and 14 behavior/infrastructure regressions (four core operation workflows, two server boundary/continued-availability checks, and eight device/focus workflows), for 50 Playwright tests total at 320, 480, and 768px. Run `npm run test:ui:update` only when an intentional visual change has been reviewed and its baselines must be refreshed.
+
+`npm run test:server` runs six Node lifecycle and path-boundary regressions for the Dashboard acceptance server. Windows CI runs this suite independently from Playwright.
 
 Every bundle must still install and build after its source is copied independently. A Dashboard may import only its own `_leaf-ui` snapshot at runtime: importing the authority source or another bundle's UI is prohibited. Bundle-local `_leaf-core` snapshots provide the same source-level independence for shared core code. Graphics is explicitly excluded from this UI unification.
 

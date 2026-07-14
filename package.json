@@ -12,6 +12,7 @@
     "core:check": "ts-node scripts/sync-bundle-core.ts --check",
     "ui:sync": "ts-node scripts/sync-dashboard-ui.ts",
     "ui:check": "ts-node scripts/sync-dashboard-ui.ts --check",
+    "test:server": "node --test tests/dashboard-server-lifecycle.test.mjs",
     "test:standalone": "powershell -ExecutionPolicy Bypass -File scripts/test-standalone-bundle.ps1",
     "watch": "tsc --watch",
     "typecheck": "tsc --noEmit",

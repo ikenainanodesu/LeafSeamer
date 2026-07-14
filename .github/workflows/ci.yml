@@ -18,6 +18,7 @@ jobs:
       - run: npm run core:check
       - run: npm run ui:check
       - run: npm test
+      - run: npm run test:server
       - run: npm run typecheck
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run test:ui
